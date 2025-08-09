@@ -15,7 +15,6 @@ const CreatePurchase = () => {
   const [message, setMessage] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
 
-
   useEffect(() => {
     fetchVendors();
     fetchCategories();
@@ -25,19 +24,10 @@ const CreatePurchase = () => {
   const fetchVendors = async () => {
     try {
       const axios = axiosWithAuth();
-      const response = await axios.get("/vendor/");
-      const data = response.data;
-
-      if (Array.isArray(data)) {
-        setVendors(data);
-      } else if (Array.isArray(data.vendors)) {
-        setVendors(data.vendors);
-      } else {
-        console.error("Expected vendors array but got:", data);
-        setVendors([]);
-      }
-    } catch (error) {
-      console.error("Failed to fetch vendors:", error);
+      const res = await axios.get("/vendor/");
+      const data = res.data;
+      setVendors(Array.isArray(data) ? data : data.vendors || []);
+    } catch {
       setVendors([]);
     }
   };
@@ -45,19 +35,10 @@ const CreatePurchase = () => {
   const fetchCategories = async () => {
     try {
       const axios = axiosWithAuth();
-      const response = await axios.get("/store/categories");
-      const data = response.data;
-
-      if (Array.isArray(data)) {
-        setCategories(data);
-      } else if (Array.isArray(data.categories)) {
-        setCategories(data.categories);
-      } else {
-        console.error("Expected categories array but got:", data);
-        setCategories([]);
-      }
-    } catch (error) {
-      console.error("Failed to fetch categories:", error);
+      const res = await axios.get("/store/categories");
+      const data = res.data;
+      setCategories(Array.isArray(data) ? data : data.categories || []);
+    } catch {
       setCategories([]);
     }
   };
@@ -65,38 +46,43 @@ const CreatePurchase = () => {
   const fetchItems = async () => {
     try {
       const axios = axiosWithAuth();
-      const response = await axios.get("/store/items/simple");
-      const data = response.data;
-
-      if (Array.isArray(data)) {
-        setItems(data);
-      } else if (Array.isArray(data.items)) {
-        setItems(data.items);
-      } else {
-        console.error("Expected items array but got:", data);
-        setItems([]);
-      }
-    } catch (error) {
-      console.error("Failed to fetch items:", error);
+      const res = await axios.get("/store/items/simple");
+      const data = res.data;
+      setItems(Array.isArray(data) ? data : data.items || []);
+    } catch {
       setItems([]);
     }
   };
 
   const handleRowChange = (index, field, value) => {
-    const updatedRows = [...rows];
-    updatedRows[index][field] = value;
+    const updated = [...rows];
+    updated[index][field] = value;
 
-    const quantity = parseFloat(updatedRows[index].quantity) || 0;
-    const unitPrice = parseFloat(updatedRows[index].unitPrice) || 0;
-    updatedRows[index].total = quantity * unitPrice;
+    // Auto-fill category when item changes
+    if (field === "itemId") {
+      const selectedItem = items.find((i) => i.id === parseInt(value));
+      if (selectedItem) {
+        updated[index].categoryId = selectedItem.category_id
+          ? selectedItem.category_id
+          : categories.find(
+              (cat) =>
+                cat.name.toLowerCase() ===
+                selectedItem.category_name?.toLowerCase()
+            )?.id || "";
+      }
+    }
 
-    setRows(updatedRows);
+    const qty = parseFloat(updated[index].quantity) || 0;
+    const price = parseFloat(updated[index].unitPrice) || 0;
+    updated[index].total = qty * price;
+
+    setRows(updated);
   };
 
   const addRow = () => {
     setRows([
       ...rows,
-      { categoryId: "", itemId: "",  quantity: "", unitPrice: "", total: 0 },
+      { categoryId: "", itemId: "", quantity: "", unitPrice: "", total: 0 },
     ]);
   };
 
@@ -110,7 +96,6 @@ const CreatePurchase = () => {
 
     try {
       const axios = axiosWithAuth();
-
       for (const row of rows) {
         const item = items.find((i) => i.id === parseInt(row.itemId));
         if (!item) continue;
@@ -122,16 +107,12 @@ const CreatePurchase = () => {
         formData.append("quantity", String(row.quantity));
         formData.append("unit_price", String(row.unitPrice));
         formData.append("vendor_id", String(vendorId));
-        formData.append("purchase_date", new Date(purchaseDate).toISOString());
-
-
+        formData.append(
+          "purchase_date",
+          new Date(purchaseDate).toISOString()
+        );
         if (attachment) {
           formData.append("attachment", attachment);
-        }
-
-        console.log("FormData being sent:");
-        for (let [key, val] of formData.entries()) {
-          console.log(`${key}: ${val}`);
         }
 
         await axios.post("/store/purchases", formData, {
@@ -139,153 +120,157 @@ const CreatePurchase = () => {
         });
       }
 
-
       setMessage("✅ Purchase saved successfully.");
-      setRows([{ categoryId: "", itemId: "", quantity: "", unitPrice: "", total: 0 }]);
+      setRows([
+        { categoryId: "", itemId: "", quantity: "", unitPrice: "", total: 0 },
+      ]);
       setVendorId("");
       setPurchaseDate("");
+      setInvoiceNumber("");
       setAttachment(null);
     } catch (err) {
-      const detail =
-        err.response?.data?.detail || "❌ Failed to save purchase.";
-      console.error("Error:", err);
-      setMessage(detail);
+      setMessage(err.response?.data?.detail || "❌ Failed to save purchase.");
     }
   };
+
+  // Calculate invoice total
+  const invoiceTotal = rows.reduce((sum, row) => sum + row.total, 0);
 
   return (
     <div className="create-purchase-container">
       <h2>Add New Purchase</h2>
       <form onSubmit={handleSubmit} className="purchase-form">
-        <div className="form-group">
-          <label>Vendor</label>
-          <select
-            value={vendorId}
-            onChange={(e) => setVendorId(e.target.value)}
-            required
-          >
-            <option value="">Select Vendor</option>
-            {vendors.map((vendor) => (
-              <option key={vendor.id} value={vendor.id}>
-                {vendor.business_name || vendor.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label>Purchase Date</label>
-          <input
-            type="date"
-            value={purchaseDate}
-            onChange={(e) => setPurchaseDate(e.target.value)}
-            required
-          />
-        </div>
-
-        <div className="form-group">
-          <label>Invoice Number</label>
-          <input
-            type="text"
-            value={invoiceNumber}
-            onChange={(e) => setInvoiceNumber(e.target.value)}
-            required
-          />
-        </div>
-
-
         
+        {/* Compact Top Form */}
+        <div className="form-grid">
+          <div className="form-group">
+            <label>Vendor</label>
+            <select
+              value={vendorId}
+              onChange={(e) => setVendorId(e.target.value)}
+              required
+            >
+              <option value="">Select Vendor</option>
+              {vendors.map((vendor) => (
+                <option key={vendor.id} value={vendor.id}>
+                  {vendor.business_name || vendor.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
+          <div className="form-group">
+            <label>Purchase Date</label>
+            <input
+              type="date"
+              value={purchaseDate}
+              onChange={(e) => setPurchaseDate(e.target.value)}
+              required
+            />
+          </div>
 
-        <div className="form-group">
-          <label>Attach Invoice (optional)</label>
-          <input
-            type="file"
-            onChange={(e) => setAttachment(e.target.files[0])}
-          />
+          <div className="form-group">
+            <label>Invoice Number</label>
+            <input
+              type="text"
+              value={invoiceNumber}
+              onChange={(e) => setInvoiceNumber(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Attach Invoice (optional)</label>
+            <input
+              type="file"
+              onChange={(e) => setAttachment(e.target.files[0])}
+            />
+          </div>
         </div>
 
-        <div className="rows-container">
+        {/* Table-style item entry */}
+        <div className="purchase-items-table">
+          <div className="table-header">
+            <span>Quantity</span>
+            <span>Item</span>
+            <span>Category</span>
+            <span>Unit Price</span>
+            <span>Total</span>
+            <span>Action</span>
+          </div>
+
           {rows.map((row, index) => (
-            <div key={index} className="row-entry">
-              <div>
-                <label>Category</label>
-                <select
-                  value={row.categoryId}
-                  onChange={(e) =>
-                    handleRowChange(index, "categoryId", e.target.value)
-                  }
-                >
-                  <option value="">Select</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="table-row" key={index}>
+              <input
+                type="number"
+                value={row.quantity}
+                onChange={(e) =>
+                  handleRowChange(index, "quantity", e.target.value)
+                }
+                required
+              />
 
-              <div>
-                <label>Item</label>
-                <select
-                  value={row.itemId}
-                  onChange={(e) => handleRowChange(index, "itemId", e.target.value)}
-                >
-                  <option value="">Select</option>
-                  {items.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <select
+                value={row.itemId}
+                onChange={(e) =>
+                  handleRowChange(index, "itemId", e.target.value)
+                }
+              >
+                <option value="">Select</option>
+                {items.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
 
-              
+              <select
+                value={row.categoryId}
+                onChange={(e) =>
+                  handleRowChange(index, "categoryId", e.target.value)
+                }
+              >
+                <option value="">Select</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
 
-              <div>
-                <label>Quantity</label>
-                <input
-                  type="number"
-                  value={row.quantity}
-                  onChange={(e) =>
-                    handleRowChange(index, "quantity", e.target.value)
-                  }
-                  required
-                />
-              </div>
+              <input
+                type="number"
+                value={row.unitPrice}
+                onChange={(e) =>
+                  handleRowChange(index, "unitPrice", e.target.value)
+                }
+                required
+              />
 
-              <div>
-                <label>Unit Price</label>
-                <input
-                  type="number"
-                  value={row.unitPrice}
-                  onChange={(e) =>
-                    handleRowChange(index, "unitPrice", e.target.value)
-                  }
-                  required
-                />
-              </div>
+              <input type="number" value={row.total} readOnly />
 
-              <div>
-                <label>Total</label>
-                <input type="number" value={row.total} readOnly />
-              </div>
-
-              <div>
-                <button type="button" onClick={() => removeRow(index)}>
-                  Remove
-                </button>
-              </div>
+              <button
+                type="button"
+                className="remove-btn"
+                onClick={() => removeRow(index)}
+              >
+                Remove
+              </button>
             </div>
           ))}
         </div>
 
-
-
+        {/* Add Row Button */}
         <button type="button" onClick={addRow} className="add-row-btn">
           + Add Item
         </button>
 
+        {/* Invoice Total */}
+        <div className="invoice-total">
+          <strong>Total: </strong> {invoiceTotal.toFixed(2)}
+        </div>
+
+        {/* Submit Button */}
         <button type="submit" className="submit-button">
           Add Purchase
         </button>
