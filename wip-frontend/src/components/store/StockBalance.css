@@ -1,0 +1,55 @@
+.stock-balance-container {
+  padding: 20px;
+}
+
+.stock-balance-container h2 {
+  margin-bottom: 15px;
+}
+
+.stock-balance-container table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.stock-balance-container th,
+.stock-balance-container td {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: px;
+  text-align: left;
+}
+
+.stock-balance-container th {
+  background: #f4f4f4;
+}
+
+.even-row {
+  background-color: #f9f9f9;
+}
+
+.odd-row {
+  background-color: #ffffff;
+}
+
+.message {
+  background-color: #e7f5e9;
+  color: green;
+  padding: 8px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+}
+
+.stock-balance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.total-stock {
+  font-size: 16px;
+  color: #2d572c;
+  background: #e6f4ea;
+  padding: 5px 10px;
+  border-radius: 5px;
+}

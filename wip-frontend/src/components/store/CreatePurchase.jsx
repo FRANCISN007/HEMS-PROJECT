@@ -15,6 +15,8 @@ const CreatePurchase = () => {
   const [message, setMessage] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
 
+  
+
   useEffect(() => {
     fetchVendors();
     fetchCategories();
@@ -134,7 +136,11 @@ const CreatePurchase = () => {
   };
 
   // Calculate invoice total
-  const invoiceTotal = rows.reduce((sum, row) => sum + row.total, 0);
+  const invoiceTotal = rows.reduce(
+    (sum, row) => sum + (parseFloat(row.total) || 0),
+    0
+  );
+
 
   return (
     <div className="create-purchase-container">
@@ -267,8 +273,13 @@ const CreatePurchase = () => {
 
         {/* Invoice Total */}
         <div className="invoice-total">
-          <strong>Total: </strong> {invoiceTotal.toFixed(2)}
+          <strong>Total: </strong> 
+          {invoiceTotal.toLocaleString("en-NG", {
+            style: "currency",
+            currency: "NGN",
+          })}
         </div>
+
 
         {/* Submit Button */}
         <button type="submit" className="submit-button">

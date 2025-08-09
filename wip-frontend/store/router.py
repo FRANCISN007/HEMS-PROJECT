@@ -800,6 +800,34 @@ def list_store_inventory_adjustments(
     return query.order_by(StoreInventoryAdjustment.adjusted_at.desc()).all()
 
 
+@router.put("/adjustments/{adjustment_id}")
+def update_adjustment(
+    adjustment_id: int,
+    data: StoreInventoryAdjustmentCreate,  # same schema as create
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    adjustment = db.query(StoreInventoryAdjustment).filter(
+        StoreInventoryAdjustment.id == adjustment_id
+    ).first()
+
+    if not adjustment:
+        raise HTTPException(status_code=404, detail="Adjustment not found.")
+
+    # Only admins can edit
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can edit adjustments.")
+
+    adjustment.item_id = data.item_id
+    adjustment.quantity_adjusted = data.quantity_adjusted
+    adjustment.reason = data.reason
+
+    db.commit()
+    db.refresh(adjustment)
+    return adjustment
+
+
+
 @router.delete("/adjustments/{adjustment_id}")
 def delete_adjustment(
     adjustment_id: int,

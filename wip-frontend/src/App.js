@@ -52,6 +52,10 @@ import ListPurchase from "./components/store/ListPurchase"; // ✅ Add this
 import IssueItems from "./components/store/IssueItems"; // ✅ Add this
 import ListIssues from "./components/store/ListIssues";
 
+import StockAdjustment from "./components/store/StockAdjustment";
+import ListAdjustment from "./components/store/ListAdjustment";
+import StockBalance from "./components/store/StockBalance";
+
 
 
 
@@ -113,7 +117,10 @@ const App = () => {
             <Route path="purchase/list" element={<ListPurchase />} /> {/* ✅ Add this */}
             <Route path="issue/create" element={<IssueItems />} />  {/* ✅ Add this */}
             <Route path="issue/list" element={<ListIssues />} />
-            
+            <Route path="adjustment/create" element={<StockAdjustment />} />
+            <Route path="adjustment/list" element={<ListAdjustment />} />
+            <Route path="stock-balance" element={<StockBalance />} />
+
           </Route>
 
 
