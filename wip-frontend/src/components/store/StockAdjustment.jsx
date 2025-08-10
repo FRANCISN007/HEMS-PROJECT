@@ -13,6 +13,13 @@ const StockAdjustment = () => {
     fetchItems();
   }, []);
 
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(""), 3000);
+      return () => clearTimeout(timer); // cleanup if message changes or component unmounts
+    }
+  }, [message]);
+
   const fetchItems = async () => {
     try {
       const axios = axiosWithAuth();

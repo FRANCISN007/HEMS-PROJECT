@@ -13,6 +13,13 @@ const ListCategory = ({ onClose }) => {
     fetchCategories();
   }, []);
 
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(""), 3000);
+      return () => clearTimeout(timer); // cleanup if message changes or component unmounts
+    }
+  }, [message]);
+
   const fetchCategories = async () => {
     try {
       const res = await axiosWithAuth().get("/store/categories");

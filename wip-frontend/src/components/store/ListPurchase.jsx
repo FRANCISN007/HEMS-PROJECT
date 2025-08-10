@@ -17,6 +17,24 @@ const ListPurchase = () => {
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [message, setMessage] = useState("");
 
+
+  // At the top of your component
+useEffect(() => {
+  // Get first day of current month
+  const today = new Date();
+  const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  const start = firstDayOfMonth.toISOString().split("T")[0]; // YYYY-MM-DD
+  const end = today.toISOString().split("T")[0];
+
+  setStartDate(start);
+  setEndDate(end);
+
+  // Fetch purchases for current month immediately
+  fetchPurchases(start, end);
+}, []);
+
+
   // Fetch items & vendors once
   useEffect(() => {
     (async () => {
@@ -32,14 +50,18 @@ const ListPurchase = () => {
     })();
   }, []);
 
-  const fetchPurchases = async () => {
+  const fetchPurchases = async (start, end) => {
+    // Default to state if params not given
+    const sDate = typeof start === "string" ? start : startDate;
+    const eDate = typeof end === "string" ? end : endDate;
+
     setLoading(true);
     setError("");
     try {
       const axios = axiosWithAuth();
       const params = {};
-      if (startDate) params.start_date = startDate;
-      if (endDate) params.end_date = endDate;
+      if (sDate) params.start_date = sDate;
+      if (eDate) params.end_date = eDate;
       if (invoiceNumber) params.invoice_number = invoiceNumber;
 
       const response = await axios.get("/store/purchases", { params });

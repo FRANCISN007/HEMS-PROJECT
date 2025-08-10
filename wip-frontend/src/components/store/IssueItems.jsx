@@ -19,6 +19,13 @@ const IssueItems = () => {
     fetchItems();
   }, []);
 
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(""), 3000);
+      return () => clearTimeout(timer); // cleanup if message changes or component unmounts
+    }
+  }, [message]);
+
   const fetchBars = async () => {
     try {
         const res = await axiosWithAuth().get("/bar/bars/simple");
