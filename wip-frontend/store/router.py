@@ -376,7 +376,7 @@ def list_purchases(
         selectinload(store_models.StoreStockEntry.item),
     )
 
-    # Filter by purchase date range (inclusive)
+    # Filter by purchase date range
     if start_date and end_date:
         query = query.filter(
             store_models.StoreStockEntry.purchase_date >= start_date,
@@ -387,7 +387,7 @@ def list_purchases(
     elif end_date:
         query = query.filter(store_models.StoreStockEntry.purchase_date <= end_date)
 
-    # Filter by invoice number (case-insensitive partial match)
+    # Filter by invoice number
     if invoice_number:
         query = query.filter(store_models.StoreStockEntry.invoice_number.ilike(f"%{invoice_number}%"))
 
@@ -408,7 +408,7 @@ def list_purchases(
             "item_id": purchase.item_id,
             "item_name": purchase.item.name if purchase.item else "",
             "invoice_number": purchase.invoice_number,
-            "quantity": purchase.quantity,
+            "quantity": purchase.original_quantity,  # Show original purchased qty
             "unit_price": purchase.unit_price,
             "total_amount": purchase.total_amount,
             "vendor_id": purchase.vendor_id,
@@ -425,7 +425,9 @@ def list_purchases(
         "purchases": results
     }
 
-
+from fastapi import HTTPException, UploadFile, File, Form
+from datetime import datetime
+import os
 
 @router.put("/purchases/{entry_id}", response_model=store_schemas.UpdatePurchase)
 async def update_purchase(
@@ -433,7 +435,7 @@ async def update_purchase(
     item_id: int = Form(...),
     item_name: str = Form(...),
     invoice_number: str = Form(...),
-    quantity: float = Form(...),
+    quantity: float = Form(...),  # this is the new ORIGINAL quantity (total purchased)
     unit_price: float = Form(...),
     vendor_id: Optional[int] = Form(None),
     purchase_date: datetime = Form(...),
@@ -441,13 +443,43 @@ async def update_purchase(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
 ):
+    # Load the existing stock entry
     entry = db.query(store_models.StoreStockEntry).filter_by(id=entry_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="Purchase entry not found")
 
+    # Ensure target item exists
     item = db.query(store_models.StoreItem).filter_by(id=item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
+
+    # Calculate how many units have already been consumed (issued) from this stock entry
+    old_original = float(entry.original_quantity or 0)
+    old_remaining = float(entry.quantity or 0)
+    already_issued = old_original - old_remaining
+    if already_issued < 0:
+        # defensive: if DB somehow inconsistent, treat issued as 0 but log (optional)
+        already_issued = 0
+
+    # If item is being changed, disallow if some units from this entry were already issued
+    if item_id != entry.item_id and already_issued > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot change item for a purchase that already has issued quantity. Create a new purchase instead."
+        )
+
+    # New original quantity is the 'quantity' form field.
+    new_original = float(quantity)
+
+    # If new original is less than already issued -> reject (prevents negative remaining)
+    if new_original < already_issued:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot reduce purchase quantity below amount already issued ({int(already_issued)}). Use inventory adjustment instead."
+        )
+
+    # Compute new remaining quantity on this stock entry after the update
+    new_remaining = new_original - already_issued
 
     # Handle optional attachment update
     if attachment:
@@ -462,20 +494,33 @@ async def update_purchase(
 
         entry.attachment = file_location
 
+    # Normalize purchase_date (remove tzinfo if present)
+    if hasattr(purchase_date, "tzinfo") and purchase_date.tzinfo is not None:
+        purchase_date = purchase_date.replace(tzinfo=None)
+
+    # Overwrite fields safely
     entry.item_id = item_id
     entry.item_name = item_name
-    entry.invoice_number= invoice_number
-    entry.quantity = quantity
+    entry.invoice_number = invoice_number
+    entry.original_quantity = new_original
+    entry.quantity = new_remaining
     entry.unit_price = unit_price
     entry.vendor_id = vendor_id
     entry.purchase_date = purchase_date
-    entry.total_amount = quantity * unit_price
-    entry.created_by = current_user.username
+    entry.total_amount = (new_original * unit_price) if unit_price is not None else None
 
+    # Do NOT overwrite created_by (preserve who created the entry)
+    # Optionally set updated_by/updated_at if your model supports it:
+    if hasattr(entry, "updated_by"):
+        entry.updated_by = current_user.username
+    if hasattr(entry, "updated_at"):
+        entry.updated_at = datetime.now()
+
+    db.add(entry)
     db.commit()
     db.refresh(entry)
 
-    # Load related item and vendor
+    # Load related item & vendor for response
     entry = (
         db.query(store_models.StoreStockEntry)
         .options(
@@ -495,7 +540,7 @@ async def update_purchase(
         "item_id": entry.item_id,
         "item_name": entry.item.name if entry.item else "",
         "invoice_number": entry.invoice_number,
-        "quantity": entry.quantity,
+        "quantity": entry.original_quantity,
         "unit_price": entry.unit_price,
         "total_amount": entry.total_amount,
         "vendor_id": entry.vendor_id,
@@ -528,12 +573,22 @@ def delete_purchase(
 # ISSUE TO BAR (Update BarInventory)
 # ----------------------------
 
+from datetime import datetime, date
+
 @router.post("/issues", response_model=store_schemas.IssueDisplay)
 def supply_to_bars(
     issue_data: store_schemas.IssueCreate,
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
 ):
+    # ✅ Date Control: Allow only today's date
+    today = date.today()
+    if issue_data.issue_date and issue_data.issue_date.date() != today:
+        raise HTTPException(
+            status_code=400,
+            detail="❌ You can only make issues for today's date."
+        )
+
     issue = StoreIssue(
         issue_to=issue_data.issue_to,
         issued_to_id=issue_data.issued_to_id,
@@ -688,55 +743,86 @@ def delete_issue(
 # STORE BALANCE REPORT
 # ----------------------------
 
+from sqlalchemy import func
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from typing import Optional
+from fastapi import Query
+
 @router.get("/balance-stock", response_model=list[dict])
 def get_store_balances(
+    category_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
 ):
-    
-    # Fetch total adjustments per item
-    adjustments = db.query(
-        StoreInventoryAdjustment.item_id,
-        func.sum(StoreInventoryAdjustment.quantity_adjusted).label("total_adjusted")
-    ).group_by(StoreInventoryAdjustment.item_id).all()
+    # 1) Adjustments per item
+    adjustments_q = (
+        db.query(
+            store_models.StoreInventoryAdjustment.item_id,
+            func.coalesce(func.sum(store_models.StoreInventoryAdjustment.quantity_adjusted), 0).label("total_adjusted")
+        )
+        .group_by(store_models.StoreInventoryAdjustment.item_id)
+        .all()
+    )
+    adjustment_map = {row.item_id: row.total_adjusted for row in adjustments_q}
 
-    adjustment_map = {a.item_id: a.total_adjusted for a in adjustments}
+    # 2) Received + category
+    query = (
+        db.query(
+            store_models.StoreItem.id.label("item_id"),
+            store_models.StoreItem.name.label("item_name"),
+            store_models.StoreItem.unit.label("unit"),
+            store_models.StoreCategory.name.label("category_name"),
+            func.coalesce(func.sum(store_models.StoreStockEntry.original_quantity), 0).label("total_received"),
+            func.coalesce(func.sum(store_models.StoreStockEntry.quantity), 0).label("current_balance")
+        )
+        .join(store_models.StoreStockEntry, store_models.StoreItem.id == store_models.StoreStockEntry.item_id)
+        .join(store_models.StoreCategory, store_models.StoreItem.category_id == store_models.StoreCategory.id)
+    )
 
-    # Group by item: total received and current balance
-    received_data = db.query(
-        store_models.StoreItem.id.label("item_id"),
-        store_models.StoreItem.name,
-        store_models.StoreItem.unit,
-        func.sum(StoreStockEntry.original_quantity).label("total_received"),
-        func.sum(StoreStockEntry.quantity).label("balance")
-    ).join(StoreStockEntry).group_by(store_models.StoreItem.id).all()
+    # ✅ Filter if category_id provided
+    if category_id:
+        query = query.filter(store_models.StoreItem.category_id == category_id)
 
+    query = query.group_by(store_models.StoreItem.id, store_models.StoreCategory.name)
+    received_q = query.all()
+
+    # 3) Issued
+    issued_q = (
+        db.query(
+            store_models.StoreIssueItem.item_id,
+            func.coalesce(func.sum(store_models.StoreIssueItem.quantity), 0).label("total_issued")
+        )
+        .group_by(store_models.StoreIssueItem.item_id)
+        .all()
+    )
+    issued_map = {row.item_id: row.total_issued for row in issued_q}
+
+    # 4) Build response
     response = []
-    for item in received_data:
-        latest_entry = db.query(StoreStockEntry)\
-            .filter_by(item_id=item.item_id)\
-            .order_by(StoreStockEntry.purchase_date.desc())\
+    for item in received_q:
+        latest_entry = (
+            db.query(store_models.StoreStockEntry)
+            .filter(store_models.StoreStockEntry.item_id == item.item_id)
+            .order_by(store_models.StoreStockEntry.purchase_date.desc())
             .first()
-
+        )
         unit_price = latest_entry.unit_price if latest_entry else None
-        total_issued = item.total_received - item.balance
-        total_amount = unit_price * item.balance if unit_price is not None else None
-
-        adjusted = adjustment_map.get(item.item_id, 0)
-        total_issued = item.total_received - item.balance - adjusted
+        balance_value = (unit_price * item.current_balance) if unit_price is not None else None
 
         response.append({
             "item_id": item.item_id,
-            "item_name": item.name,
+            "item_name": item.item_name,
+            "category_name": item.category_name,
             "unit": item.unit,
-            "total_received": item.total_received,
-            "total_issued": total_issued,
-            "total_adjusted": adjusted,
-            "balance": item.balance,
-            "last_unit_price": unit_price,
-            "balance_total_amount": round(total_amount, 2) if total_amount else None
+            "total_received": item.total_received or 0,
+            "total_issued": float(issued_map.get(item.item_id, 0)),
+            "total_adjusted": float(adjustment_map.get(item.item_id, 0)),
+            "balance": float(item.current_balance or 0),
+            "last_unit_price": float(unit_price) if unit_price is not None else None,
+            "balance_total_amount": round(balance_value, 2) if balance_value is not None else None,
         })
-
 
     return response
 

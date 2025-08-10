@@ -4,6 +4,7 @@ import "./ListItem.css";
 
 const ListItem = () => {
   const [items, setItems] = useState([]);
+  const [simpleItems, setSimpleItems] = useState([]); // <-- new
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [editingItem, setEditingItem] = useState(null);
@@ -18,11 +19,13 @@ const ListItem = () => {
   const [newUnitPrice, setNewUnitPrice] = useState("");
   const [newCategoryId, setNewCategoryId] = useState("");
 
+  const [selectedSimpleItemId, setSelectedSimpleItemId] = useState(""); // <-- new
+
   useEffect(() => {
     fetchItems();
     fetchCategories();
+    fetchSimpleItems(); // <-- fetch simple items on mount
   }, []);
-
 
   useEffect(() => {
     if (message) {
@@ -40,6 +43,18 @@ const ListItem = () => {
       setMessage("❌ Failed to load items");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSimpleItems = async () => {
+    try {
+      const axios = axiosWithAuth();
+      const res = await axios.get("/store/items/simple");
+      // response is expected as an array of simple items
+      setSimpleItems(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("❌ Failed to load simple items", err);
+      setSimpleItems([]);
     }
   };
 
@@ -61,6 +76,8 @@ const ListItem = () => {
       await axios.delete(`/store/items/${id}`);
       setItems(items.filter((item) => item.id !== id));
       setMessage("✅ Item deleted successfully.");
+      // refresh simple items too
+      fetchSimpleItems();
     } catch (error) {
       setMessage(error.response?.data?.detail || "❌ Failed to delete item.");
     }
@@ -70,8 +87,25 @@ const ListItem = () => {
     setEditingItem(item);
     setUpdateName(item.name);
     setUpdateUnit(item.unit || "");
-    setUpdateCategoryId(item.category.id);
+    setUpdateCategoryId(item.category?.id || "");
     setUpdateUnitPrice(item.unit_price || "");
+    setSelectedSimpleItemId(item.id); // select the item in simple items
+  };
+
+  // When the user selects a different simple item, populate name/unit/unit_price
+  const handleSimpleItemChange = (value) => {
+    setSelectedSimpleItemId(value);
+    const selected = simpleItems.find((it) => String(it.id) === String(value));
+    if (selected) {
+      // populate the existing fields (user can still edit them)
+      setUpdateName(selected.name || "");
+      setUpdateUnit(selected.unit || "");
+      // some simple endpoints return 0 when no price — set to empty string if null/undefined
+      setUpdateUnitPrice(
+        typeof selected.unit_price === "number" ? String(selected.unit_price) : (selected.unit_price || "")
+      );
+      // Note: simple endpoint doesn't include category, so we don't change updateCategoryId
+    }
   };
 
   const handleUpdate = async (e) => {
@@ -106,6 +140,7 @@ const ListItem = () => {
       setMessage("✅ Item updated successfully.");
       setEditingItem(null);
       fetchItems();
+      fetchSimpleItems();
     } catch (error) {
       console.error("Update Error:", error.response?.data || error.message);
       setMessage(error.response?.data?.detail || "❌ Failed to update item.");
@@ -138,6 +173,7 @@ const ListItem = () => {
       setNewUnitPrice("");
       setNewCategoryId("");
       fetchItems();
+      fetchSimpleItems();
     } catch (error) {
       console.error("Create Error:", error.response?.data || error.message);
       setMessage(error.response?.data?.detail || "❌ Failed to create item.");
@@ -223,7 +259,7 @@ const ListItem = () => {
               <tr key={item.id} className={index % 2 === 0 ? 'even-row' : 'odd-row'}>
                 <td>{item.id}</td>
                 <td>{item.name}</td>
-                <td>{item.category.name}</td>
+                <td>{item.category?.name}</td>
                 <td>{item.unit_price}</td>
                 <td>{item.unit}</td>
                 <td>
@@ -245,6 +281,23 @@ const ListItem = () => {
         <div className="modal-backdrop">
           <div className="modal-content">
             <h3>✏️ Update Item</h3>
+
+            {/* NEW: show select populated from /store/items/simple */}
+            <label>
+              Select Item (catalog):
+              <select
+                value={selectedSimpleItemId}
+                onChange={(e) => handleSimpleItemChange(e.target.value)}
+              >
+                <option value="">-- Select Item --</option>
+                {simpleItems.map((it) => (
+                  <option key={it.id} value={it.id}>
+                    {it.name} ({it.unit}) {it.unit_price ? `- ₦${it.unit_price}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <form onSubmit={handleUpdate}>
               <label>
                 Name:

@@ -18,6 +18,7 @@ const ListIssues = () => {
     issue_items: [],
   });
 
+  
   // Show a message for 3 seconds
   const showMessage = (msg) => {
     setMessage(msg);
@@ -125,6 +126,7 @@ const ListIssues = () => {
       showMessage("❌ Failed to update issue.");
     }
   };
+      setTimeout(() => setMessage(""), 3000);
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this issue?")) return;

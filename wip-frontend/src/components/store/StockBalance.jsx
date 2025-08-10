@@ -4,17 +4,38 @@ import "./StockBalance.css";
 
 const StockBalance = () => {
   const [balances, setBalances] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    fetchStockBalances();
+    fetchCategories();
   }, []);
 
-  const fetchStockBalances = async () => {
+  useEffect(() => {
+    // Whenever category changes, fetch filtered balances
+    fetchStockBalances(selectedCategory);
+  }, [selectedCategory]);
+
+  const fetchCategories = async () => {
     try {
       const axios = axiosWithAuth();
-      const res = await axios.get("/store/balance-stock");
+      const res = await axios.get("/store/categories");
+      setCategories(res.data || []);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+    }
+  };
+
+  const fetchStockBalances = async (categoryId = "") => {
+    try {
+      setLoading(true);
+      const axios = axiosWithAuth();
+      const url = categoryId
+        ? `/store/balance-stock?category_id=${categoryId}`
+        : `/store/balance-stock`;
+      const res = await axios.get(url);
       setBalances(res.data || []);
     } catch (error) {
       console.error("Error fetching stock balances:", error);
@@ -23,6 +44,10 @@ const StockBalance = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCategoryChange = (e) => {
+    setSelectedCategory(e.target.value);
   };
 
   const totalStockAmount = balances.reduce(
@@ -36,6 +61,23 @@ const StockBalance = () => {
     <div className="stock-balance-container">
       <div className="stock-balance-header">
         <h2>📊 Stock Balance Report</h2>
+
+        <div className="filter-frame">
+          <label htmlFor="categoryFilter">Filter by Category:</label>
+          <select
+            id="categoryFilter"
+            value={selectedCategory}
+            onChange={handleCategoryChange}
+          >
+            <option value="">All Categories</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="total-stock">
           Total Stock Value:{" "}
           <strong>₦{totalStockAmount.toLocaleString()}</strong>
@@ -49,6 +91,7 @@ const StockBalance = () => {
           <tr>
             <th>Item</th>
             <th>Unit</th>
+            <th>Category</th>
             <th>Total Received</th>
             <th>Total Issued</th>
             <th>Total Adjusted</th>
@@ -65,6 +108,7 @@ const StockBalance = () => {
             >
               <td>{item.item_name}</td>
               <td>{item.unit}</td>
+              <td>{item.category_name}</td>
               <td>{item.total_received}</td>
               <td>{item.total_issued}</td>
               <td>{item.total_adjusted}</td>
