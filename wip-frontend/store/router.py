@@ -701,16 +701,89 @@ def update_issue(
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 
-    # Delete old issue items
+    # Step 1️⃣ Restore stock from old items before deleting them
+    old_items = db.query(StoreIssueItem).filter_by(issue_id=issue_id).all()
+    for old_item in old_items:
+        # Restore stock quantities
+        stock_entries = (
+            db.query(StoreStockEntry)
+            .filter(StoreStockEntry.item_id == old_item.item_id)
+            .order_by(StoreStockEntry.purchase_date.asc())
+            .all()
+        )
+        remaining_restore = old_item.quantity
+        for entry in stock_entries:
+            if remaining_restore <= 0:
+                break
+            entry.quantity += remaining_restore
+            remaining_restore = 0
+
+        # Restore bar inventory if applicable
+        if issue.issue_to.lower() == "bar":
+            bar_inventory = (
+                db.query(BarInventory)
+                .filter_by(bar_id=issue.issued_to_id, item_id=old_item.item_id)
+                .first()
+            )
+            if bar_inventory:
+                bar_inventory.quantity -= old_item.quantity
+                if bar_inventory.quantity < 0:
+                    bar_inventory.quantity = 0
+
+    # Step 2️⃣ Delete old issue items
     db.query(StoreIssueItem).filter_by(issue_id=issue_id).delete()
 
-    # Update metadata
+    # Step 3️⃣ Update issue metadata
     issue.issue_to = update_data.issue_to
     issue.issued_to_id = update_data.issued_to_id
     issue.issue_date = update_data.issue_date or datetime.utcnow()
     issue.issued_by_id = current_user.id
 
+    # Step 4️⃣ Add new issue items & deduct stock
     for item_data in update_data.issue_items:
+        # Deduct from stock (FIFO)
+        remaining_quantity = item_data.quantity
+        stock_entries = (
+            db.query(StoreStockEntry)
+            .filter(StoreStockEntry.item_id == item_data.item_id, StoreStockEntry.quantity > 0)
+            .order_by(StoreStockEntry.purchase_date.asc())
+            .all()
+        )
+        for entry in stock_entries:
+            if remaining_quantity <= 0:
+                break
+            if entry.quantity >= remaining_quantity:
+                entry.quantity -= remaining_quantity
+                remaining_quantity = 0
+            else:
+                remaining_quantity -= entry.quantity
+                entry.quantity = 0
+
+        # Update bar inventory if applicable
+        if update_data.issue_to.lower() == "bar":
+            bar_inventory = (
+                db.query(BarInventory)
+                .filter_by(bar_id=update_data.issued_to_id, item_id=item_data.item_id)
+                .first()
+            )
+            if bar_inventory:
+                bar_inventory.quantity += item_data.quantity
+            else:
+                latest_stock = (
+                    db.query(StoreStockEntry)
+                    .filter(StoreStockEntry.item_id == item_data.item_id)
+                    .order_by(StoreStockEntry.id.desc())
+                    .first()
+                )
+                bar_inventory = BarInventory(
+                    bar_id=update_data.issued_to_id,
+                    item_id=item_data.item_id,
+                    quantity=item_data.quantity,
+                    selling_price=latest_stock.unit_price if latest_stock else 0
+                )
+                db.add(bar_inventory)
+
+        # Save the new issue item
         new_issue_item = StoreIssueItem(
             issue_id=issue_id,
             item_id=item_data.item_id,
@@ -722,7 +795,6 @@ def update_issue(
     db.refresh(issue)
     return issue
 
-
 @router.delete("/issues/{issue_id}")
 def delete_issue(
     issue_id: int,
@@ -733,11 +805,46 @@ def delete_issue(
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 
+    # Fetch all items in this issue
+    issue_items = db.query(StoreIssueItem).filter_by(issue_id=issue.id).all()
+
+    for item in issue_items:
+        # 1️⃣ Restore StoreStockEntry quantities (FIFO reverse)
+        # We reverse from the oldest entries to newest so stock is replenished correctly
+        stock_entries = (
+            db.query(StoreStockEntry)
+            .filter(StoreStockEntry.item_id == item.item_id)
+            .order_by(StoreStockEntry.purchase_date.asc())
+            .all()
+        )
+
+        remaining_to_restore = item.quantity
+        for stock_entry in stock_entries:
+            # Restore until we've added back the full issued quantity
+            if remaining_to_restore <= 0:
+                break
+            stock_entry.quantity += remaining_to_restore
+            remaining_to_restore = 0
+
+        # 2️⃣ If issue was to a bar, reduce bar inventory
+        if issue.issue_to.lower() == "bar":
+            bar_inventory = (
+                db.query(BarInventory)
+                .filter_by(bar_id=issue.issued_to_id, item_id=item.item_id)
+                .first()
+            )
+            if bar_inventory:
+                bar_inventory.quantity -= item.quantity
+                if bar_inventory.quantity < 0:
+                    bar_inventory.quantity = 0  # prevent negative
+
+    # Delete the issue items and issue itself
     db.query(StoreIssueItem).filter_by(issue_id=issue.id).delete()
     db.delete(issue)
-    db.commit()
-    return {"detail": "Issue deleted successfully"}
 
+    db.commit()
+
+    return {"detail": "✅ Issue deleted and stock restored successfully"}
 
 # ----------------------------
 # STORE BALANCE REPORT
@@ -756,7 +863,7 @@ def get_store_balances(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
 ):
-    # 1) Adjustments per item
+    # 1) Historical Adjustments
     adjustments_q = (
         db.query(
             store_models.StoreInventoryAdjustment.item_id,
@@ -765,9 +872,20 @@ def get_store_balances(
         .group_by(store_models.StoreInventoryAdjustment.item_id)
         .all()
     )
-    adjustment_map = {row.item_id: row.total_adjusted for row in adjustments_q}
+    adjustment_map = {row.item_id: float(row.total_adjusted) for row in adjustments_q}
 
-    # 2) Received + category
+    # 2) Historical Issues
+    issued_q = (
+        db.query(
+            store_models.StoreIssueItem.item_id,
+            func.coalesce(func.sum(store_models.StoreIssueItem.quantity), 0).label("total_issued")
+        )
+        .group_by(store_models.StoreIssueItem.item_id)
+        .all()
+    )
+    issued_map = {row.item_id: float(row.total_issued) for row in issued_q}
+
+    # 3) Purchases & Current Stock
     query = (
         db.query(
             store_models.StoreItem.id.label("item_id"),
@@ -781,25 +899,13 @@ def get_store_balances(
         .join(store_models.StoreCategory, store_models.StoreItem.category_id == store_models.StoreCategory.id)
     )
 
-    # ✅ Filter if category_id provided
     if category_id:
         query = query.filter(store_models.StoreItem.category_id == category_id)
 
     query = query.group_by(store_models.StoreItem.id, store_models.StoreCategory.name)
     received_q = query.all()
 
-    # 3) Issued
-    issued_q = (
-        db.query(
-            store_models.StoreIssueItem.item_id,
-            func.coalesce(func.sum(store_models.StoreIssueItem.quantity), 0).label("total_issued")
-        )
-        .group_by(store_models.StoreIssueItem.item_id)
-        .all()
-    )
-    issued_map = {row.item_id: row.total_issued for row in issued_q}
-
-    # 4) Build response
+    # 4) Build Final Response
     response = []
     for item in received_q:
         latest_entry = (
@@ -808,19 +914,19 @@ def get_store_balances(
             .order_by(store_models.StoreStockEntry.purchase_date.desc())
             .first()
         )
-        unit_price = latest_entry.unit_price if latest_entry else None
-        balance_value = (unit_price * item.current_balance) if unit_price is not None else None
+        unit_price = float(latest_entry.unit_price) if latest_entry else None
+        balance_value = (unit_price * float(item.current_balance)) if unit_price is not None else None
 
         response.append({
             "item_id": item.item_id,
             "item_name": item.item_name,
             "category_name": item.category_name,
             "unit": item.unit,
-            "total_received": item.total_received or 0,
-            "total_issued": float(issued_map.get(item.item_id, 0)),
-            "total_adjusted": float(adjustment_map.get(item.item_id, 0)),
-            "balance": float(item.current_balance or 0),
-            "last_unit_price": float(unit_price) if unit_price is not None else None,
+            "total_received": float(item.total_received or 0),   # All-time purchases
+            "total_issued": issued_map.get(item.item_id, 0),     # All-time issues (for info)
+            "total_adjusted": adjustment_map.get(item.item_id, 0), # All-time adjustments (for info)
+            "balance": float(item.current_balance or 0),         # Actual current stock
+            "last_unit_price": unit_price,
             "balance_total_amount": round(balance_value, 2) if balance_value is not None else None,
         })
 
@@ -889,30 +995,93 @@ def list_store_inventory_adjustments(
 @router.put("/adjustments/{adjustment_id}")
 def update_adjustment(
     adjustment_id: int,
-    data: StoreInventoryAdjustmentCreate,  # same schema as create
+    data: StoreInventoryAdjustmentCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    adjustment = db.query(StoreInventoryAdjustment).filter(
-        StoreInventoryAdjustment.id == adjustment_id
-    ).first()
-
-    if not adjustment:
-        raise HTTPException(status_code=404, detail="Adjustment not found.")
-
-    # Only admins can edit
+    # AuthZ
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Only admins can edit adjustments.")
 
+    # Load existing adjustment
+    adjustment = db.query(StoreInventoryAdjustment).filter(
+        StoreInventoryAdjustment.id == adjustment_id
+    ).first()
+    if not adjustment:
+        raise HTTPException(status_code=404, detail="Adjustment not found.")
+
+    # Helper to get the latest stock entry we mutate for an item
+    def latest_entry_for(item_id: int):
+        return db.query(StoreStockEntry).filter(
+            StoreStockEntry.item_id == item_id
+        ).order_by(StoreStockEntry.purchase_date.desc()).first()
+
+    # CASE A: Same item — adjust by delta (new - old)
+    if data.item_id == adjustment.item_id:
+        entry = latest_entry_for(adjustment.item_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail=f"No stock entry found for item {adjustment.item_id}")
+
+        old_qty = adjustment.quantity_adjusted          # previously removed from stock
+        new_qty = data.quantity_adjusted                # to be removed now
+        delta = new_qty - old_qty                       # positive => remove more; negative => return some
+
+        if delta > 0:
+            # need to remove extra `delta` from stock
+            if entry.quantity < delta:
+                raise HTTPException(status_code=400, detail="Adjustment exceeds available stock.")
+            entry.quantity -= delta
+        elif delta < 0:
+            # need to give back -delta to stock
+            entry.quantity += (-delta)
+
+        # update adjustment record
+        adjustment.quantity_adjusted = new_qty
+        adjustment.reason = data.reason
+
+        db.add(entry)
+        db.add(adjustment)
+        db.commit()
+        db.refresh(adjustment)
+
+        return {
+            "message": "Adjustment updated successfully.",
+            "adjustment": adjustment,
+            "current_stock": entry.quantity
+        }
+
+    # CASE B: Item changed — restore old item fully, apply new item fully
+    # 1) restore OLD
+    old_entry = latest_entry_for(adjustment.item_id)
+    if not old_entry:
+        raise HTTPException(status_code=404, detail=f"No stock entry found for old item {adjustment.item_id}")
+    old_entry.quantity += adjustment.quantity_adjusted  # give back everything previously removed
+
+    # 2) apply NEW
+    new_entry = latest_entry_for(data.item_id)
+    if not new_entry:
+        raise HTTPException(status_code=404, detail=f"No stock entry found for new item {data.item_id}")
+    if new_entry.quantity < data.quantity_adjusted:
+        raise HTTPException(status_code=400, detail="Adjustment exceeds available stock for the new item.")
+    new_entry.quantity -= data.quantity_adjusted
+
+    # 3) update adjustment record
     adjustment.item_id = data.item_id
     adjustment.quantity_adjusted = data.quantity_adjusted
     adjustment.reason = data.reason
 
+    db.add(old_entry)
+    db.add(new_entry)
+    db.add(adjustment)
     db.commit()
     db.refresh(adjustment)
-    return adjustment
 
-
+    return {
+        "message": "Adjustment updated successfully (item changed).",
+        "adjustment": adjustment,
+        "old_item_restored_to": old_entry.quantity,
+        "new_item_current_stock": new_entry.quantity
+    }
 
 @router.delete("/adjustments/{adjustment_id}")
 def delete_adjustment(
@@ -920,9 +1089,11 @@ def delete_adjustment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # Only admins can delete
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Only admins can delete adjustments.")
 
+    # Get adjustment
     adjustment = db.query(StoreInventoryAdjustment)\
         .options(joinedload(StoreInventoryAdjustment.item))\
         .filter(StoreInventoryAdjustment.id == adjustment_id).first()
@@ -930,22 +1101,25 @@ def delete_adjustment(
     if not adjustment:
         raise HTTPException(status_code=404, detail="Adjustment not found.")
 
-    # Restore quantity to stock
+    # Get latest stock entry for the affected item
     stock_entry = db.query(StoreStockEntry).filter(
         StoreStockEntry.item_id == adjustment.item_id
     ).order_by(StoreStockEntry.purchase_date.desc()).first()
 
     if not stock_entry:
-        raise HTTPException(status_code=404, detail="No stock entry found to revert the quantity.")
+        raise HTTPException(status_code=404, detail="No stock entry found to restore the quantity.")
 
+    # ✅ Restore the stock to received baseline by ADDING back the adjusted quantity
     stock_entry.quantity += adjustment.quantity_adjusted
     db.add(stock_entry)
 
+    # Delete the adjustment record
     db.delete(adjustment)
     db.commit()
 
     return {
         "message": "Adjustment deleted successfully.",
         "restored_quantity": adjustment.quantity_adjusted,
-        "item_id": adjustment.item_id
+        "item_id": adjustment.item_id,
+        "current_stock": stock_entry.quantity
     }
