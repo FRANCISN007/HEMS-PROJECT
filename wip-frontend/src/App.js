@@ -8,7 +8,6 @@ import {
   Navigate,
 } from "react-router-dom";
 
-
 import HomePage from "./pages/HomePage";
 import LicensePage from "./modules/license/LicensePage";
 import LoginPage from "./modules/auth/LoginPage";
@@ -36,45 +35,36 @@ import ListEvent from "./components/events/ListEvent";
 import EventPayment from "./components/events/EventPayment";
 import ListEventPayment from "./components/events/ListEventPayment";
 import VoidEventPayment from "./components/events/VoidEventPayment";
-import ViewEventForm from "./components/events/ViewEventForm"; // ✅ add this
+import ViewEventForm from "./components/events/ViewEventForm";
 import EventUpdate from "./components/events/EventUpdate";
 import ViewEventPayment from "./components/events/ViewEventPayment";
 
-
-
-
 import ListVendor from "./components/store/ListVendor";
 import ListCategory from "./components/store/ListCategory";
-
 import ListItem from "./components/store/ListItem";
-import CreatePurchase from "./components/store/CreatePurchase"; // ✅ Add this
-import ListPurchase from "./components/store/ListPurchase"; // ✅ Add this
-import IssueItems from "./components/store/IssueItems"; // ✅ Add this
+import CreatePurchase from "./components/store/CreatePurchase";
+import ListPurchase from "./components/store/ListPurchase";
+import IssueItems from "./components/store/IssueItems";
 import ListIssues from "./components/store/ListIssues";
-
 import StockAdjustment from "./components/store/StockAdjustment";
 import ListAdjustment from "./components/store/ListAdjustment";
 import StockBalance from "./components/store/StockBalance";
+import BarBalanceStock from "./components/store/BarBalanceStock";
 
 
 
+import ListBar from "./components/bar/ListBar";
+import BarStockBalance from "./components/bar/BarStockBalance";
 
+import StoreToBarControl from "./components/bar/StoreToBarControl";
+import BarStockAdjustment from "./components/bar/BarStockAdjustment";
 
-
-
-
-
-
-import ListBar from "./components/bar/ListBar"; // ✅ Add this
-
+import ListBarAdjustment from "./components/bar/ListBarAdjustment";
+import BarSalesCreate from "./components/bar/BarSalesCreate";
 
 
 
 console.log("✅ API BASE:", process.env.REACT_APP_API_BASE_URL);
-
-
-// import SearchPayment from "./components/payments/SearchPayment";
-// import VoidPayment from "./components/payments/VoidPayment";
 
 const App = () => {
   const [isLicenseVerified, setIsLicenseVerified] = useState(false);
@@ -106,56 +96,49 @@ const App = () => {
           }
         />
 
-
-          {/* ✅ Fullscreen Store route, outside /dashboard */}
-          <Route path="/store" element={<StoreDashboardPage />}>
-           
-            <Route path="vendor/list" element={<ListVendor />} />
-            <Route path="category/list" element={<ListCategory />} />
-            <Route path="items/list" element={<ListItem />} />  {/* ✅ FIXED */}
-            <Route path="purchase/create" element={<CreatePurchase />} /> {/* ✅ Add this */}
-            <Route path="purchase/list" element={<ListPurchase />} /> {/* ✅ Add this */}
-            <Route path="issue/create" element={<IssueItems />} />  {/* ✅ Add this */}
-            <Route path="issue/list" element={<ListIssues />} />
-            <Route path="adjustment/create" element={<StockAdjustment />} />
-            <Route path="adjustment/list" element={<ListAdjustment />} />
-            <Route path="stock-balance" element={<StockBalance />} />
-
-          </Route>
-
-
-          {/* ✅ Fullscreen Bar route, outside /dashboard */}
-          <Route path="/dashboard/bar/*" element={<BarDashboardPage />}>
-           
-            <Route path="list" element={<ListBar />} />
-
-            
-          </Route>
-
-          
+        {/* ✅ Fullscreen Store route */}
+        <Route path="/store" element={<StoreDashboardPage />}>
+          <Route path="vendor/list" element={<ListVendor />} />
+          <Route path="category/list" element={<ListCategory />} />
+          <Route path="items/list" element={<ListItem />} />
+          <Route path="purchase/create" element={<CreatePurchase />} />
+          <Route path="purchase/list" element={<ListPurchase />} />
+          <Route path="issue/create" element={<IssueItems />} />
+          <Route path="issue/list" element={<ListIssues />} />
+          <Route path="adjustment/create" element={<StockAdjustment />} />
+          <Route path="adjustment/list" element={<ListAdjustment />} />
+          <Route path="stock-balance" element={<StockBalance />} />
+          <Route path="barstock-balance" element={<BarBalanceStock />} />
+        </Route>
 
 
 
+        {/* ✅ Bar routes (match Store style: base /bar + relative children) */}
+        <Route path="/bar" element={<BarDashboardPage />}>
+          <Route path="list" element={<ListBar />} />
+          <Route path="stock-balance" element={<BarStockBalance />} />
+          <Route path="/bar/store-issues" element={<StoreToBarControl />} />
+          <Route path="/bar/adjustment/create" element={<BarStockAdjustment />} />
+          <Route path="/bar/adjustment/list" element={<ListBarAdjustment />} />
+          <Route path="/bar/sales/create" element={<BarSalesCreate />} />
+        </Route>
 
-          <Route path="/bar" element={<BarDashboardPage />} />
 
-          <Route path="/restaurant" element={<RestDashboardPage />} />
 
-        {/* Protected dashboard routes */}
+
+        {/* Restaurant dashboard */}
+        <Route path="/restaurant" element={<RestDashboardPage />} />
+
+        {/* Main dashboard (protected) */}
         <Route
-
-          
           path="/dashboard"
           element={
             isLicenseVerified ? <DashboardPage /> : <Navigate to="/license" replace />
           }
         >
-          
           <Route path="users" element={<UsersPage />} />
           <Route path="rooms" element={<RoomsPage />} />
           <Route path="rooms/status" element={<RoomStatusBoard />} />
-
-          
 
           {/* Bookings */}
           <Route path="bookings" element={<BookingsPage />}>
@@ -166,14 +149,13 @@ const App = () => {
             <Route path="cancel" element={<CancelBooking />} />
           </Route>
 
-          {/* ✅ Payments - now correctly placed */}
+          {/* Payments */}
           <Route path="payments">
             <Route path="create" element={<PaymentOutstandingList />} />
             <Route path="create/:booking_id" element={<CreatePayment />} />
             <Route path="list" element={<ListPayment />} />
             <Route path="void" element={<VoidPayment />} />
           </Route>
-
 
           {/* Events */}
           <Route path="events">
@@ -186,18 +168,10 @@ const App = () => {
             <Route path="view" element={<ViewEventForm />} />
             <Route path="update" element={<EventUpdate />} />
             <Route path="view/:id" element={<ViewEventPayment />} />
-            
-
           </Route>
 
-            
-      
-
-
-          {/* ✅ Add this line below to link the Reservation Alert */}
-            <Route path="reservation-alert" element={<ReservationAlert />} />
-
-
+          {/* Reservation alerts */}
+          <Route path="reservation-alert" element={<ReservationAlert />} />
         </Route>
 
         {/* Fallback */}

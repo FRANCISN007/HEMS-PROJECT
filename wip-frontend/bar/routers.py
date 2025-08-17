@@ -18,7 +18,7 @@ from typing import Optional
 from datetime import timedelta
 
 from app.store.models import StoreItem
-from app.bar.schemas import BarStockReceiveCreate, BarInventoryDisplay
+from app.bar.schemas import BarStockReceiveCreate, BarInventoryDisplay, BarItemSimple
 from datetime import datetime
 from app.bar.schemas import  BarInventoryReceiptDisplay  # <- New response schema
 
@@ -242,6 +242,47 @@ def delete_bar_inventory(inventory_id: int, db: Session = Depends(get_db)):
 
 
 
+@router.get("/items/simple", response_model=List[bar_schemas.BarSaleItemSummary])
+def get_bar_items(
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+):
+    # Get latest selling_price per item (avoid duplicates)
+    subquery = (
+        db.query(
+            bar_models.BarInventory.item_id,
+            func.max(bar_models.BarInventory.id).label("latest_inventory_id")
+        )
+        .group_by(bar_models.BarInventory.item_id)
+        .subquery()
+    )
+
+    items = (
+        db.query(
+            store_models.StoreItem.id.label("item_id"),
+            store_models.StoreItem.name.label("item_name"),
+            bar_models.BarInventory.selling_price.label("selling_price"),
+        )
+        .join(subquery, subquery.c.item_id == store_models.StoreItem.id)
+        .join(bar_models.BarInventory, bar_models.BarInventory.id == subquery.c.latest_inventory_id)
+        .all()
+    )
+
+    # Convert to schema format
+    result = [
+        bar_schemas.BarSaleItemSummary(
+            item_id=item.item_id,
+            item_name=item.item_name,
+            selling_price=item.selling_price,
+            quantity=0,
+            total_amount=0
+        )
+        for item in items
+    ]
+    return result
+
+
+
 @router.put("/inventory/set-price", response_model=bar_schemas.BarInventoryDisplay)
 def update_selling_price(
     data: bar_schemas.BarPriceUpdate,
@@ -291,46 +332,46 @@ def create_bar_sale(
             created_by_id=current_user.id
         )
         db.add(sale)
-        db.flush()  # Get sale.id before committing
+        db.flush()
 
         for item_data in sale_data.items:
-            # Step 1: Get BarInventory record
+            # Step 1: Get BarInventory record (for stock validation only)
             inventory = db.query(bar_models.BarInventory).filter_by(
                 bar_id=sale_data.bar_id,
                 item_id=item_data.item_id
             ).first()
 
             if not inventory:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Inventory not found for item ID {item_data.item_id}"
-                )
-
-            # Step 2: Check available quantity directly from inventory
-            if inventory.quantity < item_data.quantity:
+                db.rollback()
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Not enough stock for item ID {item_data.item_id} (available: {inventory.quantity})"
+                    detail=f"Bar {sale_data.bar_id} does not have item ID {item_data.item_id} in stock."
                 )
 
-            # Step 3: Update inventory quantity
+            # Step 2: Check stock availability
+            if inventory.quantity < item_data.quantity:
+                db.rollback()
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Not enough stock for item '{inventory.item.name}' "
+                           f"(requested: {item_data.quantity}, available: {inventory.quantity})."
+                )
+
+            # Step 3: Deduct stock
             inventory.quantity -= item_data.quantity
 
-            # Step 4: Calculate total for item
-            item_total = item_data.quantity * inventory.selling_price
+            # Step 4: Calculate using **frontend-sent price**
+            item_total = item_data.quantity * item_data.unit_price
             total_amount += item_total
 
-            # Step 5: Add the sale item
+            # Step 5: Save sale item
             sale_item = bar_models.BarSaleItem(
-            sale_id=sale.id,
-            bar_inventory_id=inventory.id,
-            quantity=item_data.quantity,
-            unit_price=inventory.selling_price,  # <-- This line is required
-            total_amount=item_total
-        )
-
-
-
+                sale_id=sale.id,
+                bar_inventory_id=inventory.id,
+                quantity=item_data.quantity,
+                unit_price=item_data.unit_price,   # 👈 use frontend-sent price
+                total_amount=item_total
+            )
             db.add(sale_item)
 
         # Step 6: Finalize sale
@@ -342,7 +383,9 @@ def create_bar_sale(
         sale = db.query(bar_models.BarSale).options(
             joinedload(bar_models.BarSale.bar),
             joinedload(bar_models.BarSale.created_by_user),
-            joinedload(bar_models.BarSale.sale_items).joinedload(bar_models.BarSaleItem.bar_inventory).joinedload(bar_models.BarInventory.item)
+            joinedload(bar_models.BarSale.sale_items)
+            .joinedload(bar_models.BarSaleItem.bar_inventory)
+            .joinedload(bar_models.BarInventory.item)
         ).get(sale.id)
 
         sale_items = []
@@ -355,7 +398,7 @@ def create_bar_sale(
                 item_id=inventory.item_id if inventory else 0,
                 item_name=item_name,
                 quantity=item.quantity,
-                selling_price=inventory.selling_price if inventory else 0.0,
+                selling_price=item.unit_price,   # 👈 now reflecting sale record price
                 total_amount=item.total_amount
             ))
 
@@ -543,6 +586,7 @@ def get_bar_stock_balance(
         # Step 1: Fetch issued items
         issued_query = db.query(
             store_models.StoreIssueItem.item_id,
+            store_models.StoreIssue.issued_to_id.label("bar_id"),  # ✅ NEW
             func.sum(store_models.StoreIssueItem.quantity).label("total_received")
         ).join(store_models.StoreIssue)
 
@@ -553,12 +597,13 @@ def get_bar_stock_balance(
         if end_date:
             issued_query = issued_query.filter(store_models.StoreIssue.issued_at <= end_date)
 
-        issued_query = issued_query.group_by(store_models.StoreIssueItem.item_id)
-        issued_data = {row.item_id: row.total_received for row in issued_query.all()}
+        issued_query = issued_query.group_by(store_models.StoreIssueItem.item_id, store_models.StoreIssue.issued_to_id)
+        issued_data = {(row.item_id, row.bar_id): row.total_received for row in issued_query.all()}
 
         # Step 2: Fetch sold items
         sold_query = db.query(
             bar_models.BarInventory.item_id,
+            bar_models.BarSale.bar_id,  # ✅ NEW
             func.sum(bar_models.BarSaleItem.quantity).label("total_sold")
         ).join(bar_models.BarSaleItem.bar_inventory).join(bar_models.BarSaleItem.sale)
 
@@ -569,14 +614,15 @@ def get_bar_stock_balance(
         if end_date:
             sold_query = sold_query.filter(bar_models.BarSale.sale_date <= end_date)
 
-        sold_query = sold_query.group_by(bar_models.BarInventory.item_id)
-        sold_data = {row.item_id: row.total_sold for row in sold_query.all()}
+        sold_query = sold_query.group_by(bar_models.BarInventory.item_id, bar_models.BarSale.bar_id)
+        sold_data = {(row.item_id, row.bar_id): row.total_sold for row in sold_query.all()}
 
         # Step 3: Fetch adjusted items
         adjusted_query = db.query(
             bar_models.BarInventoryAdjustment.item_id,
+            bar_models.BarInventoryAdjustment.bar_id,  # ✅ NEW
             func.sum(bar_models.BarInventoryAdjustment.quantity_adjusted).label("total_adjusted")
-        ).filter(True)
+        )
 
         if bar_id:
             adjusted_query = adjusted_query.filter(bar_models.BarInventoryAdjustment.bar_id == bar_id)
@@ -585,24 +631,29 @@ def get_bar_stock_balance(
         if end_date:
             adjusted_query = adjusted_query.filter(bar_models.BarInventoryAdjustment.adjusted_at <= end_date)
 
-        adjusted_query = adjusted_query.group_by(bar_models.BarInventoryAdjustment.item_id)
-        adjusted_data = {row.item_id: row.total_adjusted for row in adjusted_query.all()}
+        adjusted_query = adjusted_query.group_by(bar_models.BarInventoryAdjustment.item_id, bar_models.BarInventoryAdjustment.bar_id)
+        adjusted_data = {(row.item_id, row.bar_id): row.total_adjusted for row in adjusted_query.all()}
 
         # Step 4: Merge all data
-        all_item_ids = set(issued_data.keys()) | set(sold_data.keys()) | set(adjusted_data.keys())
+        all_keys = set(issued_data.keys()) | set(sold_data.keys()) | set(adjusted_data.keys())
         results = []
 
-        for item_id in all_item_ids:
-            issued = issued_data.get(item_id, 0)
-            sold = sold_data.get(item_id, 0)
-            adjusted = adjusted_data.get(item_id, 0)
+        for (item_id, b_id) in all_keys:
+            issued = issued_data.get((item_id, b_id), 0)
+            sold = sold_data.get((item_id, b_id), 0)
+            adjusted = adjusted_data.get((item_id, b_id), 0)
             balance = issued - sold - adjusted
 
             item = db.query(store_models.StoreItem).get(item_id)
+            bar = db.query(bar_models.Bar).get(b_id)  # ✅ NEW
 
             results.append(bar_schemas.BarStockBalance(
+                bar_id=b_id,
+                bar_name=bar.name if bar else "Unknown",  # ✅ NEW
                 item_id=item_id,
                 item_name=item.name if item else "Unknown",
+                category_name=item.category.name if item and item.category else "Uncategorized",
+                unit=item.unit if item else "-",
                 total_received=issued,
                 total_sold=sold,
                 total_adjusted=adjusted,

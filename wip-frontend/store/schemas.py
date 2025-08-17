@@ -253,3 +253,21 @@ class StoreInventoryAdjustmentDisplay(BaseModel):
 
 from app.bar.schemas import BarDisplaySimple
 SomeSchema.update_forward_refs()
+
+
+class BarStockBalanceRow(BaseModel):
+    bar_id: int
+    bar_name: str
+    item_id: int
+    item_name: str
+    unit: Optional[str]        # ✅ Ensure this exists
+    category_name: Optional[str]  # ✅ Ensure this exists
+    unit: Optional[str] = None
+    quantity: float
+    selling_price: float
+    amount: float  # quantity * selling_price
+
+class BarStockBalanceResponse(BaseModel):
+    rows: List[BarStockBalanceRow]
+    total_entries: int
+    total_amount: float

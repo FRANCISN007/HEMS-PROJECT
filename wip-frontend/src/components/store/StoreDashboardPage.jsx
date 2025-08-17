@@ -106,10 +106,17 @@ const StoreDashboardPage = () => {
         { label: "🔧 List Adjustment", path: "adjustment/list" },
       ],
     },
+
     {
-      name: "📊 Stock Balance",
+      name: "📊 Store Stock Balance",
       path: "stock-balance",
     },
+
+    {
+      name: "📊 Bar Stock Balance",
+      path: "barstock-balance",
+    },
+
     {
       name: "🏭 Manage Vendor",
       path: "vendor/list", // 👉 direct navigation
