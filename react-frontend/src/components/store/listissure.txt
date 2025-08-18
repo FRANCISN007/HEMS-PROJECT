@@ -1,0 +1,265 @@
+import React, { useState, useEffect } from "react";
+import axiosWithAuth from "../../utils/axiosWithAuth";
+import "./ListIssues.css";
+
+const ListIssues = () => {
+  const [issues, setIssues] = useState([]);
+  const [message, setMessage] = useState("");
+  const [barName, setBarName] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [bars, setBars] = useState([]);
+  const [formData, setFormData] = useState({
+    issue_to: "",
+    issued_to_id: "",
+    issue_date: "",
+    issue_items: [],
+  });
+
+  useEffect(() => {
+    fetchBars();
+  }, []);
+
+  useEffect(() => {
+    fetchIssues();
+  }, [barName, startDate, endDate]);
+
+  const fetchBars = async () => {
+    try {
+      const res = await axiosWithAuth().get("/bar/bars/simple");
+      if (Array.isArray(res.data)) {
+        setBars(res.data);
+      } else {
+        console.warn("Bars response is not an array:", res.data);
+        setBars([]);
+      }
+    } catch (err) {
+      console.error("❌ Error fetching bars", err);
+    }
+  };
+
+  const fetchIssues = async () => {
+    try {
+      const params = {};
+      if (barName.trim()) params.bar_name = barName;
+      if (startDate) params.start_date = startDate;
+      if (endDate) params.end_date = endDate;
+
+      const res = await axiosWithAuth().get("/store/issues", { params });
+      if (Array.isArray(res.data)) {
+        setIssues(res.data);
+      } else {
+        console.warn("Issues response is not an array:", res.data);
+        setIssues([]);
+      }
+    } catch (err) {
+      console.error("❌ Error fetching issues", err);
+    }
+  };
+
+  const handleEditClick = (issue) => {
+    setEditingId(issue.id);
+    setFormData({
+      issue_to: issue.issued_to?.name || "",
+      issued_to_id: issue.issued_to?.id || "",
+      issue_date: issue.issue_date?.split("T")[0] || "",
+      issue_items: issue.issue_items.map((item) => ({
+        item_id: item.item?.id,
+        quantity: item.quantity,
+      })),
+    });
+  };
+
+  const handleFormChange = (index, field, value) => {
+    const newItems = [...formData.issue_items];
+    newItems[index][field] = value;
+    setFormData({ ...formData, issue_items: newItems });
+  };
+
+  const handleSubmitEdit = async (id) => {
+    try {
+      await axiosWithAuth().put(`/store/issues/${id}`, formData);
+      setMessage("✅ Issue updated successfully.");
+      setEditingId(null);
+      fetchIssues();
+    } catch (err) {
+      console.error("❌ Update failed", err);
+      setMessage("❌ Failed to update issue.");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm("Are you sure you want to delete this issue?")) {
+      try {
+        await axiosWithAuth().delete(`/store/issues/${id}`);
+        setMessage("✅ Issue deleted successfully.");
+        fetchIssues();
+      } catch (err) {
+        console.error("❌ Delete failed", err);
+        setMessage("❌ Failed to delete issue.");
+      }
+    }
+  };
+
+  // Summary calculations
+  const totalIssued = issues.length;
+  const totalQuantity = issues.reduce((acc, issue) => {
+    const qty = issue.issue_items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
+    return acc + qty;
+  }, 0);
+
+  return (
+    <div className="list-issues-container">
+      <h2>📦 List of Issued Items</h2>
+
+      <div className="filters">
+        <select
+          value={barName}
+          onChange={(e) => setBarName(e.target.value)}
+        >
+          <option value="">-- Filter by Bar --</option>
+          {Array.isArray(bars) &&
+            bars.map((bar) => (
+              <option key={bar.id} value={bar.name}>
+                {bar.name}
+              </option>
+            ))}
+        </select>
+
+        <input
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+        />
+        <input
+          type="date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+        />
+        <button onClick={fetchIssues}>🔍 Filter</button>
+        <button
+          onClick={() => {
+            setBarName("");
+            setStartDate("");
+            setEndDate("");
+          }}
+        >
+          ♻️ Reset
+        </button>
+      </div>
+
+      {message && <p className="issue-message">{message}</p>}
+
+      <div className="summary">
+        <p>Total Entries: {totalIssued}</p>
+        <p>Total Quantity Issued: {totalQuantity}</p>
+      </div>
+
+      <table className="list-issues-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Issue To</th>
+            <th>Issue Date</th>
+            <th>Items Issued</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {issues.length === 0 ? (
+            <tr>
+              <td colSpan="5">No issues found.</td>
+            </tr>
+          ) : (
+            issues.map((issue) => (
+              <React.Fragment key={issue.id}>
+                <tr>
+                  <td>{issue.id}</td>
+                  <td>{issue.issued_to?.name || "Unnamed Bar"}</td>
+                  <td>{new Date(issue.issue_date).toLocaleString()}</td>
+                  <td>
+                    <ul style={{ paddingLeft: "1rem", margin: 0 }}>
+                      {issue.issue_items.map((item) => (
+                        <li key={item.id}>
+                          {item.item?.name || "Unnamed Item"} — Qty: {item.quantity}
+                        </li>
+                      ))}
+                    </ul>
+                  </td>
+                  <td>
+                    <button className="edit-btn" onClick={() => handleEditClick(issue)}>
+                      ✏️ Edit
+                    </button>
+                    <button className="delete-btn" onClick={() => handleDelete(issue.id)}>
+                      🗑️ Delete
+                    </button>
+                  </td>
+                </tr>
+
+                {editingId === issue.id && (
+                  <tr>
+                    <td colSpan="5">
+                      <div className="edit-form">
+                        <label>Issue To (Bar):</label>
+                        <select
+                          value={formData.issued_to_id}
+                          onChange={(e) => {
+                            const selectedId = parseInt(e.target.value);
+                            const selectedBar = bars.find((bar) => bar.id === selectedId);
+                            setFormData({
+                              ...formData,
+                              issued_to_id: selectedId,
+                              issue_to: selectedBar?.name || "",
+                            });
+                          }}
+                        >
+                          <option value="">-- Select a bar --</option>
+                          {bars.map((bar) => (
+                            <option key={bar.id} value={bar.id}>
+                              {bar.name}
+                            </option>
+                          ))}
+                        </select>
+
+                        <label>Issue Date:</label>
+                        <input
+                          type="date"
+                          value={formData.issue_date}
+                          onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })}
+                        />
+
+                        <h4>Items</h4>
+                        {formData.issue_items.map((item, index) => (
+                          <div key={index}>
+                            <label>Item ID:</label>
+                            <input
+                              type="number"
+                              value={item.item_id}
+                              onChange={(e) => handleFormChange(index, "item_id", e.target.value)}
+                            />
+                            <label>Quantity:</label>
+                            <input
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => handleFormChange(index, "quantity", e.target.value)}
+                            />
+                          </div>
+                        ))}
+
+                        <button onClick={() => handleSubmitEdit(issue.id)}>✅ Save</button>
+                        <button onClick={() => setEditingId(null)}>❌ Cancel</button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+export default ListIssues;

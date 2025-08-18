@@ -279,6 +279,9 @@ const printContent = () => {
     { name: "📅 Bookings", path: "/dashboard/bookings" },
     { name: "💳 Payments", path: "/dashboard/payments" },
     { name: "🎉 Events", path: "/dashboard/events" },
+    { name: "🍷 Bar", path: "/bar" },
+    { name: "🏪 Store", path: "/store" },
+    { name: "🍽️ Restaurant", path: "/restaurant" },
     { name: "🟩 Room Status", path: "/dashboard/rooms/status" }, // ⬅️ add this
   ];
 
@@ -376,11 +379,11 @@ const printContent = () => {
               >
                 <button
                   onClick={() => {
-                    if (!isBookings && !isPayments && !isEvents) {
-                      navigate(item.path);
-                    }
-                    
+                    navigate(item.path); // let React Router handle it
                   }}
+
+
+
                   className={`sidebar-button ${
                     isBookings && isBookingsHovered ||
                     isPayments && isPaymentsHovered ||
@@ -389,7 +392,7 @@ const printContent = () => {
                       : ""
                   }`}
                 >
-                  <span style={{ fontSize: "1.6rem", marginRight: "8px" }}>
+                  <span style={{ fontSize: "1.3rem", marginRight: "6px" }}>
                     {item.name.slice(0, 2)}
                   </span>
                   {item.name.slice(2).trim()}

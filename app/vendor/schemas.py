@@ -14,11 +14,17 @@ class VendorBase(BaseModel):
 class VendorCreate(VendorBase):
     pass
 
-class VendorOut(VendorBase):
+
+
+class VendorOut(BaseModel):
     id: int
+    business_name: str
+    address: str
+    phone_number: str
+
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class VendorDisplay(BaseModel):

@@ -1,0 +1,155 @@
+/* src/components/store/ListIssues.css */
+
+.list-issues-container {
+  max-width: 1000px;
+  margin: 5px auto;
+  padding: 10px;
+  background: rgb(238, 234, 234);
+  border-radius: 10px;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+}
+
+.list-issues-container h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.list-issues-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #fafafa;
+}
+
+.list-issues-table th,
+.list-issues-table td {
+  padding: 4px;
+  border: 1px solid #ccc;
+  text-align: center;
+}
+
+.list-issues-table th {
+  background-color: #2b3342;
+  color: white;
+}
+
+.list-issues-table button {
+  margin: 0 4px;
+  padding: 3px 6px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+
+
+.edit-btn {
+  background-color: #10b981;
+  color: white;
+}
+
+.delete-btn {
+  background-color: #ef4444;
+  color: white;
+}
+
+.issue-message {
+  margin: 1rem 0;
+  font-weight: bold;
+  text-align: center;
+  color: green;
+}
+
+
+.filters {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.filters input[type="text"],
+.filters input[type="date"] {
+  padding: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.filters button {
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+
+/* Modal background overlay */
+.edit-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 110vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.2);
+  display: flex;
+  border-radius: 8px;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* Ultra-compact edit form modal box */
+.edit-form {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  max-width: 360px;
+  width: 95%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+  z-index: 1001;
+}
+
+.edit-form label {
+  font-weight: 500;
+  color: #333;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+/* Inputs, selects, textareas */
+.edit-form input,
+.edit-form select,
+.edit-form textarea {
+  grid-column: span 2;
+  padding: 4px 6px;
+  border: 1px solid #bbb;
+  border-radius: 8px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.edit-form input:focus,
+.edit-form select:focus,
+.edit-form textarea:focus {
+  border-color: #007bff;
+}
+
+/* Button */
+.edit-form button {
+  grid-column: span 2;
+  padding: 6px 8px;
+  font-size: 13px;
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.edit-form button:hover {
+  background-color: #0056b3;
+}

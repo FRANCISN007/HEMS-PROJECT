@@ -45,3 +45,14 @@ react-frontend/
   │   └── api.js
   ├── App.js
   └── index.js
+
+
+info install
+npm install react-icons
+
+
+now lets work on something again, in the dashboard display content, i have the room status display session and the bar chart session. i want to replace that bar chart  session to payment status session, so as the guest payment i posted it will display a green as payment, the display will look like the room status box like display but in smaller form, we may have color display as this, since we have payment status as 
+fully paid : green
+part payment: dark grey
+pending: light gray 
+complimentary:

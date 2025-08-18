@@ -1,0 +1,143 @@
+.category-list-container {
+  max-width: 500px;
+  margin: 10px auto; /* Move up and center */
+  padding: 16px;
+  background-color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+}
+
+.category-list-container h2 {
+  margin-bottom: 8px;
+  text-align: center;
+  font-size: 1.3rem;
+  color: #2c3e50;
+}
+
+.category-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.category-table th,
+.category-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.category-table th {
+  background-color: #f4f4f4;
+  font-weight: 600;
+}
+
+.even-row {
+  background-color: #ffffff;
+}
+
+.odd-row {
+  background-color: #f9f9f9;
+}
+
+.action-btn {
+  margin-right: 4px;
+  padding: 4px 7px;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 0.78rem;
+}
+
+.action-btn.update {
+  background-color: #007bff;
+  color: white;
+}
+
+.action-btn.delete {
+  background-color: #dc3545;
+  color: white;
+}
+
+.action-btn.save {
+  background-color: #28a745;
+  color: white;
+}
+
+.action-btn.cancel {
+  background-color: #6c757d;
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .category-list-container {
+    max-width: 92%;
+    padding: 12px;
+  }
+
+  .category-table th,
+  .category-table td {
+    padding: 6px;
+    font-size: 0.85rem;
+  }
+
+  .action-btn {
+    padding: 4px 8px;
+    font-size: 0.78rem;
+  }
+}
+
+.form-header {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.close-button {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #888;
+  cursor: pointer;
+  padding: 6px;
+  line-height: 1;
+}
+
+.close-button:hover {
+  color: #d00;
+}
+
+.create-category-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.create-category-form input {
+  flex-grow: 1;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.create-category-form .create-btn {
+  padding: 8px 12px;
+  border: none;
+  background-color: #27ae60;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.create-category-form .create-btn:hover {
+  background-color: #219150;
+}

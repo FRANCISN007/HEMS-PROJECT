@@ -1,0 +1,121 @@
+.bar-container {
+  max-width: 750px;
+  margin: 0 auto;
+  background: #f1eded;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  font-size: 14px;
+}
+
+.bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bar-header h2 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 20px;
+}
+
+.close-btn {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  font-size: 20px;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.bar-form {
+  display: flex;
+  gap: 10px;
+  margin: 15px 0;
+  flex-wrap: wrap;
+}
+
+.bar-form input {
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  flex: 1;
+}
+
+.bar-form button {
+  padding: 6px 12px;
+  background-color: #2980b9;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.bar-form button:hover {
+  background-color: #2471a3;
+}
+
+.bar-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.bar-table th,
+.bar-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+  border-radius: 6px;
+}
+
+.bar-table th {
+  background-color: #f4f4f4;
+  color: #2c3e50;
+}
+
+.odd-row {
+  background-color: #f9f9f9;
+}
+
+.even-row {
+  background-color: #ffffff;
+}
+
+.action-btn {
+  margin-right: 5px;
+  padding: 4px 8px;
+  font-size: 12px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.action-btn.update {
+  background-color: #3498db;
+  color: white;
+}
+
+.action-btn.delete {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.action-btn.save {
+  background-color: #2ecc71;
+  color: white;
+}
+
+.action-btn.cancel {
+  background-color: #95a5a6;
+  color: white;
+}
+
+.bar-message {
+  margin-top: 10px;
+  font-weight: bold;
+  color: #2c3e50;
+}

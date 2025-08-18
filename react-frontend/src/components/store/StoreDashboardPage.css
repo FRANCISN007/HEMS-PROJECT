@@ -1,0 +1,227 @@
+/* Container holds sidebar and main content side by side */
+.dashboard-container {
+  display: flex;
+  height: 100vh;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #3e66a3;
+  position: relative;
+  overflow: hidden; /* prevent scroll */
+}
+
+
+/* Sidebar styling */
+.sidebars1 {
+  width: 160px; /* reduced width */
+  background: #1f2937; /* dark slate */
+  color: white;
+  padding: 20px 15px; /* less horizontal padding */
+  box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column; /* vertical stack */
+  border-radius: 0 10px 10px 0;
+  z-index: 1;
+}
+
+/* Sidebar Title */
+.sidebar-title {
+  font-weight: 700;
+  font-size: 1.3rem;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #f3f5f3; /* green accent */
+  padding-bottom: 8px;
+  text-align: center;  /* <-- centered text */
+}
+
+/* Sidebar buttons - vertical list */
+.sidebars1-button {
+  background: transparent;
+  border: none;
+  color: #d1d5db;
+  text-align: left;
+  padding: 10px 12px; /* reduced from 12px 15px */
+  margin-bottom: 8px; /* reduced space between buttons */
+  font-size: 0.95rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  display: block;
+  width: 100%;
+  white-space: nowrap;
+}
+
+
+.sidebars1-button:hover,
+.sidebars1-button.active {
+  background-color: #4ade80; /* green accent */
+  color: #111827;
+}
+
+
+
+
+
+/* Logout button - moved outside sidebar at top-right of dashboard */
+.logout-button1 {
+  background-color: #b91c1c; /* dark red */
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 2px solid #ef4444;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  white-space: nowrap;
+}
+.logout-button1:hover {
+  background-color: #7f1d1d;
+}
+
+/* Main content area */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 20px; /* tighter layout */
+  background-color: #c5ccd8;
+  overflow: hidden;
+  height: 100vh;
+  box-sizing: border-box;
+}
+
+
+
+
+/* Header */
+.header {
+  height: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  gap: 20px;
+}
+
+
+.header-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a45a1;
+  margin: 0;
+}
+
+
+.dashboard-icon {
+  margin-right: 10px;
+  font-size: 1.4rem;
+  color: #0f4ad6; /* or your theme color */
+  vertical-align: middle;
+}
+
+
+.content-area {
+  background-color:#e2d8d8f8;
+  padding: 20px 30px;  /* smaller padding */
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+  flex: 1;
+  width: 100%;
+  height: auto; /* allow content to grow naturally */
+  box-sizing: border-box;
+  overflow: auto;
+}
+
+
+.sidebar-item-wrapper {
+  position: relative;
+}
+
+/* Keep sidebar-button green if submenu is visible or hovered */
+.sidebar-button-active {
+  background-color: #4ade80;
+  color: #1655dd;
+}
+
+
+
+/* Submenu items match green theme and transition */
+.submenu-item {
+  display: block;
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 6px 12px; /* Reduced vertical and horizontal padding */
+  width: 100%;
+  cursor: pointer;
+  font-size: 0.85rem; /* Slightly smaller text */
+  color: #111827;
+  transition: background-color 0.3s, color 0.3s;
+  line-height: 1.2; /* tighter line height */
+}
+
+/* Submenu hover color darker for feedback */
+.submenu-item:hover {
+  background-color:  #4ade80; /* slightly darker green */
+  color: #0f4ad6;
+}
+
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.modal-content {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
+  position: relative;
+  max-height: 95%;
+  overflow-y: auto;
+}
+
+
+
+.action-button1 {
+  background-color: transparent;
+  color: #333;
+  border: 1px solid #c2bfda;   /* Light border */
+  border-radius: 6px;
+  padding: 6px 4px;         /* Increased padding */
+  font-size: 14px;           /* Slightly larger text */
+  transition: color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+  cursor: pointer;
+  
+}
+
+.action-button1:hover {
+  color: #3301fa;            /* Change text color on hover */
+ border-color: #5537c4;
+}
+
+
+
+.sidebars-button {
+  padding: 8px 12px;
+  background-color: #3e66a3;
+  border: none;
+  color: white;
+  font-size: 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  margin: 6px 0;
+  transition: background-color 0.3s;
+}
+
+.sidebars-button:hover {
+  background-color: #2e518c;
+}

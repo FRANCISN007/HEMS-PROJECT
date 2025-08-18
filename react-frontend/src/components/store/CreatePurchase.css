@@ -1,0 +1,157 @@
+/* ===== Container ===== */
+.create-purchase-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  background: #faf7f7;
+  padding: 25px;
+  border-radius: 10px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+  font-family: Arial, sans-serif;
+}
+
+.create-purchase-container h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+/* ===== Top Form ===== */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 5px;
+  color: #444;
+}
+
+.form-group input,
+.form-group select {
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+  background-color: #fff;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: #3498db;
+  outline: none;
+}
+
+/* ===== Table Layout ===== */
+.purchase-items-table {
+  width: 100%;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  overflow-x: auto;
+}
+
+.table-header {
+  display: grid;
+  grid-template-columns: 2.4fr 1.3fr 1.3fr 1.3fr 1.3fr 0.8fr;
+  background-color: #f7f7f7;
+  padding: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  border-bottom: 1px solid #ddd;
+  color: #333;
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: 0.4fr 2.2fr 2fr 1.3fr 1.3fr 0.8fr;
+  gap: 8px;
+  padding: 8px;
+  align-items: center;
+  border-bottom: 1px solid #eee;
+}
+
+.table-row:nth-child(even) {
+  background-color: #fafafa;
+}
+
+.table-row input,
+.table-row select {
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.table-row input[readonly] {
+  background: #f0f0f0;
+}
+
+/* ===== Buttons ===== */
+.add-row-btn {
+  margin-top: 12px;
+  background-color: #27ae60;
+  color: #382e2e;
+  border: none;
+  padding: 8px 14px;
+  font-size: 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.add-row-btn:hover {
+  background-color: #219150;
+}
+
+.remove-btn {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.remove-btn:hover {
+  background-color: #c0392b;
+}
+
+.submit-button {
+  margin-top: 15px;
+  background-color: #3498db;
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  font-size: 15px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.submit-button:hover {
+  background-color: #2980b9;
+}
+
+/* ===== Invoice Total ===== */
+.invoice-total {
+  margin-top: 10px;
+  font-size: 1.1em;
+  text-align: right;
+}
+
+/* ===== Message ===== */
+.message {
+  margin-top: 10px;
+  font-size: 14px;
+  padding: 8px;
+  border-radius: 6px;
+}

@@ -16,9 +16,10 @@ class Bar(Base):
     location = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # Relationships
     inventory_items = relationship("BarInventory", back_populates="bar", cascade="all, delete-orphan")
     sales = relationship("BarSale", back_populates="bar", cascade="all, delete-orphan")
-
+    issues = relationship("StoreIssue", back_populates="issued_to")  # ✅ Match the other side
 
 
 

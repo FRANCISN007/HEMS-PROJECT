@@ -12,9 +12,31 @@ from app.vendor import models, schemas
 
 router = APIRouter()
 
+from fastapi import HTTPException, status
+from sqlalchemy import func  # for case-insensitive search
+
 @router.post("/", response_model=schemas.VendorOut)
 def create_vendor(vendor: schemas.VendorCreate, db: Session = Depends(get_db)):
-    new_vendor = models.Vendor(**vendor.dict())
+    # Normalize the business name: trim and lowercase
+    normalized_name = vendor.business_name.strip().lower()
+
+    # Check if vendor with same name exists (case-insensitive)
+    existing_vendor = (
+        db.query(models.Vendor)
+        .filter(func.lower(models.Vendor.business_name) == normalized_name)
+        .first()
+    )
+    if existing_vendor:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vendor name already exists"
+        )
+
+    # Save vendor with trimmed business name
+    vendor_data = vendor.dict()
+    vendor_data["business_name"] = vendor.business_name.strip()
+    new_vendor = models.Vendor(**vendor_data)
+
     db.add(new_vendor)
     db.commit()
     db.refresh(new_vendor)
@@ -22,7 +44,7 @@ def create_vendor(vendor: schemas.VendorCreate, db: Session = Depends(get_db)):
 
 @router.get("/", response_model=List[schemas.VendorOut])
 def list_vendors(db: Session = Depends(get_db)):
-    return db.query(models.Vendor).all()
+    return db.query(models.Vendor).order_by(models.Vendor.id.asc()).all()
 
 @router.get("/{vendor_id}", response_model=schemas.VendorOut)
 def get_vendor(vendor_id: int, db: Session = Depends(get_db)):

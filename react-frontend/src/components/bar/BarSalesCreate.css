@@ -1,0 +1,76 @@
+.sale-container {
+  max-width: 900px;
+  margin: auto;
+  padding: 20px;
+  background: #fefefe;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.sale-container h2 {
+  margin-bottom: 15px;
+  color: #2c3e50;
+}
+
+.sale-message {
+  padding: 10px;
+  background: #f1f8e9;
+  color: #2e7d32;
+  margin-bottom: 15px;
+  border-radius: 5px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group select {
+  padding: 6px;
+  border-radius: 5px;
+}
+
+.sale-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 15px;
+}
+
+.sale-table th,
+.sale-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: center;
+}
+
+.sale-table th {
+  background: #f4f4f4;
+}
+
+.add-btn,
+.remove-btn,
+.submit-btn {
+  background: #3498db;
+  color: white;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.remove-btn {
+  background: #e74c3c;
+}
+
+.add-btn {
+  margin-top: 10px;
+}
+
+.totals {
+  margin-top: 15px;
+  font-weight: bold;
+}
+
+.submit-btn {
+  margin-top: 20px;
+  background: #2ecc71;
+}

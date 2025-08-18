@@ -1,0 +1,63 @@
+.issue-items-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 0 5px rgba(0,0,0,0.1);
+}
+
+.issue-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.issue-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.issue-table th,
+.issue-table td {
+  border: 1px solid #ccc;
+  padding: 8px;
+  text-align: left;
+}
+
+.add-row-btn,
+.submit-btn {
+  margin-top: 10px;
+  padding: 8px 16px;
+  font-weight: bold;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.add-row-btn {
+  background-color: #ddd;
+}
+
+.submit-btn {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.issue-message {
+  margin-top: 1rem;
+  font-weight: bold;
+}
+
+.issue-form input,
+.issue-form select,
+.issue-table input,
+.issue-table select {
+  width: 100%;
+  padding: 6px;
+  box-sizing: border-box;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+
