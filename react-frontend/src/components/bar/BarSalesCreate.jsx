@@ -116,7 +116,7 @@ const BarSalesCreate = () => {
           .map((row) => ({
             item_id: Number(row.item_id),
             quantity: row.quantity,
-            unit_price: row.selling_price,
+            selling_price: row.selling_price,
           })),
       };
 
@@ -172,7 +172,7 @@ const BarSalesCreate = () => {
             <tr>
               <th>Item</th>
               <th>Quantity</th>
-              <th>Unit Price (₦)</th>
+              <th>Selling Price (₦)</th>
               <th>Total (₦)</th>
               <th>Action</th>
             </tr>

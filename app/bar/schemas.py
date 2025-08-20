@@ -100,7 +100,7 @@ class BarStockReceiveCreate(BaseModel):
 class BarSaleItemCreate(BaseModel):
     item_id: int
     quantity: int
-    unit_price: float   # 👈 allow frontend to set price
+    selling_price: float   # 👈 allow frontend to set price
 
 
 
@@ -143,6 +143,14 @@ class BarSaleDisplay(BaseModel):
         "from_attributes": True  # replaces orm_mode in Pydantic v2
     }
 
+
+class BarSaleListResponse(BaseModel):
+    total_entries: int
+    total_sales_amount: float
+    sales: List[BarSaleDisplay]
+
+    
+
 class BarInventoryReceiptDisplay(BaseModel):
     id: int
     bar_id: int
@@ -160,10 +168,7 @@ class BarInventoryReceiptDisplay(BaseModel):
 
 
 
-class BarSaleListResponse(BaseModel):
-    total_entries: int
-    total_sales_amount: float
-    sales: List[BarSaleDisplay]
+
 
 
 class BarInventorySummaryDisplay(BaseModel):

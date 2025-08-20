@@ -108,9 +108,9 @@ const BarStockAdjustment = () => {
         <label>Quantity to Deduct</label>
         <input
           type="number"
-          min="1"
           value={quantityAdjusted}
           onChange={(e) => setQuantityAdjusted(e.target.value)}
+          placeholder="e.g. 5 to reduce, -5 to add"
         />
 
         {/* Reason */}

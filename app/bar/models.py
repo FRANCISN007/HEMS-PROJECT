@@ -120,7 +120,7 @@ class BarSaleItem(Base):
     sale_id = Column(Integer, ForeignKey("bar_sales.id"), nullable=False)
     bar_inventory_id = Column(Integer, ForeignKey("bar_inventory.id"), nullable=False)
     quantity = Column(Integer, nullable=False)
-    unit_price = Column(Float, nullable=False)
+    selling_price = Column(Float, nullable=False)
     total_amount = Column(Float, nullable=False)
 
     sale = relationship("BarSale", back_populates="sale_items")

@@ -61,6 +61,8 @@ import BarStockAdjustment from "./components/bar/BarStockAdjustment";
 
 import ListBarAdjustment from "./components/bar/ListBarAdjustment";
 import BarSalesCreate from "./components/bar/BarSalesCreate";
+import ListBarSales from "./components/bar/ListBarSales";
+
 
 
 
@@ -121,6 +123,8 @@ const App = () => {
           <Route path="/bar/adjustment/create" element={<BarStockAdjustment />} />
           <Route path="/bar/adjustment/list" element={<ListBarAdjustment />} />
           <Route path="/bar/sales/create" element={<BarSalesCreate />} />
+          <Route path="/bar/sales/list" element={<ListBarSales />} />
+          
         </Route>
 
 
