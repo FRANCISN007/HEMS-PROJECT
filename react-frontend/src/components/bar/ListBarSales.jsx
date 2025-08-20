@@ -170,8 +170,8 @@ const ListBarSales = () => {
             <tr>
               <th>Date</th>
               <th>Bar</th>
-              <th>Total Amount</th>
               <th>Items</th>
+              <th>Total Amount</th>
               <th>Created By</th>
               <th>Actions</th>
             </tr>
@@ -181,14 +181,16 @@ const ListBarSales = () => {
               <tr key={sale.id} className={idx % 2 === 0 ? "even" : "odd"}>
                 <td>{new Date(sale.sale_date).toLocaleDateString()}</td>
                 <td>{sale.bar_name}</td>
-                <td>₦{sale.total_amount.toLocaleString()}</td>
+                
                 <td>
                   {sale.sale_items.map((i, iidx) => (
                     <div key={iidx}>
                       {i.item_name} - {i.quantity} @ ₦{i.selling_price}
                     </div>
+                
                   ))}
                 </td>
+                <td>₦{sale.total_amount.toLocaleString()}</td>
                 <td>{sale.created_by}</td>
                 <td>
                   <button onClick={() => handleEdit(sale)}>✏ Edit</button>
