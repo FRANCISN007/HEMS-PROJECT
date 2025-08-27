@@ -206,8 +206,8 @@ const formatAmount = (amount) => {
 
       {/* Payment Modal */}
       {selectedSale && (
-        <div className="modal-overlay">
-          <div className="modal">
+        <div className="modal-overlay1">
+          <div className="modal1">
             <h3>Make Payment for Sale #{selectedSale.bar_sale_id}</h3>
             <form onSubmit={handlePayment}>
               <label>Amount Paid:</label>
@@ -228,7 +228,7 @@ const formatAmount = (amount) => {
                 <option value="transfer">Transfer</option>
               </select>
 
-              <div className="modal-actions">
+              <div className="modal-actions1">
                 <button type="submit">Submit Payment</button>
                 <button type="button" onClick={() => setSelectedSale(null)}>
                   Cancel

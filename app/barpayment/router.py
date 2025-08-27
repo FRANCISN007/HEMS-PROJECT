@@ -73,21 +73,38 @@ def create_bar_payment(
 
 from sqlalchemy.sql import func
 
-@router.get("/", response_model=list[schemas.BarPaymentDisplay])
+@router.get("/")
 def list_bar_payments(
+    bar_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user)
 ):
-    payments = db.query(models.BarPayment).all()
+    query = db.query(models.BarPayment).order_by(models.BarPayment.date_paid.desc())
+
+    if bar_id:
+        query = query.join(BarSale).filter(BarSale.bar_id == bar_id)
+
+    payments = query.all()
     response = []
+
+    # ✅ Summary accumulators
+    total_sales = 0
+    total_paid_all = 0
+    total_due_all = 0
+    total_cash = 0
+    total_pos = 0
+    total_transfer = 0
+
+    # ✅ Track unique sales so we don’t double count
+    processed_sales = set()
 
     for p in payments:
         sale = db.query(BarSale).filter(BarSale.id == p.bar_sale_id).first()
         if not sale:
             continue
 
-        # Total active payments for this sale
-        total_paid = (
+        # ✅ Compute balance for this sale (always)
+        total_paid_for_sale = (
             db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
             .filter(
                 models.BarPayment.bar_sale_id == sale.id,
@@ -95,28 +112,43 @@ def list_bar_payments(
             )
             .scalar()
         )
+        balance_due = float(sale.total_amount) - float(total_paid_for_sale)
 
-        balance_due = float(sale.total_amount) - float(total_paid)
+        # ✅ Only add once per sale (sales + balance)
+        if sale.id not in processed_sales:
+            total_sales += float(sale.total_amount)
+            total_due_all += balance_due
+            processed_sales.add(sale.id)
 
-        # Decide overall sale status
-        if total_paid == 0:
+        # ✅ Always add each individual payment
+        total_paid_all += float(p.amount_paid)
+
+        # ✅ Decide payment status
+        if total_paid_for_sale == 0:
             payment_status = "unpaid"
-        elif total_paid < sale.total_amount:
+        elif total_paid_for_sale < sale.total_amount:
             payment_status = "part payment"
         else:
             payment_status = "fully paid"
 
-        # For voided payments, always show "voided"
-        if p.status == "voided":
-            row_status = "voided"
-        else:
-            row_status = payment_status
+        # ✅ Handle voided rows
+        row_status = "voided" if p.status == "voided" else payment_status
+
+        # ✅ Per-method totals
+        if p.payment_method:
+            method = p.payment_method.lower()
+            if method == "cash":
+                total_cash += float(p.amount_paid)
+            elif method in ["pos", "card"]:
+                total_pos += float(p.amount_paid)
+            elif method == "transfer":
+                total_transfer += float(p.amount_paid)
 
         response.append({
             "id": p.id,
             "bar_sale_id": p.bar_sale_id,
             "sale_amount": float(sale.total_amount),
-            "amount_paid": float(total_paid),  # cumulative paid
+            "amount_paid": float(p.amount_paid),
             "balance_due": float(balance_due),
             "payment_method": p.payment_method,
             "note": p.note,
@@ -125,8 +157,17 @@ def list_bar_payments(
             "status": row_status
         })
 
-    return response
-
+    return {
+        "payments": response,
+        "summary": {
+            "total_sales": total_sales,
+            "total_paid": total_paid_all,
+            "total_due": total_due_all,
+            "total_cash": total_cash,
+            "total_pos": total_pos,
+            "total_transfer": total_transfer,
+        }
+    }
 
 from fastapi import Query
 
@@ -185,19 +226,67 @@ def list_outstanding_payments(
 
 
 @router.put("/{payment_id}", response_model=schemas.BarPaymentDisplay)
-def update_bar_payment(payment_id: int, update_data: schemas.BarPaymentUpdate, db: Session = Depends(get_db)):
-    payment = db.query(models.BarPayment).filter(models.BarPayment.id == payment_id, models.BarPayment.status == "active").first()
+def update_bar_payment(
+    payment_id: int,
+    update_data: schemas.BarPaymentUpdate,
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user)
+):
+    payment = (
+        db.query(models.BarPayment)
+        .filter(models.BarPayment.id == payment_id, models.BarPayment.status == "active")
+        .first()
+    )
     if not payment:
         raise HTTPException(status_code=404, detail="Active payment not found")
 
-    if update_data.amount is not None:
-        payment.amount = update_data.amount
+    # ✅ Apply updates
+    if update_data.amount_paid is not None:
+        payment.amount_paid = update_data.amount_paid
     if update_data.payment_method is not None:
         payment.payment_method = update_data.payment_method
+    if update_data.note is not None:
+        payment.note = update_data.note
 
     db.commit()
     db.refresh(payment)
-    return payment
+
+    # ✅ Recalculate balance for the related sale
+    sale = db.query(BarSale).filter(BarSale.id == payment.bar_sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Bar sale not found")
+
+    total_paid = (
+        db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
+        .filter(
+            models.BarPayment.bar_sale_id == sale.id,
+            models.BarPayment.status == "active"
+        )
+        .scalar()
+    )
+    balance_due = float(sale.total_amount) - float(total_paid)
+
+    # ✅ Determine status (overall sale status)
+    if total_paid == 0:
+        status = "unpaid"
+    elif total_paid < sale.total_amount:
+        status = "part payment"
+    else:
+        status = "fully paid"
+
+    # ✅ Return consistent with list (individual entry, but with sale context)
+    return {
+        "id": payment.id,
+        "bar_sale_id": payment.bar_sale_id,
+        "sale_amount": float(sale.total_amount),    # total sale amount
+        "amount_paid": float(payment.amount_paid),  # only this entry’s payment
+        "balance_due": float(balance_due),          # remaining balance
+        "payment_method": payment.payment_method,
+        "note": payment.note,
+        "date_paid": payment.date_paid,
+        "created_by": payment.created_by,
+        "status": status,                           # overall sale status
+    }
 
 
 @router.put("/{payment_id}/void", response_model=schemas.BarPaymentDisplay)

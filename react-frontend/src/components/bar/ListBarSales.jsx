@@ -206,8 +206,8 @@ const ListBarSales = () => {
 
       {/* Edit Modal */}
       {editingSale && (
-        <div className="modal-overlay">
-          <div className="modal">
+        <div className="modal-overlay2">
+          <div className="modal2">
             <h3>Edit Sale</h3>
             <form onSubmit={handleUpdate}>
               <label>Bar</label>
@@ -267,7 +267,7 @@ const ListBarSales = () => {
                   .toLocaleString()}
               </p>
 
-              <div className="modal-actions">
+              <div className="modal-actions2">
                 <button type="submit">💾 Save</button>
                 <button type="button" onClick={() => setEditingSale(null)}>
                   ❌ Cancel
