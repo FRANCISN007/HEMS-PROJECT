@@ -16,6 +16,7 @@ from app.users.models import User
 from app.bar.models import Bar, BarInventoryReceipt
 from typing import Optional
 from datetime import timedelta
+from app.barpayment import models as barpayment_models
 
 from app.store.models import StoreItem
 from app.bar.schemas import BarStockReceiveCreate, BarInventoryDisplay, BarItemSimple
@@ -376,6 +377,7 @@ def create_bar_sale(
 
         # Step 6: Finalize sale
         sale.total_amount = total_amount
+        sale.status = "unpaid"   # 👈 make sure sales always start as unpaid
         db.commit()
         db.refresh(sale)
 
@@ -496,6 +498,97 @@ def list_bar_sales(
     }
 
 
+@router.get("/unpaid_sales", response_model=bar_schemas.BarSaleListResponse)
+def list_unpaid_sales(
+    bar_id: Optional[int] = None,
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+):
+    query = db.query(bar_models.BarSale).options(
+        joinedload(bar_models.BarSale.bar),
+        joinedload(bar_models.BarSale.created_by_user),
+        joinedload(bar_models.BarSale.sale_items)
+            .joinedload(bar_models.BarSaleItem.bar_inventory)
+            .joinedload(bar_models.BarInventory.item)
+    )
+
+    if bar_id:
+        query = query.filter(bar_models.BarSale.bar_id == bar_id)
+
+    if start_date and end_date:
+        query = query.filter(func.date(bar_models.BarSale.sale_date).between(start_date, end_date))
+    elif start_date:
+        query = query.filter(func.date(bar_models.BarSale.sale_date) >= start_date)
+    elif end_date:
+        query = query.filter(func.date(bar_models.BarSale.sale_date) <= end_date)
+
+    query = query.order_by(bar_models.BarSale.sale_date.desc())
+    sales = query.all()
+
+    results = []
+    total_sales_amount = 0.0
+
+    for sale in sales:
+        # ✅ Calculate total paid for this sale
+        total_paid = (
+            db.query(func.coalesce(func.sum(barpayment_models.BarPayment.amount_paid), 0))
+            .filter(
+                barpayment_models.BarPayment.bar_sale_id == sale.id,
+                barpayment_models.BarPayment.status == "active"
+            )
+            .scalar()
+        )
+
+        if total_paid >= sale.total_amount:
+            # fully paid → skip
+            continue
+
+        sale_items = []
+        sale_total = 0.0
+
+        for s_item in sale.sale_items:
+            inv = s_item.bar_inventory
+            store_item = inv.item if inv else None
+            item_name = store_item.name if store_item else "Unknown"
+            item_id = inv.item_id if inv else None
+            selling_price = float(s_item.selling_price or 0.0)
+
+            sale_items.append({
+                "item_id": item_id,
+                "item_name": item_name,
+                "quantity": int(s_item.quantity or 0),
+                "selling_price": selling_price,
+                "total_amount": float(s_item.total_amount or 0.0),
+            })
+
+            sale_total += float(s_item.total_amount or 0.0)
+
+        # determine payment status
+        if total_paid == 0:
+            status = "unpaid"
+        else:
+            status = "part payment"
+
+        results.append({
+            "id": sale.id,
+            "sale_date": sale.sale_date,
+            "bar_id": sale.bar_id,
+            "bar_name": sale.bar.name if sale.bar else "",
+            "created_by": sale.created_by_user.username if sale.created_by_user else "",
+            "status": status,  # override here
+            "total_amount": sale_total,
+            "sale_items": sale_items,
+        })
+
+        total_sales_amount += sale_total
+
+    return {
+        "total_entries": len(results),
+        "total_sales_amount": total_sales_amount,
+        "sales": results,
+    }
 
 @router.put("/sales/{sale_id}", response_model=bar_schemas.BarSaleDisplay)
 def update_bar_sale(

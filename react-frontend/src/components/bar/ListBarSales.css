@@ -1,5 +1,5 @@
-.list-bar-sales-container {
-  padding: 10px 15px; /* tighter padding */
+.list-bar-sales-container1 {
+  padding: 8px 12px; /* tighter padding */
 }
 
 .page-heading {
@@ -9,11 +9,11 @@
 }
 
 /* 🔹 Data content container */
-.data-container {
+.data-container1 {
   background: #fff;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
-  padding: 12px 15px;
+  padding: 4px 6px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   margin-top: 10px;
 }
@@ -54,35 +54,35 @@
 }
 
 /* 🔹 Table */
-.sales-table {
+.sales-table1 {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
   line-height: 1.3;
 }
 
-.sales-table th,
-.sales-table td {
+.sales-table1 th,
+.sales-table1 td {
   border: 1px solid #e0e0e0;
-  padding: 3px 6px;
+  padding: 3px 4px;
   text-align: left;
 }
 
-.sales-table th {
+.sales-table1 th {
   background: #f7f7f7;
   font-weight: 600;
   font-size: 13px;
 }
 
-.sales-table tr.even {
+.sales-table1 tr.even {
   background-color: #fafafa;
 }
 
-.sales-table tr.odd {
+.sales-table1 tr.odd {
   background-color: #ffffff;
 }
 
-.sales-table tr:hover {
+.sales-table1 tr:hover {
   background: #f0f6ff;
 }
 

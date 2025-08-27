@@ -1,0 +1,223 @@
+.bar-payment-container2 {
+  max-width: 1100px;
+  margin: 20px auto;
+  padding: 20px;
+  background: #f3f0f0;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.bar-payment-container2 h2 {
+  text-align: center;
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+/* 🔍 Filter Dropdown (more compact + aligned) */
+.bar-filter {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin: 15px 0 20px;
+}
+
+.bar-filter label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #34495e;
+}
+
+.bar-filter select {
+  padding: 6px 12px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid #bbb;
+  min-width: 200px;
+  transition: all 0.2s;
+}
+
+.bar-filter select:focus {
+  border-color: #3498db;
+  box-shadow: 0 0 4px rgba(52, 152, 219, 0.4);
+  outline: none;
+}
+
+/* 📋 Sales Table (compact rows) */
+.sales-table2 {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.sales-table2 th,
+.sales-table2 td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.sales-table2 th {
+  background: #5d82a9;
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.sales-table2 td {
+  color: #2c3e50;
+}
+
+/* 🟦 Stripe */
+.sales-table2 tr:nth-child(odd) {
+  background: #f9fcff;
+}
+
+.sales-table2 tr:nth-child(even) {
+  background: #eef9f0;
+}
+
+.sales-table2 tr:hover {
+  background: #e9f2fb;
+}
+
+/* Compact Pay Button */
+.pay-btn {
+  background: #27ae60;
+  color: white;
+  padding: 6px 10px;
+  font-size: 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.pay-btn:hover {
+  background: #219150;
+}
+
+.pay-btn:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+}
+
+/* 📌 Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal {
+  background: #fff;
+  padding: 24px;
+  border-radius: 12px;
+  width: 420px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+}
+
+.modal h3 {
+  margin-bottom: 16px;
+  font-size: 18px;
+  color: #2c3e50;
+}
+
+.modal label {
+  display: block;
+  margin: 10px 0 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.modal input,
+.modal select {
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.modal-actions button {
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+
+.modal-actions button[type="submit"] {
+  background: #3498db;
+  color: white;
+}
+
+.modal-actions button[type="submit"]:hover {
+  background: #2980b9;
+}
+
+.modal-actions button[type="button"] {
+  background: #e74c3c;
+  color: white;
+}
+
+.modal-actions button[type="button"]:hover {
+  background: #c0392b;
+}
+
+/* ✅ Alerts */
+.message {
+  text-align: center;
+  margin: 15px 0;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.message.success {
+  background: #eafaf1;
+  color: #27ae60;
+  border: 1px solid #27ae60;
+}
+
+.message.error {
+  background: #fdecea;
+  color: #e74c3c;
+  border: 1px solid #e74c3c;
+}
+
+.message.warning {
+  background: #fff8e5;
+  color: #f39c12;
+  border: 1px solid #f39c12;
+}
+
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.summary-box {
+  text-align: right;
+  font-size: 14px;
+}

@@ -121,7 +121,7 @@ const ListBarSales = () => {
   const totalAmount = sales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
 
   return (
-    <div className="list-bar-sales-container">
+    <div className="list-bar-sales-container1">
       <h2 className="page-heading">📋 Bar Sales List</h2>
 
       {message && <div className="message">{message}</div>}
@@ -164,10 +164,11 @@ const ListBarSales = () => {
       </div>
 
       {/* Wrapped content in a professional container */}
-      <div className="data-container">
-        <table className="sales-table">
+      <div className="data-container1">
+        <table className="sales-table1">
           <thead>
             <tr>
+              <th>Sale ID</th>   {/* 👈 Added */}
               <th>Date</th>
               <th>Bar</th>
               <th>Items</th>
@@ -179,6 +180,7 @@ const ListBarSales = () => {
           <tbody>
             {sales.map((sale, idx) => (
               <tr key={sale.id} className={idx % 2 === 0 ? "even" : "odd"}>
+                <td>{sale.id}</td>   {/* 👈 Added */}
                 <td>{new Date(sale.sale_date).toLocaleDateString()}</td>
                 <td>{sale.bar_name}</td>
                 

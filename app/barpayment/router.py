@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import func
@@ -39,7 +39,7 @@ def create_bar_payment(
     db.commit()
     db.refresh(db_payment)
 
-    # Only sum ACTIVE payments
+    # Total paid so far (only ACTIVE payments)
     total_paid = (
         db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
         .filter(models.BarPayment.bar_sale_id == payment.bar_sale_id)
@@ -47,8 +47,10 @@ def create_bar_payment(
         .scalar()
     )
 
+    balance_due = float(sale.total_amount) - float(total_paid)
+
     if total_paid == 0:
-        status = "pending"
+        status = "unpaid"
     elif total_paid < sale.total_amount:
         status = "part payment"
     else:
@@ -57,7 +59,9 @@ def create_bar_payment(
     return {
         "id": db_payment.id,
         "bar_sale_id": db_payment.bar_sale_id,
-        "amount_paid": db_payment.amount_paid,
+        "sale_amount": float(sale.total_amount),
+        "amount_paid": float(total_paid),  # cumulative paid
+        "balance_due": float(balance_due),
         "payment_method": db_payment.payment_method,
         "note": db_payment.note,
         "date_paid": db_payment.date_paid,
@@ -78,53 +82,105 @@ def list_bar_payments(
     response = []
 
     for p in payments:
-        # If payment has been voided, status should be "voided"
-        if p.status == "voided":
-            response.append({
-                "id": p.id,
-                "bar_sale_id": p.bar_sale_id,
-                "amount_paid": p.amount_paid,
-                "payment_method": p.payment_method,
-                "note": p.note,
-                "date_paid": p.date_paid,
-                "created_by": p.created_by,
-                "status": "voided"
-            })
-            continue
-
-        # Only compute payment status for active (non-voided) payments
         sale = db.query(BarSale).filter(BarSale.id == p.bar_sale_id).first()
         if not sale:
             continue
 
+        # Total active payments for this sale
         total_paid = (
             db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
             .filter(
-                models.BarPayment.bar_sale_id == p.bar_sale_id,
-                models.BarPayment.status != "voided"
+                models.BarPayment.bar_sale_id == sale.id,
+                models.BarPayment.status == "active"
             )
             .scalar()
         )
 
+        balance_due = float(sale.total_amount) - float(total_paid)
+
+        # Decide overall sale status
         if total_paid == 0:
-            payment_status = "pending"
+            payment_status = "unpaid"
         elif total_paid < sale.total_amount:
             payment_status = "part payment"
         else:
             payment_status = "fully paid"
 
+        # For voided payments, always show "voided"
+        if p.status == "voided":
+            row_status = "voided"
+        else:
+            row_status = payment_status
+
         response.append({
             "id": p.id,
             "bar_sale_id": p.bar_sale_id,
-            "amount_paid": p.amount_paid,
+            "sale_amount": float(sale.total_amount),
+            "amount_paid": float(total_paid),  # cumulative paid
+            "balance_due": float(balance_due),
             "payment_method": p.payment_method,
             "note": p.note,
             "date_paid": p.date_paid,
             "created_by": p.created_by,
-            "status": payment_status
+            "status": row_status
         })
 
     return response
+
+
+from fastapi import Query
+
+@router.get("/outstanding", response_model=schemas.BarOutstandingSummary)
+def list_outstanding_payments(
+    bar_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user)
+):
+    sales_query = db.query(BarSale)
+
+    if bar_id:
+        sales_query = sales_query.filter(BarSale.bar_id == bar_id)
+
+    sales = sales_query.all()
+    results = []
+    total_due = 0.0
+
+    for sale in sales:
+        total_paid = (
+            db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
+            .filter(
+                models.BarPayment.bar_sale_id == sale.id,
+                models.BarPayment.status == "active"
+            )
+            .scalar()
+        )
+
+        balance_due = float(sale.total_amount) - float(total_paid)
+
+        if balance_due > 0:
+            if total_paid == 0:
+                payment_status = "unpaid"
+            elif total_paid < sale.total_amount:
+                payment_status = "part payment"
+            else:
+                payment_status = "fully paid"
+
+            results.append({
+                "bar_sale_id": sale.id,
+                "sale_amount": float(sale.total_amount),
+                "amount_paid": float(total_paid),
+                "balance_due": float(balance_due),
+                "status": payment_status
+            })
+
+            total_due += balance_due
+
+    return {
+        "total_entries": len(results),
+        "total_due": total_due,
+        "results": results
+    }
+
 
 
 

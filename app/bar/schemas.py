@@ -167,7 +167,16 @@ class BarInventoryReceiptDisplay(BaseModel):
         from_attributes = True
 
 
+#class BarSaleDisplay(BaseModel):
+    #id: int
+    #bar_id: int
+    #total_amount: float
+    #total_paid: float
+    #status: str
+    #created_at: datetime
 
+    #class Config:
+        #from_attributes = True
 
 
 
@@ -222,7 +231,7 @@ class BarInventoryAdjustmentDisplay(BaseModel):
     adjusted_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 
