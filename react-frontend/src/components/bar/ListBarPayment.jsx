@@ -5,14 +5,15 @@ import "./ListBarPayment.css";
 const ListBarPayment = () => {
   const [payments, setPayments] = useState([]);
   const [summary, setSummary] = useState(null);
-  const [bars, setBars] = useState([]); // ✅ bar list
-  const [selectedBar, setSelectedBar] = useState(""); // ✅ selected bar
+  const [bars, setBars] = useState([]);
+  const [selectedBar, setSelectedBar] = useState("");
+  const [startDate, setStartDate] = useState(""); // ✅ date filter
+  const [endDate, setEndDate] = useState("");     // ✅ date filter
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [editingPayment, setEditingPayment] = useState(null);
   const [formData, setFormData] = useState({ amount_paid: "", payment_method: "", note: "" });
 
-  // format amounts nicely
   const formatAmount = (amount) => {
     if (!amount && amount !== 0) return "₦0.00";
     return `₦${Number(amount).toLocaleString()}`;
@@ -28,13 +29,16 @@ const ListBarPayment = () => {
     }
   };
 
-  // ✅ Fetch payments (with bar filter)
-  const fetchPayments = async (barId = "") => {
+  // ✅ Fetch payments with filters
+  const fetchPayments = async (barId = "", start = "", end = "") => {
     setLoading(true);
     try {
-      const res = await axiosWithAuth().get("/barpayment/", {
-        params: barId ? { bar_id: barId } : {},
-      });
+      const params = {};
+      if (barId) params.bar_id = barId;
+      if (start) params.start_date = start;
+      if (end) params.end_date = end;
+
+      const res = await axiosWithAuth().get("/barpayment/", { params });
       setPayments(Array.isArray(res.data.payments) ? res.data.payments : []);
       setSummary(res.data.summary || null);
     } catch (err) {
@@ -50,12 +54,11 @@ const ListBarPayment = () => {
     fetchPayments();
   }, []);
 
-  // Re-fetch when bar changes
+  // ✅ Re-fetch when filters change
   useEffect(() => {
-    fetchPayments(selectedBar);
-  }, [selectedBar]);
+    fetchPayments(selectedBar, startDate, endDate);
+  }, [selectedBar, startDate, endDate]);
 
-  // ✅ Handle Delete
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this payment?")) return;
     try {
@@ -67,7 +70,6 @@ const ListBarPayment = () => {
     }
   };
 
-  // ✅ Handle Edit
   const handleEdit = (payment) => {
     setEditingPayment(payment);
     setFormData({
@@ -77,7 +79,6 @@ const ListBarPayment = () => {
     });
   };
 
-  // ✅ Handle Save
   const handleSave = async () => {
     try {
       const res = await axiosWithAuth().put(`/barpayment/${editingPayment.id}`, formData);
@@ -93,7 +94,7 @@ const ListBarPayment = () => {
     <div className="list-bar-payment-container">
       <h2>📃 Bar Payment Records</h2>
 
-      {/* ✅ Bar Filter */}
+      {/* ✅ Filter Section */}
       <div className="filter-section">
         <label>Filter by Bar: </label>
         <select value={selectedBar} onChange={(e) => setSelectedBar(e.target.value)}>
@@ -104,12 +105,25 @@ const ListBarPayment = () => {
             </option>
           ))}
         </select>
+
+        <label>Start Date: </label>
+        <input
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+        />
+
+        <label>End Date: </label>
+        <input
+          type="date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+        />
       </div>
 
       {loading && <p>⏳ Loading payments...</p>}
       {error && <p className="error">{error}</p>}
 
-      {/* ✅ Summary Section */}
       {summary && (
         <div className="summary-box">
           <h3>📊 Payment Summary</h3>
@@ -128,7 +142,7 @@ const ListBarPayment = () => {
         <table className="bar-payment-table">
           <thead>
             <tr>
-              <th>Payment ID</th>
+              <th>PayID</th>
               <th>Sale ID</th>
               <th>Sale Amount</th>
               <th>Paid</th>

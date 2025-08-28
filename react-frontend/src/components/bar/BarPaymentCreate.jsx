@@ -11,6 +11,7 @@ const BarPayment = () => {
   const [selectedSale, setSelectedSale] = useState(null);
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
+  const [note, setNote] = useState(""); // ✅ new state
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState(""); // success | error | warning
 
@@ -27,12 +28,11 @@ const BarPayment = () => {
     fetchBars();
   }, []);
 
-
   // Utility function for formatting amounts
-const formatAmount = (amount) => {
-  if (!amount && amount !== 0) return "₦0.00";
-  return `₦${Number(amount).toLocaleString()}`;
-};
+  const formatAmount = (amount) => {
+    if (!amount && amount !== 0) return "₦0.00";
+    return `₦${Number(amount).toLocaleString()}`;
+  };
 
   // Fetch outstanding sales for selected bar
   useEffect(() => {
@@ -43,7 +43,6 @@ const formatAmount = (amount) => {
         const res = await axiosWithAuth().get(
           `/barpayment/outstanding?bar_id=${selectedBar}`
         );
-        // ✅ now API returns { total_entries, total_due, results }
         setSales(Array.isArray(res.data.results) ? res.data.results : []);
         setSummary({
           total_entries: res.data.total_entries || 0,
@@ -62,7 +61,7 @@ const formatAmount = (amount) => {
   const handlePayment = async (e) => {
     e.preventDefault();
     if (!selectedSale || !amountPaid || !paymentMethod) {
-      setMessage("⚠️ Please fill all fields.");
+      setMessage("⚠️ Please fill all required fields.");
       setMessageType("warning");
       return;
     }
@@ -72,7 +71,7 @@ const formatAmount = (amount) => {
         bar_sale_id: selectedSale.bar_sale_id,
         amount_paid: parseFloat(amountPaid),
         payment_method: paymentMethod,
-        note: "",
+        note: note, // ✅ include note
       };
 
       await axiosWithAuth().post("/barpayment/", payload);
@@ -84,6 +83,7 @@ const formatAmount = (amount) => {
       setSelectedSale(null);
       setAmountPaid("");
       setPaymentMethod("");
+      setNote(""); // ✅ reset note
 
       // Refresh sales
       const res = await axiosWithAuth().get(
@@ -111,7 +111,6 @@ const formatAmount = (amount) => {
     <div className="bar-payment-container2">
       <div className="header-row">
         <h2>💳 Bar Payments</h2>
-        {/* ✅ Summary at top-right */}
         {selectedBar && (
           <div className="summary-box">
             <p><strong>Total Entries:</strong> {summary.total_entries}</p>
@@ -227,6 +226,14 @@ const formatAmount = (amount) => {
                 <option value="pos">POS</option>
                 <option value="transfer">Transfer</option>
               </select>
+
+              {/* ✅ New Note field */}
+              <label>Note:</label>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Optional note about this payment"
+              />
 
               <div className="modal-actions1">
                 <button type="submit">Submit Payment</button>

@@ -73,17 +73,36 @@ def create_bar_payment(
 
 from sqlalchemy.sql import func
 
+from datetime import date
+
+from datetime import date, timedelta
+
 @router.get("/")
 def list_bar_payments(
     bar_id: int | None = None,
+    start_date: date | None = None,   # ✅ optional filter
+    end_date: date | None = None,     # ✅ optional filter
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user)
 ):
     query = db.query(models.BarPayment).order_by(models.BarPayment.date_paid.desc())
 
+    # ✅ filter by bar
     if bar_id:
         query = query.join(BarSale).filter(BarSale.bar_id == bar_id)
 
+    # ✅ if only start_date is provided, default end_date = today
+    if start_date and not end_date:
+        end_date = date.today()
+
+    # ✅ filter by date range (inclusive)
+    if start_date:
+        query = query.filter(models.BarPayment.date_paid >= start_date)
+    if end_date:
+        query = query.filter(models.BarPayment.date_paid < end_date + timedelta(days=1))  
+        # 🔑 add 1 day so 2025-08-15 includes all times on 15th
+
+    # ✅ all payments considered are already filtered, so summary matches filter
     payments = query.all()
     response = []
 
@@ -95,7 +114,7 @@ def list_bar_payments(
     total_pos = 0
     total_transfer = 0
 
-    # ✅ Track unique sales so we don’t double count
+    # ✅ Track unique sales so we don’t double count sales amounts
     processed_sales = set()
 
     for p in payments:
@@ -103,7 +122,7 @@ def list_bar_payments(
         if not sale:
             continue
 
-        # ✅ Compute balance for this sale (always)
+        # ✅ Compute total paid for this sale
         total_paid_for_sale = (
             db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
             .filter(
@@ -114,13 +133,13 @@ def list_bar_payments(
         )
         balance_due = float(sale.total_amount) - float(total_paid_for_sale)
 
-        # ✅ Only add once per sale (sales + balance)
+        # ✅ Only add once per sale
         if sale.id not in processed_sales:
             total_sales += float(sale.total_amount)
             total_due_all += balance_due
             processed_sales.add(sale.id)
 
-        # ✅ Always add each individual payment
+        # ✅ Always add individual payment to total paid
         total_paid_all += float(p.amount_paid)
 
         # ✅ Decide payment status
@@ -131,7 +150,7 @@ def list_bar_payments(
         else:
             payment_status = "fully paid"
 
-        # ✅ Handle voided rows
+        # ✅ Handle voided payments
         row_status = "voided" if p.status == "voided" else payment_status
 
         # ✅ Per-method totals
@@ -159,15 +178,21 @@ def list_bar_payments(
 
     return {
         "payments": response,
-        "summary": {
+        "summary": {   # ✅ always reflects filtered data
             "total_sales": total_sales,
             "total_paid": total_paid_all,
             "total_due": total_due_all,
             "total_cash": total_cash,
             "total_pos": total_pos,
             "total_transfer": total_transfer,
+        },
+        "filters": {
+            "bar_id": bar_id,
+            "start_date": start_date,
+            "end_date": end_date,
         }
     }
+
 
 from fastapi import Query
 

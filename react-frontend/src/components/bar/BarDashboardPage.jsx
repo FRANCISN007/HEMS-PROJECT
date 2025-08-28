@@ -76,13 +76,15 @@ const BarDashboardPage = () => {
 
   const barMenu = [
     { name: "🍾 Bar Outlet", path: "/bar/list" },
-    {
-      name: "📥 Receive Stock",
-      submenu: [
-        { label: "➕ Enter Stock", path: "/bar/stock/create" },
-        { label: "📃 List Stock", path: "/bar/stock/list" },
-      ],
-    },
+    
+    //{
+      //name: "📥 Receive Stock",
+      //submenu: [
+        //{ label: "➕ Enter Stock", path: "/bar/stock/create" },
+        //{ label: "📃 List Stock", path: "/bar/stock/list" },
+      //],
+    //},
+    
     {
       name: "🛍️ Bar Sales",
       submenu: [
@@ -106,7 +108,8 @@ const BarDashboardPage = () => {
         { label: "📃 List Adjustment", path: "/bar/adjustment/list" },
       ],
     },
-    { name: "💲 Set Price", path: "/bar/price" },
+
+    //{ name: "💲 Set Price", path: "/bar/price" },
     { name: "🏪 Store Issues Control", path: "/bar/store-issues" },
   ];
 
