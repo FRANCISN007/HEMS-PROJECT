@@ -7,8 +7,12 @@ const ListBarPayment = () => {
   const [summary, setSummary] = useState(null);
   const [bars, setBars] = useState([]);
   const [selectedBar, setSelectedBar] = useState("");
-  const [startDate, setStartDate] = useState(""); // ✅ date filter
-  const [endDate, setEndDate] = useState("");     // ✅ date filter
+
+  // ✅ Default both start and end date to today
+  const today = new Date().toISOString().split("T")[0];
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [editingPayment, setEditingPayment] = useState(null);
@@ -49,12 +53,13 @@ const ListBarPayment = () => {
     }
   };
 
+  // ✅ On first load, fetch with today’s date only
   useEffect(() => {
     fetchBars();
-    fetchPayments();
+    fetchPayments("", today, today);
   }, []);
 
-  // ✅ Re-fetch when filters change
+  // ✅ Re-fetch whenever filters change
   useEffect(() => {
     fetchPayments(selectedBar, startDate, endDate);
   }, [selectedBar, startDate, endDate]);
@@ -87,6 +92,18 @@ const ListBarPayment = () => {
     } catch (err) {
       console.error("❌ Failed to update payment:", err);
       alert("Failed to update payment.");
+    }
+  };
+
+  // ✅ Handle Void Payment
+  const handleVoid = async (id) => {
+    if (!window.confirm("Are you sure you want to void this payment?")) return;
+    try {
+      const res = await axiosWithAuth().put(`/barpayment/${id}/void`);
+      setPayments(payments.map((p) => (p.id === id ? res.data : p))); // update row
+    } catch (err) {
+      console.error("❌ Failed to void payment:", err);
+      alert("Failed to void payment.");
     }
   };
 
@@ -175,6 +192,14 @@ const ListBarPayment = () => {
                 <td>
                   <button className="btn-edit" onClick={() => handleEdit(p)}>✏️ Edit</button>
                   <button className="btn-delete" onClick={() => handleDelete(p.id)}>🗑️ Delete</button>
+                  {/* ✅ New Void Button */}
+                  <button
+                    className="btn-void"
+                    onClick={() => handleVoid(p.id)}
+                    disabled={p.status === "voided"}  // disable if already voided
+                  >
+                    🚫 Void
+                  </button>
                 </td>
               </tr>
             ))}

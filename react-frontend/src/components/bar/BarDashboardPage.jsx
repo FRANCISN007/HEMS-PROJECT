@@ -97,7 +97,7 @@ const BarDashboardPage = () => {
       submenu: [
         { label: "➕ Create Payment", path: "/bar/payment/create" },
         { label: "📃 List Payment", path: "/bar/payment/list" },
-        { label: "❌ Void Payment", path: "/bar/payment/void" },
+        //{ label: "❌ Void Payment", path: "/bar/payment/void" },
       ],
     },
     { name: "📊 Stock Balance", path: "/bar/stock-balance" },

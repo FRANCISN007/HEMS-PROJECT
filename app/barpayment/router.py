@@ -102,7 +102,6 @@ def list_bar_payments(
         query = query.filter(models.BarPayment.date_paid < end_date + timedelta(days=1))  
         # 🔑 add 1 day so 2025-08-15 includes all times on 15th
 
-    # ✅ all payments considered are already filtered, so summary matches filter
     payments = query.all()
     response = []
 
@@ -122,7 +121,7 @@ def list_bar_payments(
         if not sale:
             continue
 
-        # ✅ Compute total paid for this sale
+        # ✅ Compute total paid for this sale (exclude voided)
         total_paid_for_sale = (
             db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
             .filter(
@@ -139,10 +138,21 @@ def list_bar_payments(
             total_due_all += balance_due
             processed_sales.add(sale.id)
 
-        # ✅ Always add individual payment to total paid
-        total_paid_all += float(p.amount_paid)
+        # ✅ Only count ACTIVE payments in totals
+        if p.status == "active":
+            total_paid_all += float(p.amount_paid)
 
-        # ✅ Decide payment status
+            # ✅ Per-method totals (exclude voided)
+            if p.payment_method:
+                method = p.payment_method.lower()
+                if method == "cash":
+                    total_cash += float(p.amount_paid)
+                elif method in ["pos", "card"]:
+                    total_pos += float(p.amount_paid)
+                elif method == "transfer":
+                    total_transfer += float(p.amount_paid)
+
+        # ✅ Decide sale-level payment status
         if total_paid_for_sale == 0:
             payment_status = "unpaid"
         elif total_paid_for_sale < sale.total_amount:
@@ -150,18 +160,8 @@ def list_bar_payments(
         else:
             payment_status = "fully paid"
 
-        # ✅ Handle voided payments
+        # ✅ Row status (voided rows should appear as voided)
         row_status = "voided" if p.status == "voided" else payment_status
-
-        # ✅ Per-method totals
-        if p.payment_method:
-            method = p.payment_method.lower()
-            if method == "cash":
-                total_cash += float(p.amount_paid)
-            elif method in ["pos", "card"]:
-                total_pos += float(p.amount_paid)
-            elif method == "transfer":
-                total_transfer += float(p.amount_paid)
 
         response.append({
             "id": p.id,
@@ -178,7 +178,7 @@ def list_bar_payments(
 
     return {
         "payments": response,
-        "summary": {   # ✅ always reflects filtered data
+        "summary": {   # ✅ now excludes voided payments
             "total_sales": total_sales,
             "total_paid": total_paid_all,
             "total_due": total_due_all,
@@ -192,7 +192,6 @@ def list_bar_payments(
             "end_date": end_date,
         }
     }
-
 
 from fastapi import Query
 
@@ -315,7 +314,17 @@ def update_bar_payment(
 
 
 @router.put("/{payment_id}/void", response_model=schemas.BarPaymentDisplay)
-def void_bar_payment(payment_id: int, db: Session = Depends(get_db)):
+def void_bar_payment(
+    payment_id: int,
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user)
+):
+    
+    # ✅ Restrict to admin only
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can void payments")
+    
+    # ✅ Get the payment
     payment = db.query(models.BarPayment).filter(
         models.BarPayment.id == payment_id,
         models.BarPayment.status == "active"
@@ -324,42 +333,47 @@ def void_bar_payment(payment_id: int, db: Session = Depends(get_db)):
     if not payment:
         raise HTTPException(status_code=404, detail="Active payment not found")
 
-    # Mark as voided
+    # ✅ Mark as voided
     payment.status = "voided"
     db.commit()
     db.refresh(payment)
 
-    # Get related sale
+    # ✅ Get related sale
     sale = db.query(BarSale).filter(BarSale.id == payment.bar_sale_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Related bar sale not found")
 
-    # Recompute total paid for this sale (excluding voided)
+    # ✅ Recompute total paid for this sale (excluding voided)
     total_paid = (
         db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
-        .filter(models.BarPayment.bar_sale_id == sale.id, models.BarPayment.status == "active")
+        .filter(
+            models.BarPayment.bar_sale_id == sale.id,
+            models.BarPayment.status == "active"   # exclude voided
+        )
         .scalar()
     )
 
-    # Determine payment status
+    balance_due = float(sale.total_amount) - float(total_paid)
+
+    # ✅ Consistent status handling
     if total_paid == 0:
-        status = "pending"
+        payment_status = "unpaid"
     elif total_paid < sale.total_amount:
-        status = "part payment"
-    elif total_paid >= sale.total_amount:
-        status = "fully paid"
+        payment_status = "part payment"
     else:
-        status = "pending"  # fallback
+        payment_status = "fully paid"
 
     return {
         "id": payment.id,
         "bar_sale_id": payment.bar_sale_id,
-        "amount_paid": payment.amount_paid,
+        "sale_amount": float(sale.total_amount),
+        "amount_paid": float(total_paid),   # cumulative active payments
+        "balance_due": float(balance_due),
         "payment_method": payment.payment_method,
         "note": payment.note,
         "date_paid": payment.date_paid,
         "created_by": payment.created_by,
-        "status": "voided",  # explicitly show this payment's status as 'voided'
+        "status": "voided"  # ✅ explicitly mark this row voided
     }
 
 
@@ -430,6 +444,10 @@ def delete_bar_payment(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user)
 ):
+    # ✅ Allow only admins
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can delete payments")
+
     payment = db.query(models.BarPayment).filter(models.BarPayment.id == payment_id).first()
     
     if not payment:
@@ -437,6 +455,8 @@ def delete_bar_payment(
 
     db.delete(payment)
     db.commit()
+
+    #return {"message": "Payment deleted successfully"}
 
     return {"detail": f"Payment with ID {payment_id} has been deleted"}
 
