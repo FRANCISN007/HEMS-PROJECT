@@ -66,6 +66,12 @@ import BarPaymentCreate from "./components/bar/BarPaymentCreate";
 import ListBarPayment from "./components/bar/ListBarPayment";
 
 
+import RestaurantLocation from "./components/restaurant/RestaurantLocation";
+import MealCategory from "./components/restaurant/MealCategory";
+import MealCreate from "./components/restaurant/MealCreate";
+
+
+
 
 
 console.log("✅ API BASE:", process.env.REACT_APP_API_BASE_URL);
@@ -128,19 +134,25 @@ const App = () => {
           <Route path="/bar/sales/list" element={<ListBarSales />} />
           <Route path="/bar/payment/create" element={<BarPaymentCreate />} />
           <Route path="/bar/payment/list" element={<ListBarPayment />} />
-
-
-          
         </Route>
 
-
-
-
+        
         {/* Restaurant dashboard */}
-        <Route path="/restaurant" element={<RestDashboardPage />} />
+        <Route path="/restaurant" element={<RestDashboardPage />}>
+          <Route path="location" element={<RestaurantLocation />} />
+          <Route path="MealCategory" element={<MealCategory />} />
+          <Route path="MealCreate" element={<MealCreate />} />
+        </Route>
+
+      
 
         {/* Main dashboard (protected) */}
         <Route
+
+
+
+
+
           path="/dashboard"
           element={
             isLicenseVerified ? <DashboardPage /> : <Navigate to="/license" replace />
@@ -166,6 +178,8 @@ const App = () => {
             <Route path="list" element={<ListPayment />} />
             <Route path="void" element={<VoidPayment />} />
           </Route>
+
+          
 
           {/* Events */}
           <Route path="events">

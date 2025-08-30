@@ -1,0 +1,148 @@
+.meal-container {
+  max-width: 1000px;
+  margin: 30px auto;
+  padding: 20px;
+  background: #f3f1f1;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  font-size: 14px;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.meal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.meal-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+}
+
+.meal-form {
+  display: flex;
+  gap: 10px;
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+
+.meal-form input,
+.meal-form select {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  flex: 1;
+  min-width: 100px;
+  transition: border 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.meal-form input:focus,
+.meal-form select:focus {
+  border-color: #007bff;
+  outline: none;
+  box-shadow: 0 0 4px rgba(0, 123, 255, 0.3);
+}
+
+.meal-form button {
+  padding: 10px 16px;
+  border: none;
+  background: #28a745;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s ease-in-out;
+}
+
+.meal-form button:hover {
+  background: #1e7e34;
+}
+
+.meal-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.meal-table th,
+.meal-table td {
+  padding: 8px;
+  border: 1px solid #e0e0e0;
+  text-align: left;
+  border-radius: 6px;
+}
+
+.meal-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #333;
+  border-radius: 6px;
+}
+
+.meal-table tr:hover {
+  background-color: #f1f7ff;
+  transition: background 0.2s ease-in-out;
+}
+
+.even-row {
+  background-color: #ffffff;
+}
+
+.odd-row {
+  background-color: #f9fcff;
+}
+
+.action-btn {
+  margin-right: 6px;
+  padding: 6px 12px;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 13px;
+  transition: background 0.2s ease-in-out;
+}
+
+.update {
+  background: #ffc107;
+  color: #212529;
+}
+
+.update:hover {
+  background: #e0a800;
+}
+
+.delete {
+  background: #dc3545;
+  color: white;
+}
+
+.delete:hover {
+  background: #b02a37;
+}
+
+.save {
+  background: #007bff;
+  color: white;
+}
+
+.save:hover {
+  background: #0056b3;
+}
+
+.cancel {
+  background: #6c757d;
+  color: white;
+}
+
+.cancel:hover {
+  background: #565e64;
+}
+
+.meal-message {
+  margin-top: 12px;
+  font-weight: 500;
+  color: #28a745;
+}

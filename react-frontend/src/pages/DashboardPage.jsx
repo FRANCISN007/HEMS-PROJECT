@@ -281,7 +281,7 @@ const printContent = () => {
     { name: "🎉 Events", path: "/dashboard/events" },
     { name: "🍷 Bar", path: "/bar" },
     { name: "🏪 Store", path: "/store" },
-    { name: "🍽️ Restaurant", path: "/restaurant" },
+    { name: "🍽️ Restaurant", path: "/restaurant" }, // ✅ fixed
     { name: "🟩 Room Status", path: "/dashboard/rooms/status" }, // ⬅️ add this
   ];
 

@@ -42,14 +42,55 @@ def create_location(location: restaurant_schemas.RestaurantLocationCreate,
     return db_location
 
 
-# Get all restaurant locations
+# Get all restaurant locations in ascending order of ID
 @router.get("/locations", response_model=list[restaurant_schemas.RestaurantLocationDisplay])
 def list_locations(
     db: Session = Depends(get_db),
-                   
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
 ):
-    return db.query(restaurant_models.RestaurantLocation).all()
+    return db.query(restaurant_models.RestaurantLocation).order_by(restaurant_models.RestaurantLocation.id.asc()).all()
+
+
+# Update restaurant location
+@router.put("/locations/{location_id}", response_model=restaurant_schemas.RestaurantLocationDisplay)
+def update_location(
+    location_id: int,
+    location_update: restaurant_schemas.RestaurantLocationCreate,  # reuse create schema since it's same fields
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+):
+    db_location = db.query(restaurant_models.RestaurantLocation).filter(
+        restaurant_models.RestaurantLocation.id == location_id
+    ).first()
+
+    if not db_location:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    for key, value in location_update.dict().items():
+        setattr(db_location, key, value)
+
+    db.commit()
+    db.refresh(db_location)
+    return db_location
+
+
+# Delete restaurant location
+@router.delete("/locations/{location_id}")
+def delete_location(
+    location_id: int,
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+):
+    db_location = db.query(restaurant_models.RestaurantLocation).filter(
+        restaurant_models.RestaurantLocation.id == location_id
+    ).first()
+
+    if not db_location:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    db.delete(db_location)
+    db.commit()
+    return {"message": "Location deleted successfully"}
 
 
 # Toggle location active status
@@ -90,8 +131,48 @@ def list_meal_categories(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
 ):
-    return db.query(restaurant_models.MealCategory).all()
+    return db.query(restaurant_models.MealCategory).order_by(restaurant_models.MealCategory.id.asc()).all()
 
+
+# ✅ Update Meal Category
+@router.put("/meal-categories/{category_id}", response_model=restaurant_schemas.MealCategoryDisplay)
+def update_meal_category(
+    category_id: int,
+    category_update: restaurant_schemas.MealCategoryCreate,
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+):
+    db_category = db.query(restaurant_models.MealCategory).filter_by(id=category_id).first()
+    if not db_category:
+        raise HTTPException(status_code=404, detail="Meal category not found")
+
+    # Prevent duplicate name (except for the same category)
+    existing = db.query(restaurant_models.MealCategory).filter(
+        restaurant_models.MealCategory.name == category_update.name,
+        restaurant_models.MealCategory.id != category_id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Meal category with this name already exists")
+
+    db_category.name = category_update.name
+    db.commit()
+    db.refresh(db_category)
+    return db_category
+
+# ✅ Delete Meal Category
+@router.delete("/meal-categories/{category_id}")
+def delete_meal_category(
+    category_id: int,
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+):
+    db_category = db.query(restaurant_models.MealCategory).filter_by(id=category_id).first()
+    if not db_category:
+        raise HTTPException(status_code=404, detail="Meal category not found")
+    
+    db.delete(db_category)
+    db.commit()
+    return {"detail": f"Meal category with id {category_id} deleted successfully"}
 
 
 # --- Meal Endpoints ---
@@ -113,7 +194,42 @@ def list_meals(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
 ):
-    return db.query(restaurant_models.Meal).all()
+    return db.query(restaurant_models.Meal).order_by(restaurant_models.Meal.id.asc()).all()
+
+# ✅ Update Meal
+@router.put("/meals/{meal_id}", response_model=restaurant_schemas.MealDisplay)
+def update_meal(
+    meal_id: int,
+    meal: restaurant_schemas.MealCreate,   # you can also create a MealUpdate schema if needed
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+):
+    db_meal = db.query(restaurant_models.Meal).filter(restaurant_models.Meal.id == meal_id).first()
+    if not db_meal:
+        raise HTTPException(status_code=404, detail="Meal not found")
+
+    for key, value in meal.dict().items():
+        setattr(db_meal, key, value)
+
+    db.commit()
+    db.refresh(db_meal)
+    return db_meal
+
+
+# ✅ Delete Meal
+@router.delete("/meals/{meal_id}", response_model=dict)
+def delete_meal(
+    meal_id: int,
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+):
+    db_meal = db.query(restaurant_models.Meal).filter(restaurant_models.Meal.id == meal_id).first()
+    if not db_meal:
+        raise HTTPException(status_code=404, detail="Meal not found")
+
+    db.delete(db_meal)
+    db.commit()
+    return {"detail": "Meal deleted successfully"}
 
 
 @router.patch("/meals/{meal_id}/toggle-availability", response_model=restaurant_schemas.MealDisplay)

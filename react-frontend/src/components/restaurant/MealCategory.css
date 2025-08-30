@@ -1,0 +1,140 @@
+.category-container {
+  max-width: 900px;
+  margin: 30px auto;
+  padding: 20px;
+  font-size: 14px;
+  border-radius: 12px;
+  background: #f3f1f1;
+  box-shadow: 0px 4px 12px rgba(0,0,0,0.08);
+}
+
+.category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.category-header h2 {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+}
+
+.category-form {
+  display: flex;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.category-form input {
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  flex: 1;
+  transition: border-color 0.2s ease;
+}
+
+.category-form input:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+.category-form button {
+  padding: 8px 14px;
+  border: none;
+  background: #28a745;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s ease;
+}
+
+.category-form button:hover {
+  background: #218838;
+}
+
+.category-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.category-table th, 
+.category-table td {
+  padding: 10px;
+  border: 1px solid #e0e0e0;
+  text-align: left;
+  font-size: 14px;
+}
+
+.category-table th {
+  background: #f4f6f9;
+  font-weight: bold;
+  color: #555;
+}
+
+.even-row {
+  background-color: #fafafa;
+}
+
+.odd-row {
+  background-color: #eef7ff;
+}
+
+.action-btn {
+  margin-right: 5px;
+  padding: 5px 10px;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 13px;
+  transition: background 0.2s ease;
+}
+
+.update {
+  background: #ffc107;
+  color: #333;
+}
+
+.update:hover {
+  background: #e0a800;
+}
+
+.delete {
+  background: #dc3545;
+  color: white;
+}
+
+.delete:hover {
+  background: #c82333;
+}
+
+.save {
+  background: #007bff;
+  color: white;
+}
+
+.save:hover {
+  background: #0069d9;
+}
+
+.cancel {
+  background: #6c757d;
+  color: white;
+}
+
+.cancel:hover {
+  background: #5a6268;
+}
+
+.category-message {
+  margin-top: 12px;
+  font-weight: bold;
+  color: #155724;
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  padding: 8px;
+  border-radius: 6px;
+}
