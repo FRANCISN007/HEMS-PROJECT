@@ -1,0 +1,139 @@
+.listorder-container {
+  max-width: 1100px;
+  margin: 30px auto;
+  padding: 20px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  font-size: 14px;
+}
+
+.listorder-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.listorder-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+}
+
+.refresh-btn {
+  background: #17a2b8;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.refresh-btn:hover {
+  background: #138496;
+}
+
+.listorder-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.listorder-filters select,
+.listorder-filters input {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fafafa;
+  min-width: 160px;
+}
+
+.filter-btn {
+  background: #007bff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.filter-btn:hover {
+  background: #0056b3;
+}
+
+.listorder-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.listorder-table th {
+  background: #f4f6f9;
+  font-weight: 600;
+  padding: 10px;
+  border-bottom: 2px solid #ddd;
+  text-align: center;
+}
+
+.listorder-table td {
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+  text-align: center;
+}
+
+.listorder-table tr:nth-child(even) {
+  background: #fafafa;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.status-badge.open {
+  background: #d4edda;
+  color: #155724;
+}
+.status-badge.closed {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.action-btn {
+  margin: 0 4px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.action-btn.edit {
+  background: #ffc107;
+  color: #212529;
+}
+.action-btn.edit:hover {
+  background: #e0a800;
+}
+
+.action-btn.delete {
+  background: #dc3545;
+  color: white;
+}
+.action-btn.delete:hover {
+  background: #bb2d3b;
+}
+
+.listorder-message {
+  margin-top: 14px;
+  font-weight: 600;
+  text-align: center;
+}

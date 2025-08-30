@@ -247,7 +247,7 @@ def toggle_meal_availability(meal_id: int,
     return meal
 
 
-@router.post("/", response_model=MealOrderDisplay)
+@router.post("/orders/", response_model=MealOrderDisplay)
 def create_meal_order(order_data: MealOrderCreate, 
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
@@ -307,7 +307,7 @@ def create_meal_order(order_data: MealOrderCreate,
 
 
 
-@router.get("/", response_model=list[MealOrderDisplay])
+@router.get("/list", response_model=list[MealOrderDisplay])
 def list_meal_orders(
     status: str = Query(None, description="Filter by status: open or closed"),
     start_date: date = Query(None, description="Start date for filtering"),

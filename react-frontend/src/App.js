@@ -70,6 +70,9 @@ import RestaurantLocation from "./components/restaurant/RestaurantLocation";
 import MealCategory from "./components/restaurant/MealCategory";
 import MealCreate from "./components/restaurant/MealCreate";
 
+import GuestOrderCreate from "./components/restaurant/GuestOrderCreate";
+import ListGuestOrder from "./components/restaurant/ListGuestOrder";
+
 
 
 
@@ -142,6 +145,9 @@ const App = () => {
           <Route path="location" element={<RestaurantLocation />} />
           <Route path="MealCategory" element={<MealCategory />} />
           <Route path="MealCreate" element={<MealCreate />} />
+          <Route path="GuestOrderCreate" element={<GuestOrderCreate />} />
+          <Route path="ListGuestOrder" element={<ListGuestOrder />} />
+
         </Route>
 
       
