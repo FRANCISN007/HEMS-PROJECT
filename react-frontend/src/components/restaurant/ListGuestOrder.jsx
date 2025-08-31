@@ -88,15 +88,35 @@ const ListGuestOrder = () => {
       location_id: order.location_id,
       items: order.items.map((i) => ({
         meal_id: i.meal_id,
+        meal_name: i.meal_name,
         quantity: i.quantity,
+        price_per_unit: i.price_per_unit,
       })),
     });
+  };
+
+  // Update item quantity
+  const handleItemChange = (index, field, value) => {
+    const updatedItems = [...formData.items];
+    updatedItems[index][field] = value;
+    setFormData({ ...formData, items: updatedItems });
   };
 
   // Save edited order
   const handleSaveEdit = async () => {
     try {
-      await axiosWithAuth().put(`/restaurant/${editingOrder.id}`, formData);
+      const payload = {
+        guest_name: formData.guest_name,
+        room_number: formData.room_number,
+        order_type: formData.order_type,
+        location_id: formData.location_id,
+        items: formData.items.map((i) => ({
+          meal_id: i.meal_id,
+          quantity: i.quantity,
+        })),
+      };
+
+      await axiosWithAuth().put(`/restaurant/${editingOrder.id}`, payload);
       setMessage(`✅ Order #${editingOrder.id} updated successfully!`);
       setEditingOrder(null);
       fetchOrders();
@@ -255,6 +275,43 @@ const ListGuestOrder = () => {
                 </option>
               ))}
             </select>
+
+            <h4>🛒 Items</h4>
+            <table className="edit-items-table">
+              <thead>
+                <tr>
+                  <th>Meal</th>
+                  <th>Quantity</th>
+                  <th>Price/Unit</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {formData.items.map((item, idx) => (
+                  <tr key={idx}>
+                    <td>{item.meal_name}</td>
+                    <td>
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) =>
+                          handleItemChange(
+                            idx,
+                            "quantity",
+                            Number(e.target.value)
+                          )
+                        }
+                      />
+                    </td>
+                    <td>{currencyNGN(item.price_per_unit)}</td>
+                    <td>
+                      {currencyNGN(item.price_per_unit * item.quantity)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
             <div className="modal-actions">
               <button onClick={handleSaveEdit}>💾 Save</button>
