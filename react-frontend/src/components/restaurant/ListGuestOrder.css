@@ -204,3 +204,34 @@
   text-align: center;
   font-size: 13px;
 }
+
+
+.listorder-filters-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 12px 0;
+}
+
+.filters-left {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.filters-right {
+  text-align: right;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.filters-right strong {
+  font-weight: 600;
+  color: #333;
+}
+
+.listorder-divider {
+  border: none;
+  border-top: 2px solid #eee;
+  margin: 8px 0 16px;
+}

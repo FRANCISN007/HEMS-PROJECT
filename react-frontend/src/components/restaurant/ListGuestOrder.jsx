@@ -64,6 +64,18 @@ const ListGuestOrder = () => {
     }
   };
 
+
+  // Derived totals
+  const entriesTotal = orders.length;
+  const grossTotal = orders.reduce((sum, o) => {
+    const orderTotal = o.items.reduce(
+      (s, it) =>
+        s + (Number(it.total_price) || (Number(it.price_per_unit) || 0) * (Number(it.quantity) || 0)),
+      0
+    );
+    return sum + orderTotal;
+  }, 0);
+
   useEffect(() => {
     fetchOrders();
     fetchLocations();
@@ -159,28 +171,37 @@ const ListGuestOrder = () => {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="listorder-filters">
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All Status</option>
-          <option value="open">Open</option>
-          <option value="closed">Closed</option>
-        </select>
+      {/* Filters + Totals */}
+      <div className="listorder-filters-summary">
+        <div className="filters-left">
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All Status</option>
+            <option value="open">Open</option>
+            <option value="closed">Closed</option>
+          </select>
 
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-        />
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-        />
-        <button className="filter-btn" onClick={fetchOrders}>
-          🔍 Filter
-        </button>
-      </div>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+          <button className="filter-btn" onClick={fetchOrders}>
+            🔍 Filter
+          </button>
+        </div>
+
+  <div className="filters-right">
+    <div>Entries: <strong>{entriesTotal}</strong></div>
+    <div>Gross Total: <strong>{currencyNGN(grossTotal)}</strong></div>
+  </div>
+</div>
+
+<hr className="listorder-divider" />
 
       {/* Orders Table */}
       <table className="listorder-table">
@@ -200,9 +221,11 @@ const ListGuestOrder = () => {
           {orders.length > 0 ? (
             orders.map((o) => {
               const total = o.items.reduce(
-                (sum, it) => sum + (it.total_price || 0),
+                (sum, it) =>
+                  sum + (Number(it.total_price) || (Number(it.price_per_unit) || 0) * (Number(it.quantity) || 0)),
                 0
               );
+
               return (
                 <tr key={o.id}>
                   <td>{o.id}</td>
