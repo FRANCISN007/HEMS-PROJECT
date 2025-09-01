@@ -1,3 +1,4 @@
+// src/components/restaurant/ListGuestOrder.jsx
 import React, { useEffect, useState } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./ListGuestOrder.css";
@@ -23,7 +24,7 @@ const ListGuestOrder = () => {
     room_number: "",
     order_type: "",
     location_id: "",
-    items: [],
+    items: [], // { meal_id, meal_name, price_per_unit, quantity }
   });
 
   // Locations
@@ -48,6 +49,7 @@ const ListGuestOrder = () => {
       setOrders(res.data || []);
     } catch (err) {
       setMessage("❌ Failed to load orders.");
+      console.error(err);
     }
   };
 
@@ -58,6 +60,7 @@ const ListGuestOrder = () => {
       setLocations(res.data || []);
     } catch (err) {
       setMessage("❌ Failed to load locations.");
+      console.error(err);
     }
   };
 
@@ -75,6 +78,7 @@ const ListGuestOrder = () => {
       fetchOrders();
     } catch (err) {
       setMessage("❌ Failed to delete order.");
+      console.error(err);
     }
   };
 
@@ -89,16 +93,28 @@ const ListGuestOrder = () => {
       items: order.items.map((i) => ({
         meal_id: i.meal_id,
         meal_name: i.meal_name,
-        quantity: i.quantity,
-        price_per_unit: i.price_per_unit,
+        quantity: Number(i.quantity),
+        price_per_unit: Number(i.price_per_unit || 0),
       })),
     });
   };
 
-  // Update item quantity
+  // Update item field (quantity)
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...formData.items];
-    updatedItems[index][field] = value;
+    // ensure numeric for quantity
+    if (field === "quantity") {
+      const qty = Number(value);
+      updatedItems[index][field] = isNaN(qty) ? 0 : qty;
+    } else {
+      updatedItems[index][field] = value;
+    }
+    setFormData({ ...formData, items: updatedItems });
+  };
+
+  // Remove item from edit
+  const removeItemFromEdit = (index) => {
+    const updatedItems = formData.items.filter((_, i) => i !== index);
     setFormData({ ...formData, items: updatedItems });
   };
 
@@ -109,10 +125,10 @@ const ListGuestOrder = () => {
         guest_name: formData.guest_name,
         room_number: formData.room_number,
         order_type: formData.order_type,
-        location_id: formData.location_id,
+        location_id: Number(formData.location_id) || null,
         items: formData.items.map((i) => ({
           meal_id: i.meal_id,
-          quantity: i.quantity,
+          quantity: Number(i.quantity),
         })),
       };
 
@@ -122,8 +138,16 @@ const ListGuestOrder = () => {
       fetchOrders();
     } catch (err) {
       setMessage("❌ Failed to update order.");
+      console.error(err);
     }
   };
+
+  // Modal grand total
+  const modalGrandTotal =
+    formData.items?.reduce(
+      (sum, it) => sum + Number(it.price_per_unit || 0) * Number(it.quantity || 0),
+      0
+    ) || 0;
 
   return (
     <div className="listorder-container">
@@ -234,83 +258,121 @@ const ListGuestOrder = () => {
           <div className="edit-modal-content">
             <h3>✏️ Edit Order #{editingOrder.id}</h3>
 
-            <label>Guest Name</label>
-            <input
-              type="text"
-              value={formData.guest_name}
-              onChange={(e) =>
-                setFormData({ ...formData, guest_name: e.target.value })
-              }
-            />
+            <div className="edit-form-grid">
+              <div className="form-group">
+                <label>Guest Name</label>
+                <input
+                  type="text"
+                  value={formData.guest_name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, guest_name: e.target.value })
+                  }
+                />
+              </div>
 
-            <label>Room Number</label>
-            <input
-              type="text"
-              value={formData.room_number}
-              onChange={(e) =>
-                setFormData({ ...formData, room_number: e.target.value })
-              }
-            />
+              <div className="form-group">
+                <label>Room Number</label>
+                <input
+                  type="text"
+                  value={formData.room_number}
+                  onChange={(e) =>
+                    setFormData({ ...formData, room_number: e.target.value })
+                  }
+                />
+              </div>
 
-            <label>Order Type</label>
-            <input
-              type="text"
-              value={formData.order_type}
-              onChange={(e) =>
-                setFormData({ ...formData, order_type: e.target.value })
-              }
-            />
+              <div className="form-group">
+                <label>Order Type</label>
+                <input
+                  type="text"
+                  value={formData.order_type}
+                  onChange={(e) =>
+                    setFormData({ ...formData, order_type: e.target.value })
+                  }
+                />
+              </div>
 
-            <label>Location</label>
-            <select
-              value={formData.location_id}
-              onChange={(e) =>
-                setFormData({ ...formData, location_id: e.target.value })
-              }
-            >
-              <option value="">-- Select Location --</option>
-              {locations.map((loc) => (
-                <option key={loc.id} value={loc.id}>
-                  {loc.name}
-                </option>
-              ))}
-            </select>
+              <div className="form-group">
+                <label>Location</label>
+                <select
+                  value={formData.location_id}
+                  onChange={(e) =>
+                    setFormData({ ...formData, location_id: e.target.value })
+                  }
+                >
+                  <option value="">-- Select Location --</option>
+                  {locations.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
             <h4>🛒 Items</h4>
+
             <table className="edit-items-table">
               <thead>
                 <tr>
                   <th>Meal</th>
-                  <th>Quantity</th>
-                  <th>Price/Unit</th>
-                  <th>Total</th>
+                  <th style={{ width: 110 }}>Qty</th>
+                  <th style={{ width: 140 }}>Price/Unit</th>
+                  <th style={{ width: 140 }}>Line Total</th>
+                  <th style={{ width: 80 }}>Remove</th>
                 </tr>
               </thead>
               <tbody>
-                {formData.items.map((item, idx) => (
-                  <tr key={idx}>
-                    <td>{item.meal_name}</td>
-                    <td>
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) =>
-                          handleItemChange(
-                            idx,
-                            "quantity",
-                            Number(e.target.value)
-                          )
-                        }
-                      />
-                    </td>
-                    <td>{currencyNGN(item.price_per_unit)}</td>
-                    <td>
-                      {currencyNGN(item.price_per_unit * item.quantity)}
+                {formData.items.length > 0 ? (
+                  formData.items.map((item, idx) => {
+                    const unit = Number(item.price_per_unit || 0);
+                    const qty = Number(item.quantity || 0);
+                    return (
+                      <tr key={idx}>
+                        <td>{item.meal_name}</td>
+                        <td>
+                          <input
+                            className="qty-input"
+                            type="number"
+                            min="1"
+                            value={qty}
+                            onChange={(e) =>
+                              handleItemChange(idx, "quantity", Number(e.target.value))
+                            }
+                          />
+                        </td>
+                        <td>{currencyNGN(unit)}</td>
+                        <td>{currencyNGN(unit * qty)}</td>
+                        <td>
+                          <button
+                            className="action-btn delete"
+                            onClick={() => removeItemFromEdit(idx)}
+                            title="Remove item"
+                            type="button"
+                          >
+                            ✖
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="5" style={{ textAlign: "center", padding: "12px" }}>
+                      No items on this order.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan="3" className="total-cell-right">
+                    Grand Total
+                  </td>
+                  <td className="total-amount">{currencyNGN(modalGrandTotal)}</td>
+                  <td />
+                </tr>
+              </tfoot>
             </table>
 
             <div className="modal-actions">
