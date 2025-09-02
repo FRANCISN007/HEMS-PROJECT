@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./ListRestaurantSales.css";
+import "./Receipt.css"; // ✅ Receipt styles
 
 const ListRestaurantSales = () => {
   const [sales, setSales] = useState([]);
@@ -10,20 +11,22 @@ const ListRestaurantSales = () => {
     total_paid_amount: 0,
     total_balance: 0,
   });
+  const [selectedSale, setSelectedSale] = useState(null); // For print modal
+  const printRef = useRef(); // Reference for receipt content
 
   // Fetch sales from backend
   const fetchSales = async () => {
     setLoading(true);
     try {
       const res = await axiosWithAuth().get("/restaurant/sales");
-      console.log("🔍 Sales response:", res.data);
-
       setSales(res.data.sales || []);
-      setSummary(res.data.summary || {
-        total_sales_amount: 0,
-        total_paid_amount: 0,
-        total_balance: 0,
-      });
+      setSummary(
+        res.data.summary || {
+          total_sales_amount: 0,
+          total_paid_amount: 0,
+          total_balance: 0,
+        }
+      );
     } catch (err) {
       console.error("❌ Error fetching sales:", err);
       setSales([]);
@@ -47,6 +50,40 @@ const ListRestaurantSales = () => {
       console.error("❌ Error deleting sale:", err);
       alert(err.response?.data?.detail || "Failed to delete sale.");
     }
+  };
+
+  // Open print modal
+  const handlePrintSale = (sale) => {
+    setSelectedSale(sale);
+  };
+
+  // Close modal
+  const closeModal = () => {
+    setSelectedSale(null);
+  };
+
+  // ✅ Print receipt-style content
+  const printModalContent = () => {
+    if (!printRef.current) return;
+
+    const printWindow = window.open("", "_blank", "width=400,height=600");
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Receipt #${selectedSale.id}</title>
+          <style>
+            ${document.querySelector("style")?.innerHTML || ""}
+          </style>
+        </head>
+        <body>
+          ${printRef.current.innerHTML}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
   };
 
   useEffect(() => {
@@ -100,6 +137,12 @@ const ListRestaurantSales = () => {
 
                 <div className="sale-footer">
                   <button
+                    className="print-sale-btn"
+                    onClick={() => handlePrintSale(sale)}
+                  >
+                    🖨️ Print
+                  </button>
+                  <button
                     className="delete-sale-btn"
                     onClick={() => handleDeleteSale(sale.id)}
                   >
@@ -110,6 +153,71 @@ const ListRestaurantSales = () => {
             ))}
           </ul>
         </>
+      )}
+
+      {/* ✅ Global Modal showing POS receipt */}
+      {selectedSale && (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div
+            className="print-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div ref={printRef} className="receipt-container">
+              <div className="receipt-header">
+                <h2>Destone Hotel & Suite</h2>
+                <p>Bar / Restaurant</p>
+                <p>{new Date(selectedSale.created_at).toLocaleString()}</p>
+                <hr />
+              </div>
+
+              <div className="receipt-info">
+                <p><strong>Sale No:</strong> {selectedSale.id}</p>
+                <p><strong>Served by:</strong> {selectedSale.served_by}</p>
+              </div>
+              <hr />
+
+              <div className="receipt-items">
+                {selectedSale.items && selectedSale.items.length > 0 ? (
+                  selectedSale.items.map((item, idx) => (
+                    <div key={idx} className="receipt-item">
+                      <span>{item.quantity} × {item.meal_name}</span>
+                      <span className="amount">
+                        ₦{item.total_price?.toFixed(2)}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p>No items</p>
+                )}
+              </div>
+              <hr />
+
+              <div className="receipt-totals">
+                <p><span>Subtotal</span> <span>₦{selectedSale.total_amount.toFixed(2)}</span></p>
+                <p><span>Paid</span> <span>₦{selectedSale.amount_paid.toFixed(2)}</span></p>
+                <p className="grand-total">
+                  <span>Balance</span> 
+                  <span>₦{selectedSale.balance.toFixed(2)}</span>
+                </p>
+              </div>
+              <hr />
+
+              <div className="receipt-footer">
+                <p>Thank you for your patronage!</p>
+                <p>Powered by HEMS</p>
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button onClick={printModalContent} className="print-btn">
+                🖨️ Print Now
+              </button>
+              <button onClick={closeModal} className="close-btn">
+                ❌ Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
