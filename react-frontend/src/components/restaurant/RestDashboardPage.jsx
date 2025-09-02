@@ -96,7 +96,8 @@ const RestDashboardPage = () => {
     {
       name: "💰 Restaurant Sales",
       submenu: [
-        { label: "📃 List Sales", path: "/dashboard/restaurant/sales/list" },
+        { label: "📃 Create Sales", path: "/restaurant/OrderToSales" },
+        { label: "📃 List Sales", path: "/restaurant/ListRestaurantSales" },
       ],
     },
     {

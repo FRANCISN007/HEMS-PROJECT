@@ -1,0 +1,88 @@
+.order-to-sales {
+  padding: 20px;
+  background: #fff;
+  border-radius: 12px;
+
+}
+
+.order-to-sales h2 {
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.served-by-input {
+  margin-bottom: 20px;
+}
+
+.served-by-input label {
+  margin-right: 10px;
+  font-weight: bold;
+}
+
+.served-by-input input {
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.totals {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  font-weight: bold;
+}
+
+.orders-list {
+  list-style: none;
+  padding: 0;
+}
+
+.order-card {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  padding: 15px;
+  background: #fafafa;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.order-header {
+  font-size: 16px;
+  margin-bottom: 10px;
+  font-weight: bold;
+  color: #444;
+}
+
+.order-items {
+  margin-left: 10px;
+}
+
+.order-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.order-footer {
+  text-align: right;
+  margin-top: 10px;
+}
+
+.convert-btn {
+  padding: 6px 12px;
+  background-color: #28a745;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.convert-btn:hover {
+  background-color: #218838;
+}
+
+.no-orders {
+  color: #777;
+  font-style: italic;
+}

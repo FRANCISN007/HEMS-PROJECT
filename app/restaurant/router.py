@@ -545,6 +545,61 @@ def create_sale_from_order(
     )
 
 
+@router.get("/open")
+def list_open_meal_orders(
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+):
+    # Fetch only open orders in ascending order of order id
+    orders = (
+        db.query(MealOrder)
+        .filter(MealOrder.status == "open")
+        .order_by(MealOrder.id.asc())
+        .all()
+    )
+
+    if not orders:
+        raise HTTPException(status_code=404, detail="No open meal orders found")
+
+    result = []
+    total_amount = 0
+
+    for order in orders:
+        order_items = []
+        for item in order.items:
+            meal = db.query(Meal).filter(Meal.id == item.meal_id).first()
+            item_total = (meal.price * item.quantity) if meal else 0
+            total_amount += item_total
+
+            order_items.append(
+                MealOrderItemDisplay(
+                    meal_id=item.meal_id,
+                    meal_name=meal.name if meal else None,
+                    quantity=item.quantity,
+                    price_per_unit=meal.price if meal else None,
+                    total_price=item_total,
+                )
+            )
+
+        result.append(
+            MealOrderDisplay(
+                id=order.id,
+                location_id=order.location_id,
+                order_type=order.order_type,
+                room_number=order.room_number,
+                guest_name=order.guest_name,
+                status=order.status,
+                created_at=order.created_at,
+                items=order_items,
+            )
+        )
+
+    return {
+        "total_entries": len(orders),
+        "total_amount": total_amount,
+        "orders": result,
+    }
+
 
 
 @router.get("/{order_id}", response_model=MealOrderDisplay)
@@ -581,14 +636,21 @@ def get_meal_order(order_id: int,
 
 
 
+
 @router.put("/{order_id}", response_model=MealOrderDisplay)
-def update_meal_order(order_id: int, order_data: MealOrderCreate, 
+def update_meal_order(
+    order_id: int,
+    order_data: MealOrderCreate, 
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
 ):
     order = db.query(MealOrder).filter(MealOrder.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Meal order not found")
+
+    # 🚫 Prevent editing closed orders
+    if order.status.lower() == "closed":
+        raise HTTPException(status_code=400, detail="Closed orders cannot be edited")
 
     # Update basic fields
     order.guest_name = order_data.guest_name
@@ -634,7 +696,6 @@ def update_meal_order(order_id: int, order_data: MealOrderCreate,
         created_at=order.created_at,
         items=order_items
     )
-
 
 
 @router.delete("/{order_id}")
