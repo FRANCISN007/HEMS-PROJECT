@@ -96,15 +96,15 @@ const RestDashboardPage = () => {
     {
       name: "💰 Restaurant Sales",
       submenu: [
-        { label: "📃 Create Sales", path: "/restaurant/OrderToSales" },
+        { label: "🛒 Create Sales", path: "/restaurant/OrderToSales" },
         { label: "📃 List Sales", path: "/restaurant/ListRestaurantSales" },
       ],
     },
     {
       name: "💳 Payment",
       submenu: [
-        { label: "📃 List Payment", path: "/dashboard/restaurant/payment/list" },
-        { label: "❌ Void Payment", path: "/dashboard/restaurant/payment/void" },
+        { label: "📃 List Payment", path: "/restaurant/listpayment" },
+        { label: "❌ Void Payment", path: "/restaurant/voidpayment" },
       ],
     },
   ];
