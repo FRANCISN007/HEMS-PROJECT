@@ -388,7 +388,7 @@ const ListGuestOrder = () => {
                 🖨️ Print Now
               </button>
               <button onClick={closePrintModal} className="close-btn">
-                ❌ Close
+                ❌
               </button>
             </div>
           </div>

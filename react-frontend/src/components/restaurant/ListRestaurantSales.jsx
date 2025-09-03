@@ -213,7 +213,7 @@ const ListRestaurantSales = () => {
                 🖨️ Print Now
               </button>
               <button onClick={closeModal} className="close-btn">
-                ❌ Close
+                ❌
               </button>
             </div>
           </div>

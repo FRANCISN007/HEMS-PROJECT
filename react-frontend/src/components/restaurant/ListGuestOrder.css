@@ -250,3 +250,48 @@
   text-align: center;
   line-height: 1.3;  /* reduce vertical spacing */
 }
+
+
+.print-modal {
+  position: relative; /* Needed for the close button */
+  background: #fff;
+  padding: 20px;
+  border-radius: 10px;
+  width: 380px;
+  max-width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+
+.close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+
+  /* Size & Shape */
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+
+  /* Colors */
+  background: #e74c3c;
+  color: #fff;
+  border: none;
+
+  /* Center ❌ perfectly */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  line-height: 1;
+  transition: background 0.2s ease;
+}
+
+.close-btn:hover {
+  background: #c0392b;
+}
