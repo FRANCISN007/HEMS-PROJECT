@@ -395,12 +395,142 @@ const ListGuestOrder = () => {
         </div>
       )}
 
-      {/* Edit Modal (unchanged) */}
+      {/* ✅ Restored Edit Modal */}
       {editingOrder && (
         <div className="edit-modal">
           <div className="edit-modal-content">
             <h3>✏️ Edit Order #{editingOrder.id}</h3>
-            {/* ... existing edit form ... */}
+
+            <div className="edit-form-grid">
+              <div className="form-group">
+                <label>Guest Name</label>
+                <input
+                  type="text"
+                  value={formData.guest_name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, guest_name: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Room Number</label>
+                <input
+                  type="text"
+                  value={formData.room_number}
+                  onChange={(e) =>
+                    setFormData({ ...formData, room_number: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Order Type</label>
+                <input
+                  type="text"
+                  value={formData.order_type}
+                  onChange={(e) =>
+                    setFormData({ ...formData, order_type: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Location</label>
+                <select
+                  value={formData.location_id}
+                  onChange={(e) =>
+                    setFormData({ ...formData, location_id: e.target.value })
+                  }
+                >
+                  <option value="">-- Select Location --</option>
+                  {locations.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <h4>🛒 Items</h4>
+
+            <table className="edit-items-table">
+              <thead>
+                <tr>
+                  <th>Meal</th>
+                  <th style={{ width: 110 }}>Qty</th>
+                  <th style={{ width: 140 }}>Price/Unit</th>
+                  <th style={{ width: 140 }}>Line Total</th>
+                  <th style={{ width: 80 }}>Remove</th>
+                </tr>
+              </thead>
+              <tbody>
+                {formData.items.length > 0 ? (
+                  formData.items.map((item, idx) => {
+                    const unit = Number(item.price_per_unit || 0);
+                    const qty = Number(item.quantity || 0);
+                    return (
+                      <tr key={idx}>
+                        <td>{item.meal_name}</td>
+                        <td>
+                          <input
+                            className="qty-input"
+                            type="number"
+                            min="1"
+                            value={qty}
+                            onChange={(e) =>
+                              handleItemChange(
+                                idx,
+                                "quantity",
+                                Number(e.target.value)
+                              )
+                            }
+                          />
+                        </td>
+                        <td>{currencyNGN(unit)}</td>
+                        <td>{currencyNGN(unit * qty)}</td>
+                        <td>
+                          <button
+                            className="action-btn delete"
+                            onClick={() => removeItemFromEdit(idx)}
+                            title="Remove item"
+                            type="button"
+                          >
+                            ✖
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td
+                      colSpan="5"
+                      style={{ textAlign: "center", padding: "12px" }}
+                    >
+                      No items on this order.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan="3" className="total-cell-right">
+                    Grand Total
+                  </td>
+                  <td className="total-amount">
+                    {currencyNGN(modalGrandTotal)}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+
+            <div className="modal-actions">
+              <button onClick={handleSaveEdit}>💾 Save</button>
+              <button onClick={() => setEditingOrder(null)}>❌ Cancel</button>
+            </div>
           </div>
         </div>
       )}
