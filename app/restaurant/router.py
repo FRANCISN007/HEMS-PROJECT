@@ -412,6 +412,7 @@ def list_sales(
         sale_display = RestaurantSaleDisplay(
             id=sale.id,
             order_id=sale.order_id,
+            guest_name=order.guest_name if order else None,  # ✅ pull guest name from MealOrder
             location_id=location_id,   # ✅ include location
             # location_name=location_name,  # ✅ if you want the name
             served_by=sale.served_by,
@@ -467,9 +468,11 @@ def list_outstanding(
         items = []
         location_id = None
         location_name = None
+        guest_name = None
 
         if order:
             location_id = order.location_id
+            guest_name = order.guest_name  # ✅ pull guest name from MealOrder
             if order.location:
                 location_name = order.location.name
             items = [
@@ -489,6 +492,7 @@ def list_outstanding(
         sale_display = RestaurantSaleDisplay(
             id=sale.id,
             order_id=sale.order_id,
+            guest_name=guest_name,  # ✅ include guest name in response
             location_id=location_id,
             # location_name=location_name,  # uncomment if you want
             served_by=sale.served_by,
@@ -509,7 +513,6 @@ def list_outstanding(
     }
 
     return {"sales": result, "summary": summary}
-
 
 
 
@@ -599,6 +602,7 @@ def create_sale_from_order(
     # Create sale
     sale = RestaurantSale(
         order_id=order.id,
+        guest_name=order.guest_name,  # ✅ copy guest name into the sale
         served_by=served_by,
         total_amount=total,
         status="unpaid",
@@ -620,6 +624,7 @@ def create_sale_from_order(
     return RestaurantSaleDisplay(
         id=sale.id,
         order_id=sale.order_id,
+        guest_name=sale.guest_name,
         served_by=sale.served_by,
         total_amount=sale.total_amount,
         amount_paid=amount_paid,       # ✅ Required field

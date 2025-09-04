@@ -115,6 +115,7 @@ const ListRestaurantSales = () => {
                 </div>
 
                 <div className="sale-details">
+                  <p>Guest Name: <strong>{sale.guest_name}</strong></p>
                   <p>Status: <strong>{sale.status}</strong></p>
                   <p>Total Amount: ₦{sale.total_amount.toFixed(2)}</p>
                   <p>Amount Paid: ₦{sale.amount_paid.toFixed(2)}</p>
@@ -172,6 +173,7 @@ const ListRestaurantSales = () => {
 
               <div className="receipt-info">
                 <p><strong>Sale No:</strong> {selectedSale.id}</p>
+                <p><strong>Guest:</strong> {selectedSale.guest_name || "N/A"}</p>
                 <p><strong>Served by:</strong> {selectedSale.served_by}</p>
               </div>
               <hr />

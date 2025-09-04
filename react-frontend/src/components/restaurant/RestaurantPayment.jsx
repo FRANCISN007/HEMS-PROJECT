@@ -114,6 +114,7 @@ const RestaurantPayment = () => {
           <thead>
             <tr>
               <th>Sale ID</th>
+              <th>Guest Name</th>
               <th>Total</th>
               <th>Paid</th>
               <th>Balance</th>
@@ -128,6 +129,7 @@ const RestaurantPayment = () => {
               return (
                 <tr key={sale.id}>
                   <td>{sale.id}</td>
+                  <td>{sale.guest_name}</td>
                   <td>{sale.total_amount}</td>
                   <td>{totalPaid}</td>
                   <td>{balance}</td>
@@ -173,19 +175,31 @@ const RestaurantPayment = () => {
             <label>Paid By:</label>
             <input
               type="text"
-              value={paymentData.paid_by}
+              value={paymentData.paid_by || currentSale.guest_name || ""}
               onChange={(e) =>
                 setPaymentData({ ...paymentData, paid_by: e.target.value })
               }
+              placeholder="Enter payer name"
             />
 
             <div className="modal-actions">
-              <button onClick={handlePaymentSubmit}>✅ Submit</button>
-              <button onClick={closePaymentModal}>❌ Cancel</button>
+              <button
+                onClick={() => handlePaymentSubmit(currentSale.id)}
+                className="btn btn-primary"
+              >
+                Submit
+              </button>
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 };

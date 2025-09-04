@@ -119,6 +119,7 @@ class MealOrderDisplay(BaseModel):
 class RestaurantSaleDisplay(BaseModel):
     id: int
     order_id: int
+    guest_name: Optional[str] = None   # 👈 add this
     location_id: Optional[int] = None   # ✅ add location
     # location_name: Optional[str] = None  # ✅ optional, if you want the name directly
     served_by: str
