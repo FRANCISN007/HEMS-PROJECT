@@ -104,8 +104,8 @@ const RestDashboardPage = () => {
       name: "💳 Payment",
       submenu: [
         { label: "➕ Create Payment", path: "/restaurant/RestaurantPayment" },
-        { label: "📃 List Payment", path: "/restaurant/listpayment" },
-        { label: "❌ Void Payment", path: "/restaurant/voidpayment" },
+        { label: "📃 List Payment", path: "/restaurant/ListRestaurantPayment" },
+        
       ],
     },
   ];

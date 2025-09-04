@@ -75,7 +75,7 @@ import ListGuestOrder from "./components/restaurant/ListGuestOrder";
 import OrderToSales from "./components/restaurant/OrderToSales";
 import ListRestaurantSales from "./components/restaurant/ListRestaurantSales";
 import RestaurantPayment from "./components/restaurant/RestaurantPayment";
-
+import ListRestaurantPayment from "./components/restaurant/ListRestaurantPayment";
 
 
 console.log("✅ API BASE:", process.env.REACT_APP_API_BASE_URL);
@@ -151,7 +151,7 @@ const App = () => {
           <Route path="OrderToSales" element={<OrderToSales />} />
           <Route path="ListRestaurantSales" element={<ListRestaurantSales />} />
           <Route path="RestaurantPayment" element={<RestaurantPayment />} />
-
+          <Route path="ListRestaurantPayment" element={<ListRestaurantPayment />} />
           
         </Route>
 

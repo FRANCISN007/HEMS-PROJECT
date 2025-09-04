@@ -472,7 +472,7 @@ def list_outstanding(
 
         if order:
             location_id = order.location_id
-            guest_name = order.guest_name  # ✅ pull guest name from MealOrder
+            guest_name = order.guest_name  # ✅ guest name from MealOrder
             if order.location:
                 location_name = order.location.name
             items = [
@@ -480,8 +480,8 @@ def list_outstanding(
                 for item in order.items
             ]
 
-        # Compute payments
-        amount_paid = sum(payment.amount_paid for payment in sale.payments)
+        # ✅ Compute payments excluding voided ones
+        amount_paid = sum(payment.amount_paid for payment in sale.payments if not payment.is_void)
         balance = sale.total_amount - amount_paid
 
         # Update totals
@@ -492,7 +492,7 @@ def list_outstanding(
         sale_display = RestaurantSaleDisplay(
             id=sale.id,
             order_id=sale.order_id,
-            guest_name=guest_name,  # ✅ include guest name in response
+            guest_name=guest_name,
             location_id=location_id,
             # location_name=location_name,  # uncomment if you want
             served_by=sale.served_by,
@@ -513,7 +513,6 @@ def list_outstanding(
     }
 
     return {"sales": result, "summary": summary}
-
 
 
 @router.get("/sales/{sale_id}", response_model=RestaurantSaleDisplay)

@@ -16,6 +16,7 @@ class RestaurantSalePayment(Base):
     payment_mode = Column(String, nullable=False)  # "cash", "POS", "transfer"
     paid_by = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    is_void = Column(Boolean, default=False)
 
     # Relationships
     sale = relationship("RestaurantSale", back_populates="payments")

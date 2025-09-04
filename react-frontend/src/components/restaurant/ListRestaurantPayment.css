@@ -1,0 +1,139 @@
+/* Modal overlay */
+.modal-overlay1 {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(1px);
+}
+
+/* Modal */
+.modal1 {
+  background: #ffffff;
+  width: 360px;          /* compact width */
+  max-width: 90%;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  overflow: hidden;
+  animation: cardIn 150ms ease-out;
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Header */
+.modal-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+  background: #f9fafb;
+  text-align: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111;
+}
+
+/* Body */
+.modal-body {
+  padding: 12px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group.full {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  font-size: 0.8rem;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.form-group span {
+  font-size: 0.85rem;
+  color: #111;
+}
+
+.input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+/* Footer */
+.modal-footer {
+  padding: 10px 12px;
+  border-top: 1px solid #eee;
+  background: #fafafa;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modal-footer .btn {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+/* Buttons */
+.btn {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: transform 0.05s ease, box-shadow 0.2s ease;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn.edit {
+  background-color: #10b981; /* emerald */
+  color: white;
+}
+
+.btn.void {
+  background-color: #ef4444; /* red */
+  color: white;
+}
+
+.btn.print {
+  background-color: #3b82f6; /* blue */
+  color: white;
+}
+
+.btn:disabled {
+  background-color: #cfcfcf !important;
+  cursor: not-allowed;
+}

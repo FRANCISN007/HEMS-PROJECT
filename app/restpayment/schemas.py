@@ -19,6 +19,7 @@ class RestaurantSalePaymentDisplay(BaseModel):
     amount_paid: float
     payment_mode: str  # e.g., "cash", "POS", "transfer"
     paid_by: Optional[str]
+    is_void: bool
     created_at: datetime
 
     class Config:

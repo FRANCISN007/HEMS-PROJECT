@@ -83,8 +83,10 @@ def list_payments_with_items(
 
     for sale in sales:
         for payment in sale.payments:
-            payment_summary[payment.payment_mode] += payment.amount_paid
-            total_amount += payment.amount_paid
+            if not payment.is_void:   # <-- exclude voided payments
+                payment_summary[payment.payment_mode] += payment.amount_paid
+                total_amount += payment.amount_paid
+
 
         # Convert each sale to schema for serialization
         sale_data = RestaurantSaleWithPaymentsDisplay.from_orm(sale)
@@ -127,6 +129,71 @@ from typing import List
 
 from sqlalchemy import func
 
+
+
+# ✅ Update a payment
+@router.put("/sales/payments/{payment_id}", response_model=RestaurantSalePaymentDisplay)
+def update_payment(
+    payment_id: int,
+    amount: Optional[float] = Query(None),
+    payment_mode: Optional[str] = Query(None),
+    paid_by: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+):
+    payment = db.query(RestaurantSalePayment).filter(RestaurantSalePayment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+
+    if amount is not None:
+        payment.amount_paid = amount
+    if payment_mode is not None:
+        payment.payment_mode = payment_mode
+    if paid_by is not None:
+        payment.paid_by = paid_by
+
+    payment.updated_at = datetime.utcnow()
+    db.add(payment)
+
+    sale = db.query(RestaurantSale).filter(RestaurantSale.id == payment.sale_id).first()
+    if sale:
+        update_sale_status(sale, db)
+
+    db.commit()
+    db.refresh(payment)
+
+    return payment
+
+
+# ✅ Void a payment
+# ✅ Void a payment (cancel transaction but keep history)
+@router.put("/sales/payments/{payment_id}/void", response_model=RestaurantSalePaymentDisplay)
+def void_payment(
+    payment_id: int,
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+):
+    payment = db.query(RestaurantSalePayment).filter(RestaurantSalePayment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+
+    if payment.is_void:
+        raise HTTPException(status_code=400, detail="Payment is already voided")
+
+    # ✅ Keep amount_paid unchanged for history, just flag as void
+    payment.is_void = True
+    payment.updated_at = datetime.utcnow()
+    db.add(payment)
+
+    # ✅ Recalculate sale status, ignoring voided payments
+    sale = db.query(RestaurantSale).filter(RestaurantSale.id == payment.sale_id).first()
+    if sale:
+        update_sale_status(sale, db)
+
+    db.commit()
+    db.refresh(payment)
+
+    return payment
 
 
 @router.delete("/sales/payments/{payment_id}", response_model=RestaurantSaleDisplay)
