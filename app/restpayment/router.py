@@ -15,7 +15,7 @@ from app.database import get_db
 from app.restpayment.models import  RestaurantSalePayment
 from app.restaurant.models import RestaurantSale
 
-from app.restpayment.schemas import RestaurantSaleDisplay, RestaurantSalePaymentDisplay
+from app.restpayment.schemas import RestaurantSaleDisplay, RestaurantSalePaymentDisplay, PaymentCreate
 
 from app.restpayment.schemas import RestaurantSaleWithPaymentsDisplay
 from app.restpayment.services import update_sale_status
@@ -31,9 +31,9 @@ router = APIRouter()
 @router.post("/sales/{sale_id}/payments", response_model=RestaurantSaleDisplay)
 def add_payment_to_sale(
     sale_id: int,
-    amount: float,
-    payment_mode: str,
-    paid_by: str = None,
+    amount: float = Query(...),
+    payment_mode: str = Query(...),
+    paid_by: str = Query(...),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
 ):
@@ -41,20 +41,18 @@ def add_payment_to_sale(
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
 
-    payment = RestaurantSalePayment(
+    new_payment = RestaurantSalePayment(
         sale_id=sale.id,
         amount_paid=amount,
         payment_mode=payment_mode,
         paid_by=paid_by,
         created_at=datetime.utcnow()
     )
-    db.add(payment)
-    db.flush()  # Make sure payment is added before calculating
+    db.add(new_payment)
+    db.flush()
 
     update_sale_status(sale, db)
     return sale
-
-
 
 
 @router.get("/sales/payments", response_model=dict)
@@ -123,6 +121,11 @@ def get_sale_with_payments(sale_id: int,
         raise HTTPException(status_code=404, detail="Sale not found")
 
     return sale
+
+
+from typing import List
+
+from sqlalchemy import func
 
 
 

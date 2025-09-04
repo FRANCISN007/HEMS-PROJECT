@@ -385,10 +385,16 @@ def list_sales(
     total_balance = 0.0
 
     for sale in sales:
-        # Get order items
+        # Get order
         order = sale.order
         items = []
+        location_id = None
+        # location_name = None  # ✅ optional
+
         if order:
+            location_id = order.location_id
+            # if order.location:  # if relationship exists
+            #     location_name = order.location.name
             items = [
                 MealOrderItemDisplay.from_orm_with_meal(item)
                 for item in order.items
@@ -406,6 +412,8 @@ def list_sales(
         sale_display = RestaurantSaleDisplay(
             id=sale.id,
             order_id=sale.order_id,
+            location_id=location_id,   # ✅ include location
+            # location_name=location_name,  # ✅ if you want the name
             served_by=sale.served_by,
             total_amount=sale.total_amount,
             amount_paid=amount_paid,
@@ -424,6 +432,84 @@ def list_sales(
     }
 
     return {"sales": result, "summary": summary}
+
+
+
+@router.get("/sales/outstanding", response_model=dict)
+def list_outstanding(
+    location_id: int = Query(None, description="Filter by location"),
+    start_date: date = Query(None, description="Start date for filtering"),
+    end_date: date = Query(None, description="End date for filtering"),
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+):
+    query = db.query(RestaurantSale).filter(RestaurantSale.status.in_(["unpaid", "partial"]))
+
+    # ✅ Filter by location if provided
+    if location_id:
+        query = query.join(RestaurantSale.order).filter(MealOrder.location_id == location_id)
+
+    if start_date:
+        query = query.filter(RestaurantSale.created_at >= start_date)
+    if end_date:
+        query = query.filter(RestaurantSale.created_at <= end_date)
+
+    sales = query.order_by(RestaurantSale.created_at.desc()).all()
+    result = []
+
+    # Summary totals
+    total_sales_amount = 0.0
+    total_paid_amount = 0.0
+    total_balance = 0.0
+
+    for sale in sales:
+        order = sale.order
+        items = []
+        location_id = None
+        location_name = None
+
+        if order:
+            location_id = order.location_id
+            if order.location:
+                location_name = order.location.name
+            items = [
+                MealOrderItemDisplay.from_orm_with_meal(item)
+                for item in order.items
+            ]
+
+        # Compute payments
+        amount_paid = sum(payment.amount_paid for payment in sale.payments)
+        balance = sale.total_amount - amount_paid
+
+        # Update totals
+        total_sales_amount += sale.total_amount
+        total_paid_amount += amount_paid
+        total_balance += balance
+
+        sale_display = RestaurantSaleDisplay(
+            id=sale.id,
+            order_id=sale.order_id,
+            location_id=location_id,
+            # location_name=location_name,  # uncomment if you want
+            served_by=sale.served_by,
+            total_amount=sale.total_amount,
+            amount_paid=amount_paid,
+            balance=balance,
+            status=sale.status,
+            served_at=sale.served_at,
+            created_at=sale.created_at,
+            items=items,
+        )
+        result.append(sale_display)
+
+    summary = {
+        "total_sales_amount": total_sales_amount,
+        "total_paid_amount": total_paid_amount,
+        "total_balance": total_balance,
+    }
+
+    return {"sales": result, "summary": summary}
+
 
 
 

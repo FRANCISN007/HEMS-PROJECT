@@ -6,6 +6,13 @@ from typing import List
 
 
 
+class PaymentCreate(BaseModel):
+    amount: float
+    payment_mode: str
+    paid_by: str | None = None
+
+    
+
 class RestaurantSalePaymentDisplay(BaseModel):
     id: int
     sale_id: int

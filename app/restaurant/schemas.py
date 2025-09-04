@@ -119,10 +119,12 @@ class MealOrderDisplay(BaseModel):
 class RestaurantSaleDisplay(BaseModel):
     id: int
     order_id: int
+    location_id: Optional[int] = None   # ✅ add location
+    # location_name: Optional[str] = None  # ✅ optional, if you want the name directly
     served_by: str
     total_amount: float
-    amount_paid: float  # ✅ Add this
-    balance: float  # ✅ NEW
+    amount_paid: float
+    balance: float
     status: str
     served_at: datetime
     created_at: datetime

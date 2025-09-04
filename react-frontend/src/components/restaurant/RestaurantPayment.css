@@ -1,0 +1,199 @@
+.restaurant-payment {
+  padding: 10px;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  color: #333;
+}
+
+.restaurant-payment h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #222;
+  font-size: 20px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+
+/* Location Select */
+.location-select {
+  margin: 14px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.location-select label {
+  font-weight: 600;
+}
+
+.location-select select {
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  outline: none;
+  transition: 0.2s;
+}
+
+.location-select select:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+/* Sales Table */
+.sales-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 18px;
+  font-size: 14px;
+  box-shadow: 0px 2px 6px rgba(0,0,0,0.1);
+  border: 1px solid #ddd;
+}
+
+.sales-table th,
+.sales-table td {
+  border: 1px solid #ddd;
+  padding: 10px;
+  text-align: center;
+}
+
+.sales-table th {
+  background-color: #f0f4f8;
+  font-weight: bold;
+  color: #333;
+  text-transform: uppercase;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+
+.sales-table tr:nth-child(even) {
+  background-color: #fafafa;
+}
+
+.sales-table tr:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+.sales-table tr:hover {
+  background-color: #f1f7ff;
+}
+
+.sales-table button {
+  padding: 6px 12px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: 0.2s;
+}
+
+.sales-table button:hover {
+  background-color: #0056b3;
+}
+
+/* Payment Modal Overlay */
+.payment-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+}
+
+/* Payment Modal Box */
+.payment-modal {
+  background: #fff;
+  padding: 22px;
+  border-radius: 12px;
+  width: 360px;
+  max-width: 95%;
+  box-shadow: 0px 6px 16px rgba(0,0,0,0.25);
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.payment-modal h3 {
+  margin-bottom: 18px;
+  text-align: center;
+  color: #222;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.payment-modal label {
+  display: block;
+  margin: 8px 0 4px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.payment-modal input,
+.payment-modal select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  outline: none;
+  transition: 0.2s;
+}
+
+.payment-modal input:focus,
+.payment-modal select:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 5px rgba(0,123,255,0.3);
+}
+
+/* Modal Actions */
+.modal-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modal-actions button {
+  flex: 1;
+  padding: 9px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.modal-actions button:first-child {
+  background-color: #28a745;
+  color: white;
+}
+
+.modal-actions button:first-child:hover {
+  background-color: #1e7e34;
+}
+
+.modal-actions button:last-child {
+  background-color: #dc3545;
+  color: white;
+}
+
+.modal-actions button:last-child:hover {
+  background-color: #a71d2a;
+}
+
+/* Fade In Animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
