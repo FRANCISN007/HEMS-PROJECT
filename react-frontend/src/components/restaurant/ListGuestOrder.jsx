@@ -17,6 +17,7 @@ const ListGuestOrder = () => {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [message, setMessage] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");   // ✅ new
 
   // For editing
   const [editingOrder, setEditingOrder] = useState(null);
@@ -50,6 +51,7 @@ const ListGuestOrder = () => {
       if (status) params.status = status;
       if (startDate) params.start_date = startDate;
       if (endDate) params.end_date = endDate;
+      if (locationFilter) params.location_id = locationFilter;   // ✅ add location filter
 
       const res = await axiosWithAuth().get("/restaurant/list", { params });
       setOrders(res.data || []);
@@ -217,10 +219,24 @@ const ListGuestOrder = () => {
       {/* Filters + Totals */}
       <div className="listorder-filters-summary">
         <div className="filters-left">
+          <select
+            className="location-filter"
+            value={locationFilter}
+            onChange={(e) => setLocationFilter(e.target.value)}
+          >
+            <option value="">All Locations</option>
+            {locations.map((loc) => (
+              <option key={loc.id} value={loc.id}>
+                {loc.name}
+              </option>
+            ))}
+          </select>
+
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">All Status</option>
             <option value="open">Open</option>
             <option value="closed">Closed</option>
+            
           </select>
 
           <input

@@ -37,7 +37,12 @@ const ListRestaurantPayment = () => {
     if (!newAmount) return;
     try {
       await axiosWithAuth().put(
-        `/restpayment/sales/payments/${editPayment.id}?amount=${newAmount}`
+        `/restpayment/sales/payments/${editPayment.id}`,
+        {
+          amount_paid: Number(newAmount),
+          payment_mode: editPayment.payment_mode,
+          paid_by: editPayment.paid_by,
+        }
       );
       setEditPayment(null);
       fetchPayments();
@@ -96,7 +101,7 @@ const ListRestaurantPayment = () => {
 
   return (
     <div className="payment-list-container">
-      <h1>Restaurant Payments</h1>
+      <h1>Restaurant Payments List</h1>
 
       <table className="payment-table">
         <thead>
@@ -163,7 +168,7 @@ const ListRestaurantPayment = () => {
         </ul>
       </div>
 
-      {/* ✅ Compact & centered Edit Modal */}
+      {/* ✅ Professional Edit Modal */}
       {editPayment && (
         <div className="modal-overlay1" onClick={() => setEditPayment(null)}>
           <div className="modal1 card-scale-in" onClick={(e) => e.stopPropagation()}>
@@ -181,12 +186,40 @@ const ListRestaurantPayment = () => {
                   <label>Sale ID</label>
                   <span>{editPayment.sale_id}</span>
                 </div>
+
                 <div className="form-group full">
                   <label>Amount Paid (₦)</label>
                   <input
                     type="number"
                     value={newAmount}
                     onChange={(e) => setNewAmount(e.target.value)}
+                    className="input"
+                  />
+                </div>
+
+                <div className="form-group full">
+                  <label>Mode of Payment</label>
+                  <select
+                    value={editPayment.payment_mode}
+                    onChange={(e) =>
+                      setEditPayment({ ...editPayment, payment_mode: e.target.value })
+                    }
+                    className="input"
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="pos">POS</option>
+                    <option value="transfer">Bank Transfer</option>
+                  </select>
+                </div>
+
+                <div className="form-group full">
+                  <label>Paid By</label>
+                  <input
+                    type="text"
+                    value={editPayment.paid_by || ""}
+                    onChange={(e) =>
+                      setEditPayment({ ...editPayment, paid_by: e.target.value })
+                    }
                     className="input"
                   />
                 </div>

@@ -17,7 +17,7 @@ from app.restaurant.models import RestaurantSale
 
 from app.restpayment.schemas import RestaurantSaleDisplay, RestaurantSalePaymentDisplay, PaymentCreate
 
-from app.restpayment.schemas import RestaurantSaleWithPaymentsDisplay
+from app.restpayment.schemas import RestaurantSaleWithPaymentsDisplay, UpdatePaymentSchema
 from app.restpayment.services import update_sale_status
 from fastapi import Path
 
@@ -135,9 +135,7 @@ from sqlalchemy import func
 @router.put("/sales/payments/{payment_id}", response_model=RestaurantSalePaymentDisplay)
 def update_payment(
     payment_id: int,
-    amount: Optional[float] = Query(None),
-    payment_mode: Optional[str] = Query(None),
-    paid_by: Optional[str] = Query(None),
+    payload: UpdatePaymentSchema,
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
 ):
@@ -145,12 +143,12 @@ def update_payment(
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
 
-    if amount is not None:
-        payment.amount_paid = amount
-    if payment_mode is not None:
-        payment.payment_mode = payment_mode
-    if paid_by is not None:
-        payment.paid_by = paid_by
+    if payload.amount_paid is not None:
+        payment.amount_paid = payload.amount_paid
+    if payload.payment_mode is not None:
+        payment.payment_mode = payload.payment_mode
+    if payload.paid_by is not None:
+        payment.paid_by = payload.paid_by
 
     payment.updated_at = datetime.utcnow()
     db.add(payment)
@@ -163,7 +161,6 @@ def update_payment(
     db.refresh(payment)
 
     return payment
-
 
 # ✅ Void a payment
 # ✅ Void a payment (cancel transaction but keep history)

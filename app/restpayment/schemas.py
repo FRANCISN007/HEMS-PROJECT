@@ -26,6 +26,12 @@ class RestaurantSalePaymentDisplay(BaseModel):
         from_attributes = True
 
 
+class UpdatePaymentSchema(BaseModel):
+    amount_paid: Optional[float]
+    payment_mode: Optional[str]
+    paid_by: Optional[str]
+
+
 # restpayment/schemas.py
 
 

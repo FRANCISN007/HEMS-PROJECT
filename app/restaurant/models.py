@@ -83,14 +83,19 @@ class RestaurantSale(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("meal_orders.id"), nullable=False)
-    served_by = Column(String, nullable=False)  # Waiter/staff name or ID
+    location_id = Column(Integer, ForeignKey("restaurant_locations.id"), nullable=False)  # ✅ FIXED
+    guest_name = Column(String, nullable=True)
+    served_by = Column(String, nullable=False)
     total_amount = Column(Float, nullable=False)
-    status = Column(String, default="unpaid")  # unpaid, partial, paid
+    status = Column(String, default="unpaid")
     served_at = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-
     order = relationship("MealOrder", back_populates="sale")
-    payments = relationship("RestaurantSalePayment", back_populates="sale", cascade="all, delete")
-
+    payments = relationship(
+        "RestaurantSalePayment",
+        back_populates="sale",
+        cascade="all, delete"
+    )
+    #location = relationship("RestaurantLocation")  # ✅ optional relationship
 

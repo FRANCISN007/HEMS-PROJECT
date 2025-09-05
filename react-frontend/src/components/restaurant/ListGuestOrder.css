@@ -295,3 +295,22 @@
 .close-btn:hover {
   background: #c0392b;
 }
+
+
+/* Location Filter Dropdown */
+.location-filter {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: #fff;
+  color: #333;
+  margin-right: 8px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.location-filter:focus {
+  border-color: #3b82f6; /* blue */
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  outline: none;
+}
