@@ -18,6 +18,24 @@ const ListRestaurantSales = () => {
   const [endDate, setEndDate] = useState("");
   const printRef = useRef(); // Reference for receipt content
 
+
+  // Helper to get today's YYYY-MM-DD
+  const getToday = () => {
+    const today = new Date();
+    return today.toISOString().split("T")[0];
+  };
+
+  // On mount → set today's start/end date and fetch
+  useEffect(() => {
+    const today = getToday();
+    setStartDate(today);
+    setEndDate(today);
+
+    fetchLocations();
+    fetchSalesWithDates(today, today);
+  }, []);
+
+
   // ✅ Format numbers with commas (12,000 instead of 12000)
   const formatAmount = (value) => {
     if (value === null || value === undefined || value === "") return "0";
@@ -30,17 +48,17 @@ const ListRestaurantSales = () => {
   };
 
   // Fetch sales from backend
-  const fetchSales = async () => {
+  const fetchSalesWithDates = async (from, to) => {
     setLoading(true);
     try {
       const params = {};
       if (locationId) params.location_id = locationId;
-      if (startDate) params.start_date = startDate;
-      if (endDate) params.end_date = endDate;
+      if (from) params.start_date = from;
+      if (to) params.end_date = to;
 
       const res = await axiosWithAuth().get("/restaurant/sales", { params });
 
-      // ✅ Normalize sales
+      // normalize sales & summary (reuse your logic)
       const normalizedSales = (res.data.sales || []).map((sale) => ({
         ...sale,
         total_amount: Number(sale.total_amount) || 0,
@@ -53,7 +71,6 @@ const ListRestaurantSales = () => {
         })),
       }));
 
-      // ✅ Normalize summary
       const normalizedSummary = {
         total_sales_amount: Number(res.data.summary?.total_sales_amount) || 0,
         total_paid_amount: Number(res.data.summary?.total_paid_amount) || 0,
@@ -73,6 +90,10 @@ const ListRestaurantSales = () => {
     }
     setLoading(false);
   };
+
+  // Keep this for filter button or manual refetch
+const fetchSales = () => fetchSalesWithDates(startDate, endDate);
+
 
   // ✅ Fetch locations from backend
   const fetchLocations = async () => {

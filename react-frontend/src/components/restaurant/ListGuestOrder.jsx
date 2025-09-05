@@ -19,6 +19,22 @@ const ListGuestOrder = () => {
   const [message, setMessage] = useState("");
   const [locationFilter, setLocationFilter] = useState("");   // ✅ new
 
+  // Get today in YYYY-MM-DD
+  const getToday = () => {
+    const t = new Date();
+    return t.toISOString().split("T")[0];
+  };
+
+  useEffect(() => {
+    const today = getToday();
+    setStartDate(today);
+    setEndDate(today);
+
+    // ✅ fetch after state is set
+    fetchLocations();
+    fetchOrdersWithDates(today, today);
+  }, []);
+
   // For editing
   const [editingOrder, setEditingOrder] = useState(null);
   const [formData, setFormData] = useState({
@@ -38,20 +54,20 @@ const ListGuestOrder = () => {
   const [locations, setLocations] = useState([]);
 
   // Flash message auto-clear
-  useEffect(() => {
-    if (!message) return;
-    const t = setTimeout(() => setMessage(""), 3000);
-    return () => clearTimeout(t);
-  }, [message]);
+    useEffect(() => {
+      if (!message) return;
+      const t = setTimeout(() => setMessage(""), 3000);
+      return () => clearTimeout(t);
+    }, [message]);
 
-  // Fetch Orders
-  const fetchOrders = async () => {
+    // Fetch Orders
+    const fetchOrdersWithDates = async (from, to) => {
     try {
       const params = {};
       if (status) params.status = status;
-      if (startDate) params.start_date = startDate;
-      if (endDate) params.end_date = endDate;
-      if (locationFilter) params.location_id = locationFilter;   // ✅ add location filter
+      if (from) params.start_date = from;
+      if (to) params.end_date = to;
+      if (locationFilter) params.location_id = locationFilter;
 
       const res = await axiosWithAuth().get("/restaurant/list", { params });
       setOrders(res.data || []);
@@ -60,6 +76,10 @@ const ListGuestOrder = () => {
       console.error(err);
     }
   };
+
+// keep your existing fetchOrders for filter button reuse
+const fetchOrders = () => fetchOrdersWithDates(startDate, endDate);
+
 
   // Fetch Locations
   const fetchLocations = async () => {
@@ -85,10 +105,7 @@ const ListGuestOrder = () => {
     return sum + orderTotal;
   }, 0);
 
-  useEffect(() => {
-    fetchOrders();
-    fetchLocations();
-  }, []);
+  
 
   // Delete order
   const handleDelete = async (id) => {
@@ -210,7 +227,7 @@ const ListGuestOrder = () => {
     <div className="listorder-container">
       {/* Header */}
       <div className="listorder-header">
-        <h2>📋 Guest Orders</h2>
+        <h2>📋 Guest Orders List</h2>
         <button className="refresh-btn" onClick={fetchOrders}>
           🔄 Refresh
         </button>
