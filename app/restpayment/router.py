@@ -57,48 +57,70 @@ def add_payment_to_sale(
 
 @router.get("/sales/payments", response_model=dict)
 def list_payments_with_items(
-    sale_id: int = None,
-    start_date: date = Query(None),
-    end_date: date = Query(None),
+    sale_id: Optional[int] = None,
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    location_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
 ):
-    query = db.query(RestaurantSale)
+    query = db.query(RestaurantSalePayment).join(RestaurantSale)
 
+    # ✅ Sale filter
     if sale_id:
         query = query.filter(RestaurantSale.id == sale_id)
+
+    # ✅ Date filter logic on PAYMENT date
     if start_date:
-        query = query.filter(RestaurantSale.created_at >= start_date)
+        query = query.filter(
+            RestaurantSalePayment.created_at >= datetime.combine(start_date, datetime.min.time())
+        )
     if end_date:
-        query = query.filter(RestaurantSale.created_at <= end_date)
+        query = query.filter(
+            RestaurantSalePayment.created_at <= datetime.combine(end_date, datetime.max.time())
+        )
 
-    sales = query.all()
+    # ✅ Location filter
+    if location_id:
+        query = query.filter(RestaurantSale.location_id == location_id)
 
-    # Summary logic
+    # ✅ Exclude voids here
+    query = query.filter(RestaurantSalePayment.is_void == False)
+
+    # ✅ Order by PAYMENT date (newest first)
+    payments = query.order_by(RestaurantSalePayment.created_at.desc()).all()
+
+    # --- Build grouped response ---
     payment_summary = defaultdict(float)
     total_amount = 0.0
+    sales_map = {}
 
-    # Build response list using schema
-    sales_display = []
+    for p in payments:
+        sale = p.sale  # relationship back to RestaurantSale
+        if sale.id not in sales_map:
+            sale_model = RestaurantSaleWithPaymentsDisplay.from_orm(sale)
+            sales_map[sale.id] = sale_model.dict()
+            sales_map[sale.id]["payments"] = []
 
-    for sale in sales:
-        for payment in sale.payments:
-            if not payment.is_void:   # <-- exclude voided payments
-                payment_summary[payment.payment_mode] += payment.amount_paid
-                total_amount += payment.amount_paid
+        # ✅ Add payment, including paid_by
+        payment_dict = {
+            **RestaurantSalePaymentDisplay.from_orm(p).dict(),
+            "paid_by": p.paid_by,
+        }
+        sales_map[sale.id]["payments"].append(payment_dict)
 
+        # ✅ Summaries
+        payment_summary[p.payment_mode] += float(p.amount_paid or 0.0)
+        total_amount += float(p.amount_paid or 0.0)
 
-        # Convert each sale to schema for serialization
-        sale_data = RestaurantSaleWithPaymentsDisplay.from_orm(sale)
-        sales_display.append(sale_data)
+    summary = {k: float(v) for k, v in payment_summary.items()}
+    summary["Total"] = float(total_amount)
 
-    summary = dict(payment_summary)
-    summary["Total"] = total_amount
+    # return as list (ordered by latest payment date)
+    sales_display = list(sales_map.values())
 
-    return {
-        "sales": sales_display,
-        "summary": summary
-    }
+    return {"sales": sales_display, "summary": summary}
+
 
 
 @router.get("/sales/{sale_id}/payments", response_model=List[RestaurantSalePaymentDisplay])

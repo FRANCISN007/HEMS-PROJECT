@@ -11,10 +11,30 @@ const ListRestaurantPayment = () => {
   const [editPayment, setEditPayment] = useState(null);
   const [newAmount, setNewAmount] = useState("");
 
+  // ✅ get today date helper
+  const getToday = () => {
+    const today = new Date();
+    return today.toISOString().split("T")[0];
+  };
+
+  // ✅ filter states (default to today)
+  const [locations, setLocations] = useState([]);
+  const [selectedLocation, setSelectedLocation] = useState("");
+  const [startDate, setStartDate] = useState(getToday());
+  const [endDate, setEndDate] = useState(getToday());
+
   const fetchPayments = async () => {
     try {
       setLoading(true);
-      const response = await axiosWithAuth().get("/restpayment/sales/payments");
+
+      const params = {};
+      if (selectedLocation) params.location_id = selectedLocation;
+      if (startDate) params.start_date = startDate;
+      if (endDate) params.end_date = endDate;
+
+      const response = await axiosWithAuth().get("/restpayment/sales/payments", {
+        params,
+      });
       setPayments(response.data.sales);
       setSummary(response.data.summary);
     } catch (err) {
@@ -24,9 +44,24 @@ const ListRestaurantPayment = () => {
     }
   };
 
+  const fetchLocations = async () => {
+    try {
+      const res = await axiosWithAuth().get("/restaurant/locations");
+      setLocations(res.data);
+    } catch (err) {
+      console.error("Failed to fetch locations", err);
+    }
+  };
+
   useEffect(() => {
+    fetchLocations();
     fetchPayments();
   }, []);
+
+  // ✅ Auto refresh when filters change
+  useEffect(() => {
+    fetchPayments();
+  }, [selectedLocation, startDate, endDate]);
 
   const openEditModal = (payment) => {
     setEditPayment(payment);
@@ -78,7 +113,7 @@ const ListRestaurantPayment = () => {
           <h2>Payment Receipt</h2>
           <p><strong>Sale ID:</strong> ${payment.sale_id}</p>
           <p><strong>Payment ID:</strong> ${payment.id}</p>
-          <p><strong>Amount Paid:</strong> ₦${payment.amount_paid.toFixed(2)}</p>
+          <p><strong>Amount Paid:</strong> ₦${Number(payment.amount_paid).toLocaleString()}</p>
           <p><strong>Payment Mode:</strong> ${payment.payment_mode}</p>
           <p><strong>Paid By:</strong> ${payment.paid_by}</p>
           <p><strong>Status:</strong> ${
@@ -103,6 +138,46 @@ const ListRestaurantPayment = () => {
     <div className="payment-list-container">
       <h1>Restaurant Payments List</h1>
 
+      {/* ✅ Filters */}
+      <div className="filters">
+        <label>
+          Location:
+          <select
+            value={selectedLocation}
+            onChange={(e) => setSelectedLocation(e.target.value)}
+          >
+            <option value="">All Locations</option>
+            {locations.map((loc) => (
+              <option key={loc.id} value={loc.id}>
+                {loc.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          From:
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+        </label>
+
+        <label>
+          To:
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+        </label>
+
+        <button className="btn filter" onClick={fetchPayments}>
+          Apply Filters
+        </button>
+      </div>
+
       <table className="payment-table">
         <thead>
           <tr>
@@ -122,9 +197,9 @@ const ListRestaurantPayment = () => {
               <tr key={payment.id} className={payment.is_void ? "void-row" : ""}>
                 <td>{sale.id}</td>
                 <td>{payment.id}</td>
-                <td>₦{payment.amount_paid.toFixed(2)}</td>
+                <td>₦{Number(payment.amount_paid).toLocaleString()}</td>
                 <td>{payment.payment_mode}</td>
-                <td>{payment.paid_by}</td>
+                <td>{payment.paid_by && payment.paid_by.trim() !== "" ? payment.paid_by : "N/A"}</td>
                 <td className={payment.is_void ? "void-text" : ""}>
                   {payment.is_void ? "VOID" : "VALID"}
                 </td>
@@ -162,16 +237,19 @@ const ListRestaurantPayment = () => {
         <ul>
           {Object.entries(summary).map(([mode, amount]) => (
             <li key={mode}>
-              {mode}: ₦{amount.toFixed(2)}
+              {mode}: ₦{Number(amount).toLocaleString()}
             </li>
           ))}
         </ul>
       </div>
 
-      {/* ✅ Professional Edit Modal */}
+      {/* ✅ Edit Modal */}
       {editPayment && (
         <div className="modal-overlay1" onClick={() => setEditPayment(null)}>
-          <div className="modal1 card-scale-in" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal1 card-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
               <h3>Edit Payment</h3>
             </div>
@@ -202,7 +280,10 @@ const ListRestaurantPayment = () => {
                   <select
                     value={editPayment.payment_mode}
                     onChange={(e) =>
-                      setEditPayment({ ...editPayment, payment_mode: e.target.value })
+                      setEditPayment({
+                        ...editPayment,
+                        payment_mode: e.target.value,
+                      })
                     }
                     className="input"
                   >
