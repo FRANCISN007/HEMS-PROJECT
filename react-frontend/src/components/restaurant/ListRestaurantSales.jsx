@@ -4,6 +4,15 @@ import "./ListRestaurantSales.css";
 import "./Receipt.css"; // ✅ Receipt styles
 
 const ListRestaurantSales = () => {
+  const printRef = useRef(); // Reference for receipt content
+
+  // ✅ Helper to get today's YYYY-MM-DD
+  const getToday = () => {
+    const today = new Date();
+    return today.toISOString().split("T")[0];
+  };
+
+  // ✅ States
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState({
@@ -14,27 +23,8 @@ const ListRestaurantSales = () => {
   const [selectedSale, setSelectedSale] = useState(null); // For print modal
   const [locationId, setLocationId] = useState(""); // ✅ location filter
   const [locations, setLocations] = useState([]); // ✅ available locations
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const printRef = useRef(); // Reference for receipt content
-
-
-  // Helper to get today's YYYY-MM-DD
-  const getToday = () => {
-    const today = new Date();
-    return today.toISOString().split("T")[0];
-  };
-
-  // On mount → set today's start/end date and fetch
-  useEffect(() => {
-    const today = getToday();
-    setStartDate(today);
-    setEndDate(today);
-
-    fetchLocations();
-    fetchSalesWithDates(today, today);
-  }, []);
-
+  const [startDate, setStartDate] = useState(getToday());
+  const [endDate, setEndDate] = useState(getToday());
 
   // ✅ Format numbers with commas (12,000 instead of 12000)
   const formatAmount = (value) => {
@@ -47,7 +37,7 @@ const ListRestaurantSales = () => {
     }).format(num);
   };
 
-  // Fetch sales from backend
+  // ✅ Fetch sales from backend
   const fetchSalesWithDates = async (from, to) => {
     setLoading(true);
     try {
@@ -58,7 +48,7 @@ const ListRestaurantSales = () => {
 
       const res = await axiosWithAuth().get("/restaurant/sales", { params });
 
-      // normalize sales & summary (reuse your logic)
+      // normalize sales & summary
       const normalizedSales = (res.data.sales || []).map((sale) => ({
         ...sale,
         total_amount: Number(sale.total_amount) || 0,
@@ -92,8 +82,7 @@ const ListRestaurantSales = () => {
   };
 
   // Keep this for filter button or manual refetch
-const fetchSales = () => fetchSalesWithDates(startDate, endDate);
-
+  const fetchSales = () => fetchSalesWithDates(startDate, endDate);
 
   // ✅ Fetch locations from backend
   const fetchLocations = async () => {
@@ -153,12 +142,13 @@ const fetchSales = () => fetchSalesWithDates(startDate, endDate);
     printWindow.close();
   };
 
-  // Load locations once
+  // ✅ Load locations & today’s sales on mount
   useEffect(() => {
     fetchLocations();
+    fetchSalesWithDates(getToday(), getToday());
   }, []);
 
-  // Refetch sales when location/date filters change
+  // ✅ Refetch sales when location/date filters change
   useEffect(() => {
     fetchSales();
   }, [locationId, startDate, endDate]);
