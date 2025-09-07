@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
 import { FaFileExcel, FaPrint } from "react-icons/fa";
-import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import ExcelJS from "exceljs";
 import "./RestDashboardPage.css"; // 🆕 restaurant CSS
@@ -74,18 +73,9 @@ const RestDashboardPage = () => {
   };
 
   const restaurantMenu = [
-    {
-      name: "📍 Location",
-      path: "/restaurant/location",
-    },
-    {
-      name: "🍽️ Meal Category",
-      path: "/restaurant/mealcategory",
-    },
-    {
-      name: "🍲 Meal",
-        path: "/restaurant/mealcreate",
-    },
+    { name: "📍 Location", path: "/restaurant/location" },
+    { name: "🍽️ Meal Category", path: "/restaurant/mealcategory" },
+    { name: "🍲 Meal", path: "/restaurant/mealcreate" },
     {
       name: "🧾 Guest Order",
       submenu: [
@@ -105,7 +95,6 @@ const RestDashboardPage = () => {
       submenu: [
         { label: "➕ Create Payment", path: "/restaurant/RestaurantPayment" },
         { label: "📃 List Payment", path: "/restaurant/ListRestaurantPayment" },
-        
       ],
     },
   ];
@@ -148,6 +137,14 @@ const RestDashboardPage = () => {
               )}
             </div>
           ))}
+
+          {/* ✅ Main Dashboard Button */}
+          <button
+            className="sidebars1-button main-dashboard-btn"
+            onClick={() => navigate("/dashboard")}
+          >
+            🏠 Main Dashboard
+          </button>
         </nav>
       </aside>
 

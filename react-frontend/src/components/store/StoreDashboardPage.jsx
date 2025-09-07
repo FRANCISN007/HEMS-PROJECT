@@ -123,7 +123,13 @@ const StoreDashboardPage = () => {
       path: "vendor/list", // 👉 direct navigation
     },
 
-  ];
+  // ✅ New Main Dashboard Button
+  {
+    name: "🏠 Main Dashboard",
+    path: "/dashboard", // navigate back to hotel dashboard
+    customClass: "main-dashboard-btn", // 👈 custom class
+  },
+];
 
   return (
     <div className="dashboard-container">
@@ -138,7 +144,7 @@ const StoreDashboardPage = () => {
               onMouseLeave={() => setHovered("")}
             >
               <button
-                className={`sidebars1-button ${hovered === item.name ? "active" : ""}`}
+                className={`sidebars1-button ${hovered === item.name ? "active" : ""} ${item.customClass || ""}`}
                 onClick={() => {
                   if (!item.submenu && item.path) {
                     navigate(item.path);
@@ -147,6 +153,7 @@ const StoreDashboardPage = () => {
               >
                 {item.name}
               </button>
+
               {item.submenu && hovered === item.name && (
                 <div className="submenu">
                   {item.submenu.map((sub) => (

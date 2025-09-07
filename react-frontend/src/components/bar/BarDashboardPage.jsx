@@ -7,7 +7,7 @@ import "./BarDashboardPage.css";
 
 const BarDashboardPage = () => {
   const navigate = useNavigate();
-  const location = useLocation(); // ⬅️ used for Outlet key + active states
+  const location = useLocation();
   const [hovered, setHovered] = useState("");
 
   const exportToExcel = async () => {
@@ -76,15 +76,6 @@ const BarDashboardPage = () => {
 
   const barMenu = [
     { name: "🍾 Bar Outlet", path: "/bar/list" },
-    
-    //{
-      //name: "📥 Receive Stock",
-      //submenu: [
-        //{ label: "➕ Enter Stock", path: "/bar/stock/create" },
-        //{ label: "📃 List Stock", path: "/bar/stock/list" },
-      //],
-    //},
-    
     {
       name: "🛍️ Bar Sales",
       submenu: [
@@ -97,7 +88,6 @@ const BarDashboardPage = () => {
       submenu: [
         { label: "➕ Create Payment", path: "/bar/payment/create" },
         { label: "📃 List Payment", path: "/bar/payment/list" },
-        //{ label: "❌ Void Payment", path: "/bar/payment/void" },
       ],
     },
     { name: "📊 Stock Balance", path: "/bar/stock-balance" },
@@ -108,8 +98,6 @@ const BarDashboardPage = () => {
         { label: "📃 List Adjustment", path: "/bar/adjustment/list" },
       ],
     },
-
-    //{ name: "💲 Set Price", path: "/bar/price" },
     { name: "🏪 Store Issues Control", path: "/bar/store-issues" },
   ];
 
@@ -118,55 +106,58 @@ const BarDashboardPage = () => {
       <aside className="sidebars1">
         <h2 className="sidebar-title">BAR MENU</h2>
         <nav>
-          {barMenu.map((item) => {
-            const isActive =
-              !item.submenu && location.pathname === item.path;
-            return (
-              <div
-                key={item.name}
-                className="sidebar-item-wrapper"
-                onMouseEnter={() => setHovered(item.name)}
-                onMouseLeave={() => setHovered("")}
+          {barMenu.map((item) => (
+            <div
+              key={item.name}
+              className="sidebar-item-wrapper"
+              onMouseEnter={() => setHovered(item.name)}
+              onMouseLeave={() => setHovered("")}
+            >
+              <button
+                className={`sidebars1-button ${
+                  hovered === item.name ? "active" : ""
+                }`}
+                onClick={() => {
+                  if (!item.submenu && item.path) {
+                    navigate(item.path);
+                  }
+                }}
               >
-                <button
-                  type="button"
-                  className={`sidebars1-button ${isActive ? "active" : ""} ${
-                    hovered === item.name ? "hover" : ""
-                  }`}
-                  onClick={() => {
-                    if (!item.submenu) {
-                      navigate(item.path); // ⬅️ make sure we navigate
-                    }
-                  }}
-                >
-                  {item.name}
-                </button>
+                {item.name}
+              </button>
 
-                {item.submenu && hovered === item.name && (
-                  <div className="submenu">
-                    {item.submenu.map((sub) => {
-                      const subActive = location.pathname === sub.path;
-                      return (
-                        <button
-                          type="button"
-                          key={sub.path}
-                          className={`submenu-item ${
-                            subActive ? "active" : ""
-                          }`}
-                          onClick={() => {
-                            navigate(sub.path);
-                            setHovered("");
-                          }}
-                        >
-                          {sub.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              {item.submenu && hovered === item.name && (
+                <div className="submenu">
+                  {item.submenu.map((sub) => {
+                    const subActive = location.pathname === sub.path;
+                    return (
+                      <button
+                        type="button"
+                        key={sub.path}
+                        className={`submenu-item ${
+                          subActive ? "active" : ""
+                        }`}
+                        onClick={() => {
+                          navigate(sub.path);
+                          setHovered("");
+                        }}
+                      >
+                        {sub.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* ✅ Main Dashboard button stays at the bottom */}
+          <button
+            className="sidebars1-button main-dashboard-btn"
+            onClick={() => navigate("/dashboard")}
+          >
+            🏠 Main Dashboard
+          </button>
         </nav>
       </aside>
 
@@ -193,11 +184,9 @@ const BarDashboardPage = () => {
           </div>
         </header>
 
-        {/* Force child to re-mount when the path changes */}
         <section className="content-area">
           <Outlet />
         </section>
-
       </main>
     </div>
   );

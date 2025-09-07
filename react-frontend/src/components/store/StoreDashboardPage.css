@@ -225,3 +225,21 @@
 .sidebars-button:hover {
   background-color: #2e518c;
 }
+
+
+.main-dashboard-btn {
+  color: rgb(0, 138, 11) !important;
+  border: 2px solid darkblue !important;  /* force border */
+  border-radius: 10px;
+  font-weight: bold;
+  margin-top: 12px;
+  background-color: #ffffff !important;
+  padding: 8px 12px;
+  box-shadow: 0 0 4px rgba(0,0,0,0.1);
+}
+
+.main-dashboard-btn:hover {
+  background-color: darkblue !important;
+  color: white !important;
+  border-color: darkblue !important;
+}
