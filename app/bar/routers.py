@@ -700,6 +700,10 @@ def delete_bar_sale(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
 ):
+    # ✅ Only admin can delete
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can delete sales")
+
     sale = db.query(bar_models.BarSale).filter_by(id=sale_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
