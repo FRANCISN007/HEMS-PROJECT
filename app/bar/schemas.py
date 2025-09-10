@@ -64,8 +64,9 @@ class BarItemSimple(BaseModel):
 
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
+        
 class BarInventoryDisplay(BaseModel):
     id: int
     item_id: int

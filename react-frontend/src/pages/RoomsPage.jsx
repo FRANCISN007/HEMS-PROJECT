@@ -1,6 +1,7 @@
 // src/pages/RoomsPage.jsx
 
 import React, { useState, useEffect } from "react";
+import axiosWithAuth from "../utils/axiosWithAuth";
 import "./RoomsPage.css";
 
 import UpdateRoomForm from "../components/rooms/UpdateRoomForm";
@@ -8,9 +9,6 @@ import AddRoomForm from "../components/rooms/AddRoomForm";
 import RoomFaultsView from "../components/rooms/RoomFaultsView";
 import AvailableRooms from "../components/rooms/AvailableRooms";
 import DeleteRoomModal from "../components/rooms/DeleteRoomModal";
-
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
-
 
 const RoomsPage = () => {
   const [rooms, setRooms] = useState([]);
@@ -27,14 +25,18 @@ const RoomsPage = () => {
   const fetchRooms = async () => {
     try {
       setLoading(true);
-      const response =  await fetch(`${API_BASE_URL}/rooms/`);
-      const data = await response.json();
-      const sortedRooms = (data.rooms || data || []).sort((a, b) =>
-        a.room_number.localeCompare(b.room_number, undefined, { numeric: true })
-      );
+      const axios = axiosWithAuth();
+      const response = await axios.get("/rooms/");
+
+      // normalize response in case backend wraps in { rooms: [] }
+      const sortedRooms = (Array.isArray(response.data) ? response.data : response.data.rooms || [])
+        .sort((a, b) =>
+          a.room_number.localeCompare(b.room_number, undefined, { numeric: true })
+        );
+
       setRooms(sortedRooms);
-    } catch (error) {
-      console.error("Failed to fetch rooms:", error);
+    } catch (err) {
+      console.error("Failed to fetch rooms:", err);
       setError("Failed to load rooms.");
     } finally {
       setLoading(false);
@@ -115,9 +117,24 @@ const RoomsPage = () => {
                   <td>₦{room.amount}</td>
                   <td>{room.status === "maintenance" ? "🛠 Yes" : "✅ No"}</td>
                   <td>
-                    <button className="action-btn" onClick={() => handleEdit(room)}>Update</button>
-                    <button className="action-btn" onClick={() => handleDelete(room)}>Delete</button>
-                    <button className="action-btn" onClick={() => handleViewFaults(room)}>View Faults</button>
+                    <button
+                      className="action-btn"
+                      onClick={() => handleEdit(room)}
+                    >
+                      Update
+                    </button>
+                    <button
+                      className="action-btn"
+                      onClick={() => handleDelete(room)}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      className="action-btn"
+                      onClick={() => handleViewFaults(room)}
+                    >
+                      View Faults
+                    </button>
                   </td>
                 </tr>
               ))
@@ -129,7 +146,9 @@ const RoomsPage = () => {
       {modalView && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <button className="close-btn" onClick={handleCloseModal}>✖</button>
+            <button className="close-btn" onClick={handleCloseModal}>
+              ✖
+            </button>
 
             {modalView === "edit" && selectedRoom && (
               <UpdateRoomForm
@@ -143,15 +162,12 @@ const RoomsPage = () => {
               <RoomFaultsView
                 room={selectedRoom}
                 onClose={handleCloseModal}
-                onRefresh={fetchRooms} // ✅ this line is the fix
+                onRefresh={fetchRooms}
               />
             )}
 
             {modalView === "add" && (
-              <AddRoomForm
-                onClose={handleCloseModal}
-                onRoomAdded={fetchRooms}
-              />
+              <AddRoomForm onClose={handleCloseModal} onRoomAdded={fetchRooms} />
             )}
 
             {modalView === "delete" && selectedRoom && (

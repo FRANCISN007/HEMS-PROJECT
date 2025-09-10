@@ -8,6 +8,7 @@ from datetime import date
 from typing import Optional, List
 from collections import defaultdict
 from app.users.auth import get_current_user
+from app.users.permissions import role_required  # 👈 permission helper
 from app.users.models import User
 from app.users import schemas as user_schemas
 
@@ -35,7 +36,7 @@ def add_payment_to_sale(
     payment_mode: str = Query(...),
     paid_by: str = Query(...),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     sale = db.query(RestaurantSale).filter(RestaurantSale.id == sale_id).first()
     if not sale:
@@ -62,7 +63,7 @@ def list_payments_with_items(
     end_date: Optional[date] = Query(None),
     location_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     query = db.query(RestaurantSalePayment).join(RestaurantSale)
 
@@ -126,7 +127,7 @@ def list_payments_with_items(
 @router.get("/sales/{sale_id}/payments", response_model=List[RestaurantSalePaymentDisplay])
 def get_payments_for_sale(sale_id: int, 
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     sale = db.query(RestaurantSale).filter(RestaurantSale.id == sale_id).first()
     if not sale:
@@ -138,7 +139,7 @@ def get_payments_for_sale(sale_id: int,
 @router.get("/sales/{sale_id}/details", response_model=RestaurantSaleWithPaymentsDisplay)
 def get_sale_with_payments(sale_id: int, 
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     sale = db.query(RestaurantSale).filter(RestaurantSale.id == sale_id).first()
     if not sale:
@@ -159,7 +160,7 @@ def update_payment(
     payment_id: int,
     payload: UpdatePaymentSchema,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     payment = db.query(RestaurantSalePayment).filter(RestaurantSalePayment.id == payment_id).first()
     if not payment:
@@ -190,7 +191,7 @@ def update_payment(
 def void_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     payment = db.query(RestaurantSalePayment).filter(RestaurantSalePayment.id == payment_id).first()
     if not payment:
@@ -219,7 +220,7 @@ def void_payment(
 def delete_payment(
     payment_id: int = Path(..., description="The ID of the payment to delete"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Only admins can delete payments.")

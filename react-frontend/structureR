@@ -56,3 +56,7 @@ fully paid : green
 part payment: dark grey
 pending: light gray 
 complimentary:
+
+
+if you go thru our previous chat we have dealing on restaurant endpoint, now we have to move to list payment, we will the same folder src/components/restaurant ListRestaurantPayment.jsx and css, you will use the import function, import axiosWithAuth from "../../utils/axiosWithAuth"; 
+will have the action button. edit, void, print, i will send you the backend list payment and update 

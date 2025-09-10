@@ -135,7 +135,7 @@ const StoreDashboardPage = () => {
     <div className="dashboard-container">
       <aside className="sidebars1">
         <h2 className="sidebar-title">STORE MENU</h2>
-        <nav>
+        <nav className="sidebars1-menu">
           {storeMenu.map((item) => (
             <div
               key={item.name}
@@ -143,6 +143,7 @@ const StoreDashboardPage = () => {
               onMouseEnter={() => setHovered(item.name)}
               onMouseLeave={() => setHovered("")}
             >
+              {/* Main Button */}
               <button
                 className={`sidebars1-button ${hovered === item.name ? "active" : ""} ${item.customClass || ""}`}
                 onClick={() => {
@@ -154,6 +155,7 @@ const StoreDashboardPage = () => {
                 {item.name}
               </button>
 
+              {/* Submenu */}
               {item.submenu && hovered === item.name && (
                 <div className="submenu">
                   {item.submenu.map((sub) => (
@@ -161,11 +163,8 @@ const StoreDashboardPage = () => {
                       key={sub.label}
                       className="submenu-item"
                       onClick={() => {
-                        if (sub.path) {
-                          navigate(sub.path);
-                        } else if (sub.action) {
-                          sub.action();
-                        }
+                        if (sub.path) navigate(sub.path);
+                        if (sub.action) sub.action();
                         setHovered("");
                       }}
                     >

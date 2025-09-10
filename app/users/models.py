@@ -9,5 +9,5 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String(50), unique=True)
     hashed_password = Column(String, nullable=False)
-    role = Column(String(50))
-    
+    # store multiple roles as comma-separated values, e.g. "bar,restaurant"
+    roles = Column(String(200), default="user")      

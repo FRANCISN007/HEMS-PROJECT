@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from passlib.context import CryptContext  # ✅ Add this
+from fastapi import Body
 from app.users.auth import pwd_context, authenticate_user, create_access_token, get_current_user
 from app.database import get_db
 from app.users import crud as user_crud, schemas # Correct import for user CRUD operations
@@ -25,79 +27,110 @@ logger.add("app.log", rotation="500 MB", level="DEBUG")
 
 
 
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Store your admin password securely (e.g., environment variable)
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "supersecret")
+
 @router.post("/register/")
 def sign_up(user: schemas.UserSchema, db: Session = Depends(get_db)):
-    # Check if the username already exists
-    logger.info("creating user.....")
+    # Normalize username
     user.username = user.username.strip().lower()
+
+    # Check duplicate username
     existing_user = user_crud.get_user_by_username(db, user.username)
     if existing_user:
-        logger.warning(f"user trying to register but username entered already exist: {user.username}")
         raise HTTPException(status_code=409, detail="Username already exists")
 
-    # Check admin registration
-    if user.role == "admin":
-        if not user.admin_password or user.admin_password != ADMIN_PASSWORD:
-            logger.warning("user entered a wrong admin password while creating a new user")
-            raise HTTPException(status_code=403, detail="Invalid admin password")
+    # 🔒 Enforce admin password for ALL registrations
+    if not user.admin_password or user.admin_password != ADMIN_PASSWORD:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin can register users. Invalid admin password."
+        )
 
-    # Hash the password and create the user
+    # Hash password and create user
     hashed_password = pwd_context.hash(user.password)
     user_crud.create_user(db, user, hashed_password)
-    logger.info(f"user created successfully: {user.username}")
-    return {"message": "User registered successfully"}
 
+    return {"message": f"User {user.username} registered successfully"}
 
 @router.post("/token")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
     username = form_data.username.strip().lower()
     password = form_data.password
-
-    #print("🔐 Login attempt:", username)
 
     user = authenticate_user(db, username, password)
     if not user:
         logger.warning(f"Authentication denied for username: {username}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-
-    
     access_token = create_access_token(data={"sub": username})
     logger.info(f"✅ User authenticated: {username}")
-    return {"access_token": access_token, "token_type": "bearer"}
 
-
+    # ✅ Return roles in response
+    return {
+        "id": user.id,
+        "username": user.username,
+        "roles": user.roles.split(",") if isinstance(user.roles, str) else user.roles,
+        "access_token": access_token,
+        "token_type": "bearer",
+    }
 
 
 @router.get("/", response_model=list[schemas.UserDisplaySchema])
 def list_all_users(
     db: Session = Depends(get_db),
-    skip: int = 0,
-    limit: int = 50,
     current_user: schemas.UserDisplaySchema = Depends(get_current_user),
 ):
-    if current_user.role != "admin":
+    if "admin" not in current_user.roles:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    users = user_crud.get_all_users(db)
-    logger.info("Fetching list of users")
-    return users
+    return user_crud.get_all_users(db)
+
+@router.put("/{username}/reset_password")
+def reset_password(
+    username: str,
+    new_password: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+):
+    # ✅ Only admin can reset password
+    if "admin" not in current_user.roles:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    user = user_crud.get_user_by_username(db, username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Hash and update password
+    user.hashed_password = pwd_context.hash(new_password)
+    db.commit()
+    db.refresh(user)
+
+    return {"message": f"Password for {username} has been reset"}
+
+
+
 
 @router.get("/me", response_model=schemas.UserDisplaySchema)
 def get_current_user_info(
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user)
+    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
 ):
-    return current_user  # Ensure this returns a dictionary, not a list
+    return current_user
 
 
 @router.put("/{username}")
 def update_user(
     username: str,
-    updated_user: schemas.UserSchema,
+    updated_user: schemas.UserUpdateSchema,   # ✅ use update schema
     db: Session = Depends(get_db),
     current_user: schemas.UserDisplaySchema = Depends(get_current_user),
 ):
-    if current_user.role != "admin":
+    if "admin" not in current_user.roles:
         logger.warning(f"Unauthorized update attempt by {current_user.username}")
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
@@ -106,15 +139,18 @@ def update_user(
         logger.warning(f"User not found: {username}")
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Prevent username change
-    if updated_user.username != username:
-        logger.warning(f"Attempt to change username from {username} to {updated_user.username}")
-        raise HTTPException(status_code=400, detail="Username change not allowed")
+    # 🚫 Prevent username change (ignore if frontend sends username by mistake)
+    # Do not raise error — just skip
+    # if updated_user.username and updated_user.username != username:
+    #     raise HTTPException(status_code=400, detail="Username change not allowed")
 
-    # Update fields
+    # 🔑 Update password only if explicitly provided
     if updated_user.password:
         user.hashed_password = pwd_context.hash(updated_user.password)
-    user.role = updated_user.role
+
+    # 🎯 Update roles
+    if updated_user.roles is not None:
+        user.roles = ",".join(updated_user.roles)
 
     db.commit()
     db.refresh(user)
@@ -128,7 +164,7 @@ def delete_user(
     db: Session = Depends(get_db),
     current_user: schemas.UserDisplaySchema = Depends(get_current_user),
 ):
-    if current_user.role != "admin":
+    if "admin" not in current_user.roles:
         logger.warning(f"Unauthorized delete attempt by {current_user.username}")
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 

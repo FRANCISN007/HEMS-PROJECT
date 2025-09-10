@@ -8,10 +8,12 @@ from typing import Optional  # Import for optional parameters
 from app.users.auth import get_current_user
 from sqlalchemy import or_
 from sqlalchemy import and_
+from app.users.permissions import role_required  # 👈 permission helper
 from app.rooms import models as room_models  # Import room models
 from app.bookings import schemas, models as  booking_models
 from app.payments import models as payment_models
 from app.bookings.schemas import BookingOut
+from app.users import schemas as user_schemas
 from loguru import logger
 from datetime import datetime, time
 import os
@@ -48,7 +50,7 @@ def create_booking(
     attachment_str: Optional[str] = Form(None),
 
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     
     normalized_room_number = room_number.strip().lower()
@@ -80,9 +82,6 @@ def create_booking(
                 status_code=400,
                 detail=f"Room {room.room_number} cannot be booked until after 12:00 PM today (departure date of a previous guest)."
             )
-
-
-
 
     attachment_path = None
 
@@ -223,7 +222,10 @@ def create_booking(
 
 
 @router.get("/reservations/alerts")
-def get_active_reservations(db: Session = Depends(get_db)):
+def get_active_reservations(
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+):
     today = date.today()
     reservations = db.query(booking_models.Booking).filter(
         booking_models.Booking.status == "reserved",
@@ -242,7 +244,10 @@ def get_active_reservations(db: Session = Depends(get_db)):
 
 
 @router.get("/reservation-alerts", response_model=list[BookingOut])
-def get_reservation_alerts(db: Session = Depends(get_db)):
+def get_reservation_alerts(
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    ):
     try:
         today = date.today()
 
@@ -287,7 +292,7 @@ def list_bookings(
     start_date: Optional[date] = Query(None, description="date format-yyyy-mm-dd"),
     end_date: Optional[date] = Query(None, description="date format-yyyy-mm-dd"),
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     try:
         # Ensure that the start_date is not greater than end_date
@@ -366,7 +371,10 @@ def list_bookings(
     
 
 @router.get("/search-guest/")
-def search_guest(guest_name: str = Query(...), db: Session = Depends(get_db)):
+def search_guest(guest_name: str = Query(...), 
+                 db: Session = Depends(get_db),
+                 current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))   
+                 ):
     guests = (
         db.query(booking_models.Booking)
         .filter(booking_models.Booking.guest_name.ilike(f"%{guest_name}%"))
@@ -402,7 +410,7 @@ def list_bookings_by_status(
     start_date: Optional[date] = Query(None, description="Filter by booking date (start) in format yyyy-mm-dd"),
     end_date: Optional[date] = Query(None, description="Filter by booking date (end) in format yyyy-mm-dd"),
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     try:
         # Build the base query
@@ -484,7 +492,8 @@ def search_guest_name(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    
 ):
     try:
         query = db.query(booking_models.Booking).filter(
@@ -555,7 +564,7 @@ def search_guest_name(
 def list_booking_by_id(
     booking_id: int,
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     
     # Fetch the booking by ID
@@ -600,7 +609,7 @@ def list_bookings_by_room(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     """
     List all bookings associated with a specific room number within an optional date range.
@@ -718,7 +727,7 @@ def update_booking(
     attachment: Optional[UploadFile] = File(None),
     attachment_str: Optional[str] = Form(None),
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     # Check if the user is an admin
     if current_user.role != "admin":
@@ -884,7 +893,7 @@ def update_booking(
 def get_booking_by_id(
     booking_id: int,
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     booking = db.query(booking_models.Booking).filter(booking_models.Booking.id == booking_id).first()
     if not booking:
@@ -916,6 +925,7 @@ def get_booking_by_id(
 def guest_checkout(
     room_number: str,
     db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     """
     Endpoint to check out a guest by room number.
@@ -976,7 +986,7 @@ def guest_checkout(
 @router.get("/bookings/cancellable")
 def list_cancellable_bookings(
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     """
     List bookings eligible for cancellation:
@@ -1032,7 +1042,7 @@ def cancel_booking(
     cancellation_reason: str = Query(None),
  
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     #if current_user.role != "admin":
         #raise HTTPException(status_code=403, detail="Insufficient permissions")

@@ -9,6 +9,8 @@ from app.database import get_db
 from app.payments import schemas as payment_schemas, crud
 from app.payments import models as payment_models
 from app.users.auth import get_current_user
+from app.users.permissions import role_required  # 👈 permission helper
+from app.users import schemas as user_schemas
 from app.users import schemas
 from app.rooms import models as room_models  # Ensure Room model is imported
 from app.bookings import models as booking_models
@@ -36,7 +38,7 @@ def create_payment(
     booking_id: int,
     payment_request: payment_schemas.PaymentCreateSchema,
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     """
     Create a new payment for a booking, considering discounts and payment history.
@@ -185,7 +187,7 @@ def list_payments(
     start_date: Optional[date] = Query(None, description="date format-yyyy-mm-dd"),
     end_date: Optional[date] = Query(None, description="date format-yyyy-mm-dd"),
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     """
     List all payments made between the specified start and end date.
@@ -310,7 +312,7 @@ def list_payments_by_status(
     start_date: Optional[date] = Query(None, description="Filter by payment date (start) in format yyyy-mm-dd"),
     end_date: Optional[date] = Query(None, description="Filter by payment date (end) in format yyyy-mm-dd"),
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     try:
         # Build the base query and join with booking
@@ -373,7 +375,7 @@ def list_payments_by_status(
 @router.get("/total_daily_payment")
 def total_payment(
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     """
     Retrieve total daily sales with a breakdown of payment methods (POS Card, Bank Transfer, Cash),
@@ -464,7 +466,7 @@ def get_debtor_list(
     start_date: Optional[date] = Query(None, description="date format-yyyy-mm-dd"),
     end_date: Optional[date] = Query(None, description="date format-yyyy-mm-dd"),
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     try:
         # Ensure that the start_date is not greater than end_date
@@ -599,7 +601,7 @@ def get_debtor_list(
 @router.get("/outstanding")
 def list_outstanding_bookings(
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     try:
         # Fetch all bookings that are not cancelled or complimentary or fully paid
@@ -678,7 +680,7 @@ def list_outstanding_bookings(
 def get_payment_by_id(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     """
     Get payment details by payment ID.
@@ -735,7 +737,7 @@ def get_payment_by_id(
 def void_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Insufficient permissions")

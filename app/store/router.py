@@ -7,6 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from app.database import get_db
 from app.users.auth import get_current_user
+from app.users.permissions import role_required  # 👈 permission helper
 from app.users.models import User
 from app.users import schemas as user_schemas
 from app.store import models as store_models
@@ -56,7 +57,7 @@ router = APIRouter()
 def create_category(
     category: store_schemas.StoreCategoryCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     existing = db.query(store_models.StoreCategory).filter_by(name=category.name).first()
     if existing:
@@ -71,7 +72,7 @@ def create_category(
 @router.get("/categories", response_model=list[store_schemas.StoreCategoryDisplay])
 def list_categories(
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     return db.query(store_models.StoreCategory).all()
 
@@ -81,7 +82,7 @@ def update_category(
     category_id: int,
     update_data: store_schemas.StoreCategoryCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     category = db.query(store_models.StoreCategory).filter_by(id=category_id).first()
     if not category:
@@ -104,7 +105,7 @@ def update_category(
 def delete_category(
     category_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     category = db.query(store_models.StoreCategory).filter_by(id=category_id).first()
     if not category:
@@ -124,7 +125,7 @@ def delete_category(
 def create_item(
     item: store_schemas.StoreItemCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     try:
         existing = db.query(store_models.StoreItem).filter_by(name=item.name).first()
@@ -150,7 +151,7 @@ from fastapi import HTTPException
 def list_items(
     category: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     try:
         # Subquery to get the latest stock entry (with unit_price) for each item
@@ -210,7 +211,7 @@ from typing import List
 @router.get("/items/simple", response_model=List[store_schemas.StoreItemOut])
 def list_items_simple(
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     try:
         # Subquery to get the latest stock entry (unit_price) for each item
@@ -265,7 +266,7 @@ def update_item(
     item_id: int,
     update_data: store_schemas.StoreItemCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     item = db.query(store_models.StoreItem).filter_by(id=item_id).first()
     if not item:
@@ -290,7 +291,7 @@ def update_item(
 def delete_item(
     item_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    ccurrent_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     item = db.query(store_models.StoreItem).filter_by(id=item_id).first()
     if not item:
@@ -315,7 +316,7 @@ async def receive_inventory(
     entry: store_schemas.StoreStockEntryCreate = Depends(store_schemas.StoreStockEntryCreate.as_form),
     attachment: UploadFile = File(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     # Validate item existence
     item = db.query(store_models.StoreItem).filter_by(id=entry.item_id).first()
@@ -380,7 +381,7 @@ def list_purchases(
     end_date: date = Query(None),
     invoice_number: str = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     query = db.query(store_models.StoreStockEntry).options(
         selectinload(store_models.StoreStockEntry.vendor),
@@ -452,7 +453,7 @@ async def update_purchase(
     purchase_date: datetime = Form(...),
     attachment: UploadFile = File(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     # Load the existing stock entry
     entry = db.query(store_models.StoreStockEntry).filter_by(id=entry_id).first()
@@ -568,7 +569,7 @@ async def update_purchase(
 def delete_purchase(
     entry_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     entry = db.query(store_models.StoreStockEntry).filter_by(id=entry_id).first()
     if not entry:
@@ -590,7 +591,7 @@ from datetime import datetime, date
 def supply_to_bars(
     issue_data: store_schemas.IssueCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     # ✅ Date Control: Allow only today's date
     today = date.today()
@@ -678,12 +679,12 @@ from typing import Optional, List
 from fastapi import Query
 
 @router.get("/issues", response_model=List[store_schemas.IssueDisplay])
-def list_issues(
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+def list_issues(  
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     bar_name: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     query = db.query(StoreIssue).options(joinedload(StoreIssue.issued_to))
 
@@ -706,7 +707,7 @@ def update_issue(
     issue_id: int,
     update_data: store_schemas.IssueCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     issue = db.query(StoreIssue).filter_by(id=issue_id).first()
     if not issue:
@@ -810,7 +811,7 @@ def update_issue(
 def delete_issue(
     issue_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     issue = db.query(StoreIssue).filter_by(id=issue_id).first()
     if not issue:
@@ -872,7 +873,7 @@ from fastapi import Query
 def get_store_balances(
     category_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     # 1) Historical Adjustments
     adjustments_q = (
@@ -948,7 +949,7 @@ def get_store_balances(
 def adjust_store_inventory(
     adjustment_data: StoreInventoryAdjustmentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Only admins can adjust inventory.")
@@ -989,7 +990,7 @@ def list_store_inventory_adjustments(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     query = db.query(StoreInventoryAdjustment)
 
@@ -1008,7 +1009,7 @@ def update_adjustment(
     adjustment_id: int,
     data: StoreInventoryAdjustmentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     # AuthZ
     if current_user.role != "admin":
@@ -1098,7 +1099,7 @@ def update_adjustment(
 def delete_adjustment(
     adjustment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     # Only admins can delete
     if current_user.role != "admin":
@@ -1142,7 +1143,7 @@ def delete_adjustment(
 def get_bar_stock_balance(
     category_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     try:
         # -----------------------------

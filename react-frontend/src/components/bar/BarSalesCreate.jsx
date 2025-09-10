@@ -13,6 +13,20 @@ const BarSalesCreate = () => {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState(""); // ✅ success | error | warning
 
+  // ⏬ Get user roles (assuming you store user info in localStorage after login)
+  const user = JSON.parse(localStorage.getItem("user")) || {};
+  const roles = user.roles || [];
+
+  // ⏬ Restrict access: only admin and bar
+  if (!(roles.includes("admin") || roles.includes("bar"))) {
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to record bar sales.</p>
+      </div>
+    );
+  }
+
   // ⏬ Fetch bars
   useEffect(() => {
     const fetchBars = async () => {

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import axios from "axios";
+import axiosWithAuth from "../../utils/axiosWithAuth";  // ✅ use auth axios
 import "./CreateBooking.css";
 import { useNavigate } from "react-router-dom";
 
@@ -46,8 +46,8 @@ const CreateBooking = () => {
 
     try {
       if (guestResults.length === 0) {
-        // Initial search
-        const response = await axios.get(`${API_BASE_URL}/bookings/search-guest/`, {
+        // ✅ Use axiosWithAuth instead of axios
+        const response = await axiosWithAuth().get("/bookings/search-guest/", {
           params: { guest_name: formData.guest_name.trim() },
         });
 

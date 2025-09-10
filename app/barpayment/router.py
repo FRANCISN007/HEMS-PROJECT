@@ -5,6 +5,7 @@ from typing import Optional, List
 from sqlalchemy import func
 from app.database import get_db
 from app.users.auth import get_current_user
+from app.users.permissions import role_required  # 👈 permission helper
 from . import models, schemas
 from app.bar.models import BarSale
 from app.barpayment.models import  BarPayment
@@ -21,7 +22,7 @@ router = APIRouter()
 def create_bar_payment(
     payment: schemas.BarPaymentCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     sale = db.query(BarSale).filter(BarSale.id == payment.bar_sale_id).first()
     if not sale:
@@ -83,7 +84,7 @@ def list_bar_payments(
     start_date: date | None = None,   # ✅ optional filter
     end_date: date | None = None,     # ✅ optional filter
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     query = db.query(models.BarPayment).order_by(models.BarPayment.date_paid.desc())
 
@@ -199,7 +200,7 @@ from fastapi import Query
 def list_outstanding_payments(
     bar_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     sales_query = db.query(BarSale)
 
@@ -254,7 +255,7 @@ def update_bar_payment(
     payment_id: int,
     update_data: schemas.BarPaymentUpdate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     payment = (
         db.query(models.BarPayment)
@@ -317,7 +318,7 @@ def update_bar_payment(
 def void_bar_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     
     # ✅ Restrict to admin only
@@ -382,7 +383,8 @@ def get_bar_payment_status(
     status: Optional[str] = Query(None, description="Filter by status: fully paid, part payment, pending, voided payment"),
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     # Fetch all payments (active or voided)
     query = db.query(BarPayment).join(BarSale)
@@ -442,7 +444,7 @@ def get_bar_payment_status(
 def delete_bar_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     # ✅ Allow only admins
     if current_user.role != "admin":

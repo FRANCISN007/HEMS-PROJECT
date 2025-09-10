@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { loginUser } from "../../api/auth";
+import { loginUser } from "../../api/authService"; // ✅ updated path
 import "./../../styles/AuthForm.css";
 import { Link } from "react-router-dom";
 import { getLicenseExpiryWarning } from "../../utils/licenseUtils"; // ✅ NEW
@@ -18,31 +18,47 @@ const LoginPage = () => {
     setError("");
 
     try {
-      const token = await loginUser(username.trim().toLowerCase(), password);
+      const user = await loginUser(username.trim().toLowerCase(), password);
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("username", username);
-      navigate("/dashboard/rooms/status");
+      console.log("✅ Logged in user:", user);
 
+      // Store token separately if needed
+      localStorage.setItem("token", user.access_token);
+
+      // ✅ Redirect based on role priority
+      if (user.roles.includes("admin")) {
+        navigate("/dashboard/users");
+      } else if (user.roles.includes("dashboard")) {
+        navigate("/dashboard/rooms/status");
+      } else if (user.roles.includes("event")) {
+        navigate("/dashboard/events");
+        
+      } else {
+        navigate("/dashboard"); // fallback
+      }
     } catch (err) {
-      setError("Invalid username or password.");
+      console.error("❌ Login error:", err);
+      setError(err?.message || "Invalid username or password.");
     }
   };
+
 
   return (
     <div className="auth-page-wrapper">
       <div className="auth-container">
         {warning && (
-          <div style={{
-            backgroundColor: "#fff3cd",
-            padding: "12px",
-            marginBottom: "15px",
-            border: "1px solid #ffeeba",
-            borderRadius: "6px",
-            color: "#856404",
-            textAlign: "center",
-            fontWeight: "bold"
-          }}>
+          <div
+            style={{
+              backgroundColor: "#fff3cd",
+              padding: "12px",
+              marginBottom: "15px",
+              border: "1px solid #ffeeba",
+              borderRadius: "6px",
+              color: "#856404",
+              textAlign: "center",
+              fontWeight: "bold",
+            }}
+          >
             {warning}
           </div>
         )}
@@ -73,15 +89,13 @@ const LoginPage = () => {
             Don't have an account? <Link to="/register">Register</Link>
           </p>
         </form>
-        </div>
-
-        <footer className="homes-footer">
-          <div>Produced & Licensed by School of Accounting Package</div>
-          <div>© 2025</div>
-        </footer>
       </div>
-      
-    
+
+      <footer className="homes-footer">
+        <div>Produced & Licensed by School of Accounting Package</div>
+        <div>© 2025</div>
+      </footer>
+    </div>
   );
 };
 

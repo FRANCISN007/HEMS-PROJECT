@@ -2,11 +2,13 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.users.auth import get_current_user
+from app.users.permissions import role_required  # 👈 permission helper
 from sqlalchemy.sql import func
 from sqlalchemy import and_, or_, not_
 from app.rooms import schemas as room_schemas, models as room_models, crud
 from app.bookings import models as booking_models  # Adjust path if needed
 from app.payments import models as payment_models
+from app.users import schemas as user_schemas
 from app.users import schemas
 from sqlalchemy import func
 from datetime import datetime, time, date
@@ -53,12 +55,16 @@ logger.add("app.log", rotation="500 MB", level="DEBUG")
 def create_room(
     room: schemas.RoomSchema,
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
-    logger.info(f"Room creation request received. User: {current_user.username}, Role: {current_user.role}")
+    logger.info(
+        f"Room creation request received. User: {current_user.username}, Roles: {current_user.roles}"
+    )
 
-    if current_user.role != "admin":
-        logger.warning(f"Permission denied for user {current_user.username}. Role: {current_user.role}")
+    if "admin" not in current_user.roles:
+        logger.warning(
+            f"Permission denied for user {current_user.username}. Roles: {current_user.roles}"
+        )
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     original_room_number = room.room_number
@@ -70,7 +76,9 @@ def create_room(
         .first()
     )
     if existing_room:
-        logger.warning(f"Room creation failed. Room {original_room_number} already exists.")
+        logger.warning(
+            f"Room creation failed. Room {original_room_number} already exists."
+        )
         raise HTTPException(status_code=400, detail="Room with this number already exists")
 
     logger.info(f"Creating a new room: {original_room_number}")
@@ -89,7 +97,9 @@ def create_room(
 
 
 @router.get("/", response_model=dict)
-def list_rooms(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+def list_rooms(skip: int = 0, limit: int = 50, db: Session = Depends(get_db),
+               current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+               ):
     today = date.today()
 
     # Fetch rooms
@@ -158,7 +168,10 @@ def list_rooms(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
 
 
 @router.post("/update_status_after_checkout")
-def update_rooms_after_checkout(db: Session = Depends(get_db)):
+def update_rooms_after_checkout(
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    ):
     now = datetime.now()
     today = date.today()
     noon = time(12, 0)
@@ -209,7 +222,10 @@ def update_rooms_after_checkout(db: Session = Depends(get_db)):
 import re
 
 @router.get("/available")
-def list_available_rooms(db: Session = Depends(get_db)):
+def list_available_rooms(
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    ):
     today = date.today()
 
     # Step 1: Get rooms not booked as reserved or checked-in for today
@@ -279,7 +295,10 @@ import re
 
 
 @router.get("/unavailable", response_model=dict)
-def list_unavailable_rooms(db: Session = Depends(get_db)):
+def list_unavailable_rooms(
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    ):
     """
     Return rooms that are currently unavailable based on bookings today,
     but only if the booking has at least one payment.
@@ -345,7 +364,9 @@ def list_unavailable_rooms(db: Session = Depends(get_db)):
     }
 
 @router.put("/faults/update")
-def update_faults(faults: List[FaultUpdate], db: Session = Depends(get_db)):
+def update_faults(faults: List[FaultUpdate], db: Session = Depends(get_db),
+                  current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+                  ):
     print("Received data:", faults)
 
     affected_rooms = set()
@@ -386,7 +407,7 @@ def update_fault_status(
     fault_id: int,
     update: FaultUpdate,
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     fault = db.query(RoomFault).filter(RoomFault.id == fault_id).first()
     if not fault:
@@ -418,7 +439,9 @@ def update_fault_status(
 
 
 @router.get("/{room_number}/faults", response_model=List[RoomFaultOut])
-def get_room_faults(room_number: str, db: Session = Depends(get_db)):
+def get_room_faults(room_number: str, db: Session = Depends(get_db),
+                    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+                    ):
     room_number = room_number.lower()
 
     unresolved_faults = (
@@ -458,7 +481,7 @@ def update_room_status(
     room_number: str,
     status_update: RoomStatusUpdate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     room = db.query(room_models.Room).filter(
         func.lower(room_models.Room.room_number) == room_number.strip().lower()
@@ -478,7 +501,7 @@ def update_room(
     room_number: str,
     room_update: room_schemas.RoomUpdateSchema,
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     #if current_user.role != "admin":
         #raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -570,7 +593,9 @@ def update_room(
 
 
 @router.get("/{room_number}")
-def get_room(room_number: str, db: Session = Depends(get_db)):
+def get_room(room_number: str, db: Session = Depends(get_db),
+             current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+             ):
     logger.info(f"Fetching room with room_number: {room_number}")
 
     try:
@@ -627,7 +652,7 @@ def get_room(room_number: str, db: Session = Depends(get_db)):
 @router.get("/summary")
 def room_summary(
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     """
     Generate a summary of all rooms, including counts of:
@@ -711,17 +736,19 @@ def room_summary(
 def delete_room(
     room_number: str,
     db: Session = Depends(get_db),
-    current_user: schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     # Ensure only admin can delete rooms
-    if current_user.role != "admin":
+    if "admin" not in current_user.roles:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     # Normalize the room_number input to lowercase
     room_number = room_number.lower()
 
     # Fetch the room by the normalized room_number
-    room = db.query(room_models.Room).filter(func.lower(room_models.Room.room_number) == room_number).first()
+    room = db.query(room_models.Room).filter(
+        func.lower(room_models.Room.room_number) == room_number
+    ).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 

@@ -6,6 +6,7 @@ from app.events import models as event_models
 from app.eventpayment import models as eventpayment_models, schemas as eventpayment_schemas
 from app.users import schemas as user_schemas
 from app.users.auth import get_current_user
+from app.users.permissions import role_required  # 👈 permission helper
 from typing import List
 from sqlalchemy import and_
 from datetime import datetime, timedelta, date
@@ -16,6 +17,7 @@ from loguru import logger
 import pytz
 from datetime import datetime, timedelta, date, time
 from app.events import models as event_models # or wherever Event is
+from app.users.permissions import role_required  # 👈 permission helper
 
 
 
@@ -31,7 +33,7 @@ router = APIRouter()
 def create_event_payment(
     payment_data: eventpayment_schemas.EventPaymentCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["event"]))  # ✅ only admin
 ):
     # Fetch the event using event_id
     event = db.query(event_models.Event).filter(event_models.Event.id == payment_data.event_id).first()
@@ -94,7 +96,7 @@ def create_event_payment(
 @router.get("/outstanding")
 def list_outstanding_events(
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["event"]))
 ):
     try:
         # ✅ Step 1: Get all relevant events
@@ -160,7 +162,7 @@ def list_event_payments(
     start_date: str = Query(None, description="Start date in YYYY-MM-DD format"),
     end_date: str = Query(None, description="End date in YYYY-MM-DD format"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["event"]))
 ):
     query = db.query(eventpayment_models.EventPayment)
 
@@ -275,7 +277,7 @@ def get_event_debtor_list(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["event"]))
 ):
     if start_date and end_date and start_date > end_date:
         raise HTTPException(status_code=400, detail="Start date cannot be later than end date.")
@@ -373,7 +375,7 @@ def list_event_payments_by_status(
     start_date: Optional[date] = Query(None, description="Filter by payment date (start) in format yyyy-mm-dd"),
     end_date: Optional[date] = Query(None, description="Filter by payment date (end) in format yyyy-mm-dd"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["event"]))
 ):
     query = db.query(eventpayment_models.EventPayment)
 
@@ -403,7 +405,7 @@ def list_event_payments_by_status(
 def void_event_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["event"]))
 ):
     # Only admins can void payments
     if current_user.role != "admin":
@@ -496,7 +498,7 @@ def make_timezone_aware(dt):
 def get_event_payment_by_id(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["event"]))
 ):
     # Fetch the payment record
     payment = db.query(eventpayment_models.EventPayment).filter(

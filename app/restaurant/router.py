@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import List
 from typing import Optional
 from app.users.auth import get_current_user
+from app.users.permissions import role_required  # 👈 permission helper
 from app.users.models import User
 from fastapi import Query
 from datetime import date
@@ -34,7 +35,7 @@ router = APIRouter()
 @router.post("/locations", response_model=restaurant_schemas.RestaurantLocationDisplay)
 def create_location(location: restaurant_schemas.RestaurantLocationCreate, 
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     db_location = restaurant_models.RestaurantLocation(**location.dict())
     db.add(db_location)
@@ -47,7 +48,7 @@ def create_location(location: restaurant_schemas.RestaurantLocationCreate,
 @router.get("/locations", response_model=list[restaurant_schemas.RestaurantLocationDisplay])
 def list_locations(
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     return db.query(restaurant_models.RestaurantLocation).order_by(restaurant_models.RestaurantLocation.id.asc()).all()
 
@@ -58,7 +59,7 @@ def update_location(
     location_id: int,
     location_update: restaurant_schemas.RestaurantLocationCreate,  # reuse create schema since it's same fields
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     db_location = db.query(restaurant_models.RestaurantLocation).filter(
         restaurant_models.RestaurantLocation.id == location_id
@@ -80,7 +81,7 @@ def update_location(
 def delete_location(
     location_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     db_location = db.query(restaurant_models.RestaurantLocation).filter(
         restaurant_models.RestaurantLocation.id == location_id
@@ -98,7 +99,7 @@ def delete_location(
 @router.patch("/locations/{location_id}", response_model=restaurant_schemas.RestaurantLocationDisplay)
 def toggle_location_active(location_id: int, 
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     location = db.query(restaurant_models.RestaurantLocation).filter_by(id=location_id).first()
     if not location:
@@ -113,7 +114,7 @@ def toggle_location_active(location_id: int,
 @router.post("/meal-categories", response_model=restaurant_schemas.MealCategoryDisplay)
 def create_meal_category(category: restaurant_schemas.MealCategoryCreate, 
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     # Check if name exists
     existing = db.query(restaurant_models.MealCategory).filter_by(name=category.name).first()
@@ -130,7 +131,7 @@ def create_meal_category(category: restaurant_schemas.MealCategoryCreate,
 @router.get("/meal-categories", response_model=list[restaurant_schemas.MealCategoryDisplay])
 def list_meal_categories(
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     return db.query(restaurant_models.MealCategory).order_by(restaurant_models.MealCategory.id.asc()).all()
 
@@ -141,7 +142,7 @@ def update_meal_category(
     category_id: int,
     category_update: restaurant_schemas.MealCategoryCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     db_category = db.query(restaurant_models.MealCategory).filter_by(id=category_id).first()
     if not db_category:
@@ -165,7 +166,7 @@ def update_meal_category(
 def delete_meal_category(
     category_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     db_category = db.query(restaurant_models.MealCategory).filter_by(id=category_id).first()
     if not db_category:
@@ -181,7 +182,7 @@ def delete_meal_category(
 @router.post("/meals", response_model=restaurant_schemas.MealDisplay)
 def create_meal(meal: restaurant_schemas.MealCreate, 
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     db_meal = restaurant_models.Meal(**meal.dict())
     db.add(db_meal)
@@ -193,7 +194,7 @@ def create_meal(meal: restaurant_schemas.MealCreate,
 @router.get("/meals", response_model=list[restaurant_schemas.MealDisplay])
 def list_meals(
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     return db.query(restaurant_models.Meal).order_by(restaurant_models.Meal.id.asc()).all()
 
@@ -203,7 +204,7 @@ def update_meal(
     meal_id: int,
     meal: restaurant_schemas.MealCreate,   # you can also create a MealUpdate schema if needed
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     db_meal = db.query(restaurant_models.Meal).filter(restaurant_models.Meal.id == meal_id).first()
     if not db_meal:
@@ -222,7 +223,7 @@ def update_meal(
 def delete_meal(
     meal_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     db_meal = db.query(restaurant_models.Meal).filter(restaurant_models.Meal.id == meal_id).first()
     if not db_meal:
@@ -236,7 +237,7 @@ def delete_meal(
 @router.patch("/meals/{meal_id}/toggle-availability", response_model=restaurant_schemas.MealDisplay)
 def toggle_meal_availability(meal_id: int, 
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     meal = db.query(restaurant_models.Meal).filter_by(id=meal_id).first()
     if not meal:
@@ -251,7 +252,7 @@ def toggle_meal_availability(meal_id: int,
 @router.post("/orders/", response_model=MealOrderDisplay)
 def create_meal_order(order_data: MealOrderCreate, 
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     # Create the MealOrder
     order = MealOrder(
@@ -315,7 +316,7 @@ def list_meal_orders(
     end_date: date = Query(None, description="End date for filtering"),
     location_id: int = Query(None, description="Filter by location ID"),  # ✅ new filter
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     query = db.query(MealOrder)
 
@@ -372,7 +373,7 @@ def list_sales(
     end_date: Optional[date] = Query(None, description="End date for filtering"),
     location_id: Optional[int] = Query(None, description="Filter sales by restaurant location"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     query = db.query(RestaurantSale)
 
@@ -452,7 +453,7 @@ def list_outstanding(
     start_date: date = Query(None, description="Start date for filtering"),
     end_date: date = Query(None, description="End date for filtering"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     query = db.query(RestaurantSale).filter(RestaurantSale.status.in_(["unpaid", "partial"]))
 
@@ -529,7 +530,7 @@ def list_outstanding(
 def get_sale(
     sale_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     sale = db.query(RestaurantSale).filter(RestaurantSale.id == sale_id).first()
     if not sale:
@@ -561,7 +562,7 @@ def get_sale(
 def delete_sale(
     sale_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Only admins can delete sales.")
@@ -597,7 +598,7 @@ def create_sale_from_order(
     served_by: str,
     location_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     order = db.query(MealOrder).filter(MealOrder.id == order_id).first()
     if not order:
@@ -650,7 +651,7 @@ def create_sale_from_order(
 def list_open_meal_orders(
     location_id: Optional[int] = Query(None, description="Filter open orders by location id"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     """
     Return open meal orders. If location_id is provided, restrict to that location.
@@ -705,7 +706,7 @@ def list_open_meal_orders(
 @router.get("/{order_id}", response_model=MealOrderDisplay)
 def get_meal_order(order_id: int, 
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     order = db.query(MealOrder).filter(MealOrder.id == order_id).first()
     if not order:
@@ -742,7 +743,7 @@ def update_meal_order(
     order_id: int,
     order_data: MealOrderCreate, 
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     order = db.query(MealOrder).filter(MealOrder.id == order_id).first()
     if not order:
@@ -801,7 +802,7 @@ def update_meal_order(
 @router.delete("/{order_id}")
 def delete_meal_order(order_id: int, 
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     order = db.query(MealOrder).filter(MealOrder.id == order_id).first()
     if not order:

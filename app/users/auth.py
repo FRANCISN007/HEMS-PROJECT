@@ -66,6 +66,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
+from app.users import schemas as user_schemas
+
 def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=401,
@@ -83,4 +85,12 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
     user = crud.get_user_by_username(db, username)
     if not user:
         raise credentials_exception
-    return user
+
+    # 🔑 Convert roles from CSV string → list
+    roles = user.roles.split(",") if user.roles else ["user"]
+
+    return user_schemas.UserDisplaySchema(
+        id=user.id,
+        username=user.username,
+        roles=roles
+    )

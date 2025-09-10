@@ -1,20 +1,15 @@
+
 from sqlalchemy.orm import Session
-from app.users import models, schemas
-from app.rooms import models, schemas
-# Correct imports
-from app.users.models import User  # Correct import for User model
-from app.users import schemas as use_schema
-#from app.rooms.models import Room
-#from users.models import User
+from app.users.models import User
+from app.users import schemas as user_schema
 
 
-
-def create_user(db: Session, user: use_schema.UserSchema, hashed_password: str):
-    # Create the new user using the correct User model
+def create_user(db: Session, user: user_schema.UserSchema, hashed_password: str):
+    roles_str = ",".join(user.roles) if user.roles else "user"
     new_user = User(
         username=user.username,
         hashed_password=hashed_password,
-        role=user.role  # Set the role here
+        roles=roles_str
     )
     db.add(new_user)
     db.commit()
@@ -22,28 +17,42 @@ def create_user(db: Session, user: use_schema.UserSchema, hashed_password: str):
     return new_user
 
 
+# crud.py
+# crud.py
 def get_user_by_username(db: Session, username: str):
     return db.query(User).filter(User.username == username).first()
 
 
 
-
-
 def get_all_users(db: Session, skip: int = 0, limit: int = 50):
-    # Fetch all user fields (ORM objects) from the database
-    return db.query(User).offset(skip).limit(limit).all()
+    users = db.query(User).offset(skip).limit(limit).all()
+    result = []
+    for user in users:
+        roles = user.roles.split(",") if user.roles else ["user"]
+        result.append(
+            user_schema.UserDisplaySchema(
+                id=user.id,
+                username=user.username,
+                roles=roles
+            )
+        )
+    return result
 
-def create_room(db: Session, room: schemas.RoomSchema):
-    db_room = models.Room(
-        room_number=room.room_number,
-        room_type=room.room_type,
-        amount=room.amount,
-        status=room.status
-    )
-    db.add(db_room)
+
+def update_user(db: Session, username: str, updated_user: user_schema.UserUpdateSchema, hashed_password: str = None):
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        return None
+
+    if hashed_password:
+        user.hashed_password = hashed_password
+    if updated_user.roles:
+        user.roles = ",".join(updated_user.roles)
+
     db.commit()
-    db.refresh(db_room)
-    return db_room
+    db.refresh(user)
+    return user
+
 
 def delete_user_by_username(db: Session, username: str):
     user = db.query(User).filter(User.username == username).first()

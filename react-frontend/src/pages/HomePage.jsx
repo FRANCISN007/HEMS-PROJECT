@@ -65,7 +65,7 @@ const HomePage = () => {
         }}
       >
         <div className="hotel-name-banner">
-          Richard Continental Hotel and Suite
+           The Grand Plaza Hotel
         </div>
 
         <div className="home-card">

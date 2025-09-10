@@ -1,8 +1,20 @@
+/* ====== Wrapper ====== */
+.auth-page-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh; /* Full screen height */
+  background-color: #0f172a; /* Dark soft background */
+  position: relative;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* ====== Container ====== */
 .auth-container {
   width: 100%;
-  max-width: 260px; /* Reduced width */
-  margin: 60px auto; /* Less vertical space */
-  padding: 20px; /* Smaller padding */
+  max-width: 280px; /* Compact card */
+  margin: 50px auto;
+  padding: 20px;
   border-radius: 10px;
   background: #ffffff;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.07);
@@ -11,54 +23,11 @@
   align-items: center;
 }
 
-.auth-page-wrapper {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh; /* Full screen height */
-  background-color:#0f172a; /* Optional soft background */
-}
-
-
-.auth-container h2 {
-  margin-bottom: 16px;
-  font-size: 20px; /* Slightly smaller */
-  color: #1e3a8a;
-  font-weight: 600;
-}
-
-.auth-container form {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px; /* Reduced gap */
-}
-
-.auth-container input,
-.auth-container select {
-  width: 75%;
-  align-self: center;
-  padding: 8px 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 12px; /* More rounded */
-  font-size: 13px;
-  background: #f9fafb;
-  transition: 0.3s;
-}
-
-
-.auth-container input:focus,
-.auth-container select:focus {
-  outline: none;
-  border-color: #3b82f6;
-  background: #ffffff;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
-}
-
+/* ====== Logo ====== */
 .auth-logo-text {
-  font-size: 28px; /* Slightly reduced */
+  font-size: 26px;
   font-weight: bold;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   text-align: center;
   letter-spacing: 4px;
   color: #2e86de;
@@ -68,6 +37,66 @@
   color: #20c997;
 }
 
+/* ====== Heading ====== */
+.auth-container h2 {
+  margin-bottom: 14px;
+  font-size: 18px;
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+/* ====== Form ====== */
+.auth-container form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-container input {
+  width: 80%;
+  align-self: center;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  font-size: 13px;
+  background: #f9fafb;
+  transition: 0.3s;
+}
+
+.auth-container input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+/* ====== Roles Section (checkbox grid) ====== */
+.roles-selection {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* 2 columns */
+  gap: 8px 12px;
+  background: #f8f9fc;
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 5px;
+}
+
+.roles-selection label {
+  font-size: 12px;
+  color: #444;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.roles-selection input[type="checkbox"] {
+  accent-color: #1e3a8a; /* Modern browsers */
+  cursor: pointer;
+}
+
+/* ====== Submit Button ====== */
 .auth-container button {
   padding: 8px;
   background-color: #1e3a8a;
@@ -77,29 +106,14 @@
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: 0.2s ease;
+  transition: background 0.2s ease;
 }
 
 .auth-container button:hover {
   background-color: #3745a3;
 }
 
-.auth-container p {
-  margin-top: 10px;
-  font-size: 12px;
-  color: #6b7280;
-  text-align: center;
-}
-
-.auth-container a {
-  color: #3b82f6;
-  text-decoration: none;
-}
-
-.auth-container a:hover {
-  text-decoration: underline;
-}
-
+/* ====== Error Message ====== */
 .error-msg {
   color: #dc2626;
   background: #fee2e2;
@@ -107,9 +121,21 @@
   border-radius: 5px;
   font-size: 12px;
   text-align: center;
+  margin-bottom: 6px;
 }
 
+/* ====== Footer ====== */
+.homes-footer {
+  position: fixed;
+  bottom: 10px;
+  right: 20px;
+  color: white;
+  font-size: 0.85rem;
+  text-align: right;
+  font-style: italic;
+}
 
+/* ====== Optional Logo Top-Left ====== */
 .hems-logo-top-left {
   position: absolute;
   top: 10px;
@@ -121,12 +147,31 @@
 }
 
 
-.homes-footer {
-  position: fixed;
-  bottom: 10px;
-  right: 20px;
-  color: white;
-  font-size: 0.9rem;
-  text-align: right;
-  font-style: italic;
+/* ====== Roles Section (checkbox grid) ====== */
+.roles-selection {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* 2 columns */
+  gap: 8px 12px;
+  background: #f8f9fc;
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 5px;
+  width: 80%;
+}
+
+.roles-selection label {
+  font-size: 12px;
+  color: #444;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.roles-selection input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #1e3a8a; /* matches your button color */
+  cursor: pointer;
 }

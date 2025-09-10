@@ -13,6 +13,7 @@ from app.bar import models as bar_models, schemas as bar_schemas
 from app.store import models as store_models
 from app.bar.models import Bar, BarInventory, BarSale, BarSaleItem
 from app.users.models import User
+from app.users.permissions import role_required  # 👈 permission helper
 from app.bar.models import Bar, BarInventoryReceipt
 from typing import Optional
 from datetime import timedelta
@@ -44,7 +45,7 @@ router = APIRouter()
 def create_bar(
     bar: bar_schemas.BarCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))  # ✅ only admin
 ):
     existing = db.query(bar_models.Bar).filter_by(name=bar.name).first()
     if existing:
@@ -60,7 +61,7 @@ def create_bar(
 @router.get("/bars", response_model=List[bar_schemas.BarDisplay])
 def list_bars(
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     return db.query(bar_models.Bar).order_by(bar_models.Bar.id.asc()).all()
 
@@ -69,7 +70,7 @@ def list_bars(
 @router.get("/bars/simple", response_model=List[bar_schemas.BarDisplaySimple])
 def list_bars(
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     return db.query(bar_models.Bar).order_by(bar_models.Bar.id.asc()).all()
 
@@ -83,7 +84,7 @@ def update_bar(
     bar_id: int,
     bar_update: bar_schemas.BarCreate,  # Same schema used in creation
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     bar = db.query(bar_models.Bar).filter_by(id=bar_id).first()
     if not bar:
@@ -109,7 +110,7 @@ def update_bar(
 def delete_bar(
     bar_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     bar = db.query(bar_models.Bar).filter_by(id=bar_id).first()
     if not bar:
@@ -232,7 +233,9 @@ def update_received_stock(data: bar_schemas.BarStockUpdate, db: Session = Depend
 
 
 @router.delete("/bar-inventory/{inventory_id}", status_code=204)
-def delete_bar_inventory(inventory_id: int, db: Session = Depends(get_db)):
+def delete_bar_inventory(inventory_id: int, db: Session = Depends(get_db),
+      current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))                   
+    ):
     inventory = db.query(BarInventory).filter(BarInventory.id == inventory_id).first()
     if not inventory:
         raise HTTPException(status_code=404, detail="Inventory record not found")
@@ -246,7 +249,7 @@ def delete_bar_inventory(inventory_id: int, db: Session = Depends(get_db)):
 @router.get("/items/simple", response_model=List[bar_schemas.BarSaleItemSummary])
 def get_bar_items(
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     # Get latest selling_price per item (avoid duplicates)
     subquery = (
@@ -288,7 +291,7 @@ def get_bar_items(
 def update_selling_price(
     data: bar_schemas.BarPriceUpdate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     # Try to find existing bar_inventory record
     bar_item = db.query(bar_models.BarInventory).filter_by(
@@ -322,7 +325,7 @@ def update_selling_price(
 def create_bar_sale(
     sale_data: bar_schemas.BarSaleCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     try:
         total_amount = 0.0
@@ -428,7 +431,7 @@ def list_bar_sales(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     # Load sales with their bar, creator, sale_items, and each item’s bar_inventory+store item (for names)
     query = db.query(BarSale).options(
@@ -504,7 +507,7 @@ def list_unpaid_sales(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     query = db.query(bar_models.BarSale).options(
         joinedload(bar_models.BarSale.bar),
@@ -595,7 +598,7 @@ def update_bar_sale(
     sale_id: int,
     sale_data: bar_schemas.BarSaleCreate,  # Same structure as create
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     sale = db.query(bar_models.BarSale).filter_by(id=sale_id).first()
     if not sale:
@@ -698,7 +701,7 @@ def update_bar_sale(
 def delete_bar_sale(
     sale_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     # ✅ Only admin can delete
     if current_user.role != "admin":
@@ -720,7 +723,7 @@ def get_bar_stock_balance(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     try:
         # Step 1: Fetch issued items
@@ -811,7 +814,7 @@ def get_bar_stock_balance(
 def adjust_bar_inventory(
     adjustment_data: BarInventoryAdjustmentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     # ✅ Only admins can adjust
     if current_user.role != "admin":
@@ -854,7 +857,7 @@ def list_bar_inventory_adjustments(
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     query = db.query(BarInventoryAdjustment)
 
@@ -875,7 +878,7 @@ def list_bar_inventory_adjustments(
 def delete_bar_inventory_adjustment(
     adjustment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     # ✅ Only admins can delete
     if current_user.role != "admin":
@@ -907,7 +910,7 @@ def delete_bar_inventory_adjustment(
 def delete_bar(
     bar_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     bar = db.query(bar_models.Bar).filter_by(id=bar_id).first()
     if not bar:
@@ -935,7 +938,7 @@ def get_store_items_received(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(get_current_user),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     if bar_id:
         bar = db.query(Bar).filter(Bar.id == bar_id).first()
