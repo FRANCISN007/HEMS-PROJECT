@@ -3,7 +3,7 @@ import axiosWithAuth from "../../utils/axiosWithAuth";  // ✅ use auth axios
 import "./CreateBooking.css";
 import { useNavigate } from "react-router-dom";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
+//const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
 
 const CreateBooking = () => {
   const navigate = useNavigate();
@@ -98,40 +98,40 @@ const CreateBooking = () => {
 
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setMessage("You are not logged in. Please login to continue.");
-      return;
-    }
+  e.preventDefault();
+  const token = localStorage.getItem("token");
+  if (!token) {
+    setMessage("You are not logged in. Please login to continue.");
+    return;
+  }
 
-    const data = new FormData();
-    Object.entries(formData).forEach(([key, value]) => {
-      if (key !== "attachment" && value) {
-        data.append(key, value);
-      }
+  const data = new FormData();
+  Object.entries(formData).forEach(([key, value]) => {
+    if (key !== "attachment" && value) {
+      data.append(key, value);
+    }
+  });
+
+  if (attachmentFile) {
+    data.append("attachment_file", attachmentFile);
+  } else if (formData.attachment) {
+    data.append("attachment_str", formData.attachment);
+  }
+
+  try {
+    const response = await axiosWithAuth().post("/bookings/create/", data, {
+      headers: { "Content-Type": "multipart/form-data" },
     });
 
-    if (attachmentFile) {
-      data.append("attachment_file", attachmentFile);
-    } else if (formData.attachment) {
-      data.append("attachment_str", formData.attachment); // ✅ correct key
-    }
+    setMessage(response.data.message || "Booking created successfully.");
+    setGuestResults([]);
+    setGuestIndex(0);
+  } catch (error) {
+    console.error("Booking error:", error.response?.data);
+    setMessage(error.response?.data?.detail || JSON.stringify(error.response?.data) || "Failed to create booking.");
+  }
+};
 
-    try {
-      const response = await axios.post(`${API_BASE_URL}/bookings/create/`, data, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
-        },
-      });
-      setMessage(response.data.message || "Booking created successfully.");
-      setGuestResults([]);
-      setGuestIndex(0);
-    } catch (error) {
-      setMessage(error.response?.data?.detail || "Failed to create booking.");
-    }
-  };
 
   const handleClose = () => {
   navigate("/dashboard/rooms/status");

@@ -5,10 +5,11 @@
   "main": "postcss.config.js",
   "homepage": "./",
   "scripts": {
-    "start": "set HOST=192.168.226.67&& set BROWSER=chrome && react-scripts start",
-    "build": "react-scripts build",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "start": "set HOST=0.0.0.0 && set BROWSER=chrome && react-scripts start",
+  "build": "react-scripts build",
+  "test": "echo \"Error: no test specified\" && exit 1"
+},
+
   "keywords": [],
   "author": "",
   "license": "ISC",
