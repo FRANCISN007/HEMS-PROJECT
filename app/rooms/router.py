@@ -295,10 +295,7 @@ import re
 
 
 @router.get("/unavailable", response_model=dict)
-def list_unavailable_rooms(
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
-    ):
+def list_unavailable_rooms(db: Session = Depends(get_db)):
     """
     Return rooms that are currently unavailable based on bookings today,
     but only if the booking has at least one payment.
