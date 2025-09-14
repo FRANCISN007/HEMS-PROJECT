@@ -120,7 +120,7 @@ const CreateBooking = () => {
 
   try {
     const response = await axiosWithAuth().post("/bookings/create/", data, {
-      headers: { "Content-Type": "multipart/form-data" },
+      
     });
 
     setMessage(response.data.message || "Booking created successfully.");
