@@ -309,6 +309,8 @@ def create_meal_order(order_data: MealOrderCreate,
 
 
 
+from datetime import datetime, timedelta
+
 @router.get("/list", response_model=list[MealOrderDisplay])
 def list_meal_orders(
     status: str = Query(None, description="Filter by status: open or closed"),
@@ -328,9 +330,13 @@ def list_meal_orders(
         query = query.filter(MealOrder.status == status)
 
     if start_date:
-        query = query.filter(MealOrder.created_at >= start_date)
+        start_datetime = datetime.combine(start_date, datetime.min.time())
+        query = query.filter(MealOrder.created_at >= start_datetime)
+
     if end_date:
-        query = query.filter(MealOrder.created_at <= end_date)
+        # ✅ include entire end date by setting time to 23:59:59
+        end_datetime = datetime.combine(end_date, datetime.max.time())
+        query = query.filter(MealOrder.created_at <= end_datetime)
 
     orders = query.order_by(MealOrder.created_at.desc()).all()
     response = []
@@ -414,15 +420,17 @@ def list_sales(
         if location_id is not None and order_location_id != location_id:
             continue
 
-        # Compute payments
-        amount_paid = sum(payment.amount_paid for payment in sale.payments)
+        amount_paid = sum(
+            payment.amount_paid for payment in sale.payments if not payment.is_void
+        )
+
         balance = sale.total_amount - amount_paid
+
 
         total_sales_amount += sale.total_amount
         total_paid_amount += amount_paid
         total_balance += balance
 
-        # ✅ Send raw numbers
         sale_display = {
             "id": sale.id,
             "order_id": sale.order_id,
@@ -446,6 +454,8 @@ def list_sales(
     }
 
     return {"sales": result, "summary": summary}
+
+
 
 @router.get("/sales/outstanding", response_model=dict)
 def list_outstanding(
@@ -562,10 +572,10 @@ def get_sale(
 def delete_sale(
     sale_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can delete sales.")
+    #if current_user.role != "admin":
+        #raise HTTPException(status_code=403, detail="Only admins can delete sales.")
 
     # Check if the sale exists without accessing relationships
     sale_exists = db.query(RestaurantSale.id).filter(RestaurantSale.id == sale_id).first()

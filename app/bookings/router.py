@@ -727,11 +727,12 @@ def update_booking(
     attachment: Optional[UploadFile] = File(None),
     attachment_str: Optional[str] = Form(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
+
 ):
     # Check if the user is an admin
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    #if current_user.roles != "admin":
+        #raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     try:
         today = date.today()

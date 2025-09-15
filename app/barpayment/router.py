@@ -318,12 +318,12 @@ def update_bar_payment(
 def void_bar_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     
     # ✅ Restrict to admin only
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can void payments")
+    #if current_user.role != "admin":
+        #raise HTTPException(status_code=403, detail="Only admins can void payments")
     
     # ✅ Get the payment
     payment = db.query(models.BarPayment).filter(

@@ -405,11 +405,11 @@ def list_event_payments_by_status(
 def void_event_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["event"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     # Only admins can void payments
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    #if current_user.roles != "admin":
+        #raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     try:
         # Retrieve the payment record by ID

@@ -951,8 +951,8 @@ def adjust_store_inventory(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can adjust inventory.")
+    #if current_user.role != "admin":
+        #raise HTTPException(status_code=403, detail="Only admins can adjust inventory.")
 
     # Get latest stock entry
     latest_entry = db.query(StoreStockEntry).filter(
@@ -1012,8 +1012,8 @@ def update_adjustment(
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     # AuthZ
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can edit adjustments.")
+    #if current_user.role != "admin":
+        #raise HTTPException(status_code=403, detail="Only admins can edit adjustments.")
 
     # Load existing adjustment
     adjustment = db.query(StoreInventoryAdjustment).filter(
@@ -1099,11 +1099,11 @@ def update_adjustment(
 def delete_adjustment(
     adjustment_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     # Only admins can delete
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can delete adjustments.")
+    #if current_user.role != "admin":
+        #raise HTTPException(status_code=403, detail="Only admins can delete adjustments.")
 
     # Get adjustment
     adjustment = db.query(StoreInventoryAdjustment)\

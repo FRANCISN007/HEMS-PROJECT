@@ -817,8 +817,8 @@ def adjust_bar_inventory(
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     # ✅ Only admins can adjust
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can adjust inventory.")
+    #if current_user.role != "admin":
+        #raise HTTPException(status_code=403, detail="Only admins can adjust inventory.")
 
     # 🔍 Get existing inventory
     inventory = db.query(BarInventory).filter(
@@ -881,8 +881,8 @@ def delete_bar_inventory_adjustment(
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     # ✅ Only admins can delete
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can delete adjustments.")
+    #if current_user.role != "admin":
+        #raise HTTPException(status_code=403, detail="Only admins can delete adjustments.")
 
     adjustment = db.query(BarInventoryAdjustment).get(adjustment_id)
     if not adjustment:

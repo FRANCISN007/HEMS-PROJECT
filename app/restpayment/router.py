@@ -187,11 +187,12 @@ def update_payment(
 
 # ✅ Void a payment
 # ✅ Void a payment (cancel transaction but keep history)
+
 @router.put("/sales/payments/{payment_id}/void", response_model=RestaurantSalePaymentDisplay)
 def void_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     payment = db.query(RestaurantSalePayment).filter(RestaurantSalePayment.id == payment_id).first()
     if not payment:
