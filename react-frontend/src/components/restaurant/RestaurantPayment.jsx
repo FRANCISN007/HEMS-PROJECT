@@ -6,6 +6,7 @@ const RestaurantPayment = () => {
   const [locations, setLocations] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState("");
   const [sales, setSales] = useState([]);
+  const [summary, setSummary] = useState(null); // ✅ summary totals from backend
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [currentSale, setCurrentSale] = useState(null);
   const [paymentData, setPaymentData] = useState({
@@ -18,41 +19,37 @@ const RestaurantPayment = () => {
   useEffect(() => {
     axiosWithAuth()
       .get("/restaurant/locations")
-      .then((res) => {
-        console.log("Fetched locations:", res.data);
-        setLocations(Array.isArray(res.data) ? res.data : []);
-      })
+      .then((res) => setLocations(Array.isArray(res.data) ? res.data : []))
       .catch((err) => console.error("Failed to fetch locations:", err));
   }, []);
 
-  // ✅ Fetch unpaid/partial sales for selected location
-    const fetchSales = async (locationId) => {
-    try {
-        const res = await axiosWithAuth().get(
-        `/restaurant/sales/outstanding?location_id=${locationId}`
-        );
-        console.log("Fetched sales:", res.data);
-        setSales(Array.isArray(res.data.sales) ? res.data.sales : []);
-    } catch (err) {
-        console.error("Failed to fetch sales:", err);
-    }
-    };
-
-  // ✅ Location change handler
-  const handleLocationChange = (e) => {
-    const locationId = e.target.value;
-    setSelectedLocation(locationId);
-    if (locationId) {
-      fetchSales(locationId);
-    } else {
+  // ✅ Fetch sales from backend (use backend-provided balance/amount_paid)
+  const fetchSales = async (locationId) => {
+    if (!locationId) {
       setSales([]);
+      setSummary(null);
+      return;
+    }
+    try {
+      const res = await axiosWithAuth().get(
+        `/restaurant/sales/outstanding?location_id=${locationId}`
+      );
+
+      setSales(res.data.sales || []);
+      setSummary(res.data.summary || null);
+    } catch (err) {
+      console.error("Failed to fetch sales:", err);
     }
   };
 
   // ✅ Open modal
   const openPaymentModal = (sale) => {
     setCurrentSale(sale);
-    setPaymentData({ amount: "", payment_mode: "cash", paid_by: "" });
+    setPaymentData({
+      amount: "",
+      payment_mode: "cash",
+      paid_by: sale.guest_name || "",
+    });
     setShowPaymentModal(true);
   };
 
@@ -60,36 +57,43 @@ const RestaurantPayment = () => {
   const closePaymentModal = () => {
     setShowPaymentModal(false);
     setCurrentSale(null);
+    setPaymentData({ amount: "", payment_mode: "cash", paid_by: "" });
   };
 
+  // ✅ Submit payment
   const handlePaymentSubmit = async () => {
     try {
-        await axiosWithAuth().post(
+      await axiosWithAuth().post(
         `/restpayment/sales/${currentSale.id}/payments`,
-        null, // no body
         {
-            params: {
-            amount: parseFloat(paymentData.amount) || 0,
-            payment_mode: paymentData.payment_mode,
-            paid_by: paymentData.paid_by,
-            },
+          amount: parseFloat(paymentData.amount) || 0,
+          payment_mode: paymentData.payment_mode,
+          paid_by: paymentData.paid_by,
         }
-        );
+      );
 
-        // ✅ Show temporary success feedback
-        alert("✅ Payment recorded successfully!");
+      alert("✅ Payment recorded successfully!");
 
-        // ✅ Delay for 3 seconds before closing + refreshing
-        setTimeout(() => {
+      setTimeout(() => {
         closePaymentModal();
-        fetchSales(selectedLocation);
-        }, 500);
+        fetchSales(selectedLocation); // ✅ refresh list with new balance
+      }, 500);
     } catch (err) {
-        console.error("Payment failed:", err.response?.data || err);
-        alert("❌ Payment failed. Please try again.");
+      console.error("Payment failed:", err.response?.data || err);
+      alert(
+        `❌ Payment failed. ${
+          err.response?.data?.detail || "Please try again."
+        }`
+      );
     }
-    };
+  };
 
+  // ✅ Handle location change
+  const handleLocationChange = (e) => {
+    const locationId = e.target.value;
+    setSelectedLocation(locationId);
+    fetchSales(locationId);
+  };
 
   return (
     <div className="restaurant-payment">
@@ -108,8 +112,26 @@ const RestaurantPayment = () => {
         </select>
       </div>
 
-      {/* ✅ Show unpaid/partial sales */}
-      {sales.length > 0 && (
+      {/* ✅ Show summary */}
+      {summary && (
+        <div className="summary">
+          <p>
+            <strong>Total Sales:</strong> ₦
+            {Number(summary.total_sales_amount).toLocaleString()}
+          </p>
+          <p>
+            <strong>Total Paid:</strong> ₦
+            {Number(summary.total_paid_amount).toLocaleString()}
+          </p>
+          <p>
+            <strong>Total Balance:</strong> ₦
+            {Number(summary.total_balance).toLocaleString()}
+          </p>
+        </div>
+      )}
+
+      {/* ✅ Outstanding sales */}
+      {sales.length > 0 ? (
         <table className="sales-table">
           <thead>
             <tr>
@@ -122,34 +144,46 @@ const RestaurantPayment = () => {
             </tr>
           </thead>
           <tbody>
-            {sales.map((sale) => {
-              const totalPaid = sale.amount_paid || 0;
-              const balance = sale.balance || 0;
-
-              return (
-                <tr key={sale.id}>
-                  <td>{sale.id}</td>
-                  <td>{sale.guest_name}</td>
-                  <td>{sale.total_amount}</td>
-                  <td>{totalPaid}</td>
-                  <td>{balance}</td>
-                  <td>
-                    <button onClick={() => openPaymentModal(sale)}>
-                      💳 Make Payment
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
+            {sales.map((sale) => (
+              <tr key={sale.id}>
+                <td>{sale.id}</td>
+                <td>{sale.guest_name}</td>
+                <td>₦{Number(sale.total_amount).toLocaleString()}</td>
+                <td>₦{Number(sale.amount_paid).toLocaleString()}</td>
+                <td>₦{Number(sale.balance).toLocaleString()}</td>
+                <td>
+                  <button onClick={() => openPaymentModal(sale)}>
+                    💳 Make Payment
+                  </button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
+      ) : (
+        selectedLocation && <p>No outstanding sales for this location.</p>
       )}
 
       {/* ✅ Payment Modal */}
-      {showPaymentModal && (
+      {showPaymentModal && currentSale && (
         <div className="payment-modal-overlay">
           <div className="payment-modal">
             <h3>Make Payment for Sale #{currentSale.id}</h3>
+
+            <div className="sale-summary">
+              <p>
+                <strong>Total:</strong> ₦
+                {Number(currentSale.total_amount).toLocaleString()}
+              </p>
+              <p>
+                <strong>Already Paid:</strong> ₦
+                {Number(currentSale.amount_paid).toLocaleString()}
+              </p>
+              <p>
+                <strong>Balance:</strong> ₦
+                {Number(currentSale.balance).toLocaleString()}
+              </p>
+            </div>
 
             <label>Amount:</label>
             <input
@@ -175,31 +209,27 @@ const RestaurantPayment = () => {
             <label>Paid By:</label>
             <input
               type="text"
-              value={paymentData.paid_by || currentSale.guest_name || ""}
+              value={paymentData.paid_by}
               onChange={(e) =>
                 setPaymentData({ ...paymentData, paid_by: e.target.value })
               }
-              placeholder="Enter payer name"
             />
 
             <div className="modal-actions">
               <button
-                onClick={() => handlePaymentSubmit(currentSale.id)}
+                onClick={handlePaymentSubmit}
                 className="btn btn-primary"
+                disabled={!paymentData.amount || parseFloat(paymentData.amount) <= 0}
               >
                 Submit
               </button>
-              <button
-                onClick={() => setShowPaymentModal(false)}
-                className="btn btn-secondary"
-              >
+              <button onClick={closePaymentModal} className="btn btn-secondary">
                 Cancel
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 };

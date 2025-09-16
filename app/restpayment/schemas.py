@@ -11,6 +11,8 @@ class PaymentCreate(BaseModel):
     payment_mode: str
     paid_by: str | None = None
 
+
+
     
 
 class RestaurantSalePaymentDisplay(BaseModel):
@@ -56,3 +58,5 @@ class RestaurantSaleWithPaymentsDisplay(BaseModel):
 
     class Config:
         from_attributes = True
+
+

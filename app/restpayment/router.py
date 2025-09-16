@@ -29,30 +29,47 @@ router = APIRouter()
 # app/restpayment/routes.py
 
 
+
+
 @router.post("/sales/{sale_id}/payments", response_model=RestaurantSaleDisplay)
 def add_payment_to_sale(
     sale_id: int,
-    amount: float = Query(...),
-    payment_mode: str = Query(...),
-    paid_by: str = Query(...),
+    payment: PaymentCreate,  # 👈 accept JSON body
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
+    # 🔎 Find sale
     sale = db.query(RestaurantSale).filter(RestaurantSale.id == sale_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
 
+    # 🔎 Calculate how much is already paid (ignoring voided)
+    total_paid = sum(p.amount_paid for p in sale.payments if not p.is_void)
+    balance = (sale.total_amount or 0) - total_paid
+
+    # 🚫 Prevent overpayment
+    if payment.amount > balance:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Payment exceeds outstanding balance. Balance left: {balance}"
+        )
+
+    # 💾 Record new payment
     new_payment = RestaurantSalePayment(
         sale_id=sale.id,
-        amount_paid=amount,
-        payment_mode=payment_mode,
-        paid_by=paid_by,
+        amount_paid=payment.amount,
+        payment_mode=payment.payment_mode,
+        paid_by=payment.paid_by,
+        is_void=False,  # ✅ important
         created_at=datetime.utcnow()
     )
     db.add(new_payment)
-    db.flush()
+    db.commit()   # ✅ persist changes
+    db.refresh(sale)  # ✅ reload sale with updated payments
 
+    # 🔄 Update status (e.g., mark as fully_paid/partial)
     update_sale_status(sale, db)
+
     return sale
 
 
@@ -67,11 +84,8 @@ def list_payments_with_items(
 ):
     query = db.query(RestaurantSalePayment).join(RestaurantSale)
 
-    # ✅ Sale filter
     if sale_id:
         query = query.filter(RestaurantSale.id == sale_id)
-
-    # ✅ Date filter logic on PAYMENT date
     if start_date:
         query = query.filter(
             RestaurantSalePayment.created_at >= datetime.combine(start_date, datetime.min.time())
@@ -80,47 +94,56 @@ def list_payments_with_items(
         query = query.filter(
             RestaurantSalePayment.created_at <= datetime.combine(end_date, datetime.max.time())
         )
-
-    # ✅ Location filter
     if location_id:
         query = query.filter(RestaurantSale.location_id == location_id)
 
-    # ✅ Exclude voids here
-    query = query.filter(RestaurantSalePayment.is_void == False)
-
-    # ✅ Order by PAYMENT date (newest first)
+    # ✅ Keep voided payments too (for history)
     payments = query.order_by(RestaurantSalePayment.created_at.desc()).all()
 
-    # --- Build grouped response ---
     payment_summary = defaultdict(float)
     total_amount = 0.0
     sales_map = {}
 
     for p in payments:
-        sale = p.sale  # relationship back to RestaurantSale
-        if sale.id not in sales_map:
-            sale_model = RestaurantSaleWithPaymentsDisplay.from_orm(sale)
-            sales_map[sale.id] = sale_model.dict()
-            sales_map[sale.id]["payments"] = []
+        sale = p.sale
 
-        # ✅ Add payment, including paid_by
+        if sale.id not in sales_map:
+            sales_map[sale.id] = {
+                "id": sale.id,
+                "guest_name": sale.guest_name,
+                "total_amount": float(sale.total_amount or 0),
+                "amount_paid": 0.0,
+                "balance": float(sale.total_amount or 0),
+                "payments": [],
+            }
+
         payment_dict = {
-            **RestaurantSalePaymentDisplay.from_orm(p).dict(),
+            "id": p.id,
+            "sale_id": p.sale_id,
+            "amount_paid": float(p.amount_paid or 0),
+            "payment_mode": p.payment_mode,
             "paid_by": p.paid_by,
+            "is_void": p.is_void,
+            "created_at": p.created_at,
         }
         sales_map[sale.id]["payments"].append(payment_dict)
 
-        # ✅ Summaries
-        payment_summary[p.payment_mode] += float(p.amount_paid or 0.0)
-        total_amount += float(p.amount_paid or 0.0)
+        # ✅ Only count non-void payments toward totals
+        if not p.is_void:
+            sales_map[sale.id]["amount_paid"] += float(p.amount_paid or 0)
+            payment_summary[p.payment_mode] += float(p.amount_paid or 0.0)
+            total_amount += float(p.amount_paid or 0.0)
 
+        # ✅ Update balance after every payment
+        sales_map[sale.id]["balance"] = (
+            sales_map[sale.id]["total_amount"] - sales_map[sale.id]["amount_paid"]
+        )
+
+    # ✅ Clean summary
     summary = {k: float(v) for k, v in payment_summary.items()}
     summary["Total"] = float(total_amount)
 
-    # return as list (ordered by latest payment date)
-    sales_display = list(sales_map.values())
-
-    return {"sales": sales_display, "summary": summary}
+    return {"sales": list(sales_map.values()), "summary": summary}
 
 
 

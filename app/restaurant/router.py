@@ -505,6 +505,9 @@ def list_outstanding(
         amount_paid = sum(payment.amount_paid for payment in sale.payments if not payment.is_void)
         balance = sale.total_amount - amount_paid
 
+        if balance <= 0:
+            continue  # ✅ Skip fully paid sales
+
         # Update totals
         total_sales_amount += sale.total_amount
         total_paid_amount += amount_paid

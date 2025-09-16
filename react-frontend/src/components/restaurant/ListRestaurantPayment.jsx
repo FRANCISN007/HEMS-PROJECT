@@ -32,11 +32,29 @@ const ListRestaurantPayment = () => {
       if (startDate) params.start_date = startDate;
       if (endDate) params.end_date = endDate;
 
-      const response = await axiosWithAuth().get("/restpayment/sales/payments", {
-        params,
+      const response = await axiosWithAuth().get("/restpayment/sales/payments", { params });
+
+      // ✅ Normalize: recalc amount_paid & filter voided
+      const normalizedSales = (response.data.sales || []).map((sale) => {
+        const allPayments = sale.payments || [];
+
+        // ✅ Sum only valid payments
+        const amountPaid = allPayments
+          .filter((p) => !p.is_void)
+          .reduce((sum, p) => sum + Number(p.amount_paid || 0), 0);
+
+        return {
+          ...sale,
+          payments: allPayments, // ✅ keep voided for display
+          total_amount: Number(sale.total_amount) || 0,
+          amount_paid: amountPaid,
+          balance: (Number(sale.total_amount) || 0) - amountPaid,
+        };
       });
-      setPayments(response.data.sales);
-      setSummary(response.data.summary);
+
+
+      setPayments(normalizedSales);
+      setSummary(response.data.summary || {});
     } catch (err) {
       setError("Failed to load payments");
     } finally {
@@ -180,56 +198,61 @@ const ListRestaurantPayment = () => {
 
       <table className="payment-table">
         <thead>
-          <tr>
-            <th>Sale ID</th>
-            <th>Pay ID</th>
-            <th>Amount</th>
-            <th>Mode</th>
-            <th>Paid By</th>
-            <th>Status</th>
-            <th>Date</th>
-            <th className="th-actions">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {payments.map((sale) =>
-            sale.payments.map((payment) => (
-              <tr key={payment.id} className={payment.is_void ? "void-row" : ""}>
-                <td>{sale.id}</td>
-                <td>{payment.id}</td>
-                <td>₦{Number(payment.amount_paid).toLocaleString()}</td>
-                <td>{payment.payment_mode}</td>
-                <td>{payment.paid_by && payment.paid_by.trim() !== "" ? payment.paid_by : "N/A"}</td>
-                <td className={payment.is_void ? "void-text" : ""}>
-                  {payment.is_void ? "VOID" : "VALID"}
-                </td>
-                <td>{new Date(payment.created_at).toLocaleString()}</td>
-                <td className="row-actions">
-                  <button
-                    className="btn edit"
-                    onClick={() => openEditModal(payment)}
-                    disabled={payment.is_void}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="btn void"
-                    onClick={() => handleVoid(payment.id)}
-                    disabled={payment.is_void}
-                  >
-                    Void
-                  </button>
-                  <button
-                    className="btn print"
-                    onClick={() => handlePrint(payment)}
-                  >
-                    Print
-                  </button>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
+        <tr>
+          <th>Sale ID</th>
+          <th>Pay ID</th>
+          <th>Amount</th>
+          <th>Mode</th>
+          <th>Paid By</th>
+          <th>Status</th>
+          <th>Date</th>
+          <th>Total Paid</th>   {/* NEW */}
+          <th>Balance</th>     {/* NEW */}
+          <th className="th-actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {payments.map((sale) =>
+          sale.payments.map((payment) => (
+            <tr key={payment.id} className={payment.is_void ? "void-row" : ""}>
+              <td>{sale.id}</td>
+              <td>{payment.id}</td>
+              <td>₦{Number(payment.amount_paid).toLocaleString()}</td>
+              <td>{payment.payment_mode}</td>
+              <td>{payment.paid_by && payment.paid_by.trim() !== "" ? payment.paid_by : "N/A"}</td>
+              <td className={payment.is_void ? "void-text" : ""}>
+                {payment.is_void ? "VOID" : "VALID"}
+              </td>
+              <td>{new Date(payment.created_at).toLocaleString()}</td>
+              <td>₦{Number(sale.amount_paid).toLocaleString()}</td> {/* NEW */}
+              <td>₦{Number(sale.balance).toLocaleString()}</td>     {/* NEW */}
+              <td className="row-actions">
+                <button
+                  className="btn edit"
+                  onClick={() => openEditModal(payment)}
+                  disabled={payment.is_void}
+                >
+                  Edit
+                </button>
+                <button
+                  className="btn void"
+                  onClick={() => handleVoid(payment.id)}
+                  disabled={payment.is_void}
+                >
+                  Void
+                </button>
+                <button
+                  className="btn print"
+                  onClick={() => handlePrint(payment)}
+                >
+                  Print
+                </button>
+              </td>
+            </tr>
+          ))
+        )}
+      </tbody>
+
       </table>
 
       <div className="payment-summary">
