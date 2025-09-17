@@ -38,40 +38,28 @@ const ListRestaurantSales = () => {
   };
 
   // ✅ Fetch sales from backend
-  const fetchSalesWithDates = async (from, to) => {
-    setLoading(true);
-    try {
-      const params = {};
-      if (locationId) params.location_id = locationId;
-      if (from) params.start_date = from;
-      if (to) params.end_date = to;
+const fetchSalesWithDates = async (from, to) => {
+  setLoading(true);
+  try {
+    const params = {};
+    if (locationId) params.location_id = locationId;
+    if (from) params.start_date = from;
+    if (to) params.end_date = to;
 
-      const res = await axiosWithAuth().get("/restaurant/sales", { params });
+    const res = await axiosWithAuth().get("/restaurant/sales", { params });
 
       // normalize sales & summary
-      const normalizedSales = (res.data.sales || []).map((sale) => {
-        // ✅ Exclude voided payments before calculating amountPaid
-        const validPayments = (sale.payments || []).filter(
-          (p) => !p.is_void // or use (p.voided_at == null) depending on backend model
-        );
-
-        const amountPaid = validPayments.reduce(
-          (sum, p) => sum + Number(p.amount_paid || 0),
-          0
-        );
-
-        return {
-          ...sale,
-          total_amount: Number(sale.total_amount) || 0,
-          amount_paid: amountPaid,
-          balance: (Number(sale.total_amount) || 0) - amountPaid,
-          items: (sale.items || []).map((item) => ({
-            ...item,
-            total_price: Number(item.total_price) || 0,
-            quantity: Number(item.quantity) || 0,
-          })),
-        };
-      });
+      const normalizedSales = (res.data.sales || []).map((sale) => ({
+        ...sale,
+        total_amount: Number(sale.total_amount) || 0,
+        amount_paid: Number(sale.amount_paid) || 0,   // ✅ use backend value
+        balance: Number(sale.balance) || 0,           // ✅ use backend value
+        items: (sale.items || []).map((item) => ({
+          ...item,
+          total_price: Number(item.total_price) || 0,
+          quantity: Number(item.quantity) || 0,
+        })),
+      }));
 
       const normalizedSummary = {
         total_sales_amount: Number(res.data.summary?.total_sales_amount) || 0,

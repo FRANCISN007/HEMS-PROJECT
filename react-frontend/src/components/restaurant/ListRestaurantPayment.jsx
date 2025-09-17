@@ -201,7 +201,8 @@ const ListRestaurantPayment = () => {
         <tr>
           <th>Sale ID</th>
           <th>Pay ID</th>
-          <th>Amount</th>
+          <th>Sales Amount</th>
+          <th>Amount Paid</th>
           <th>Mode</th>
           <th>Paid By</th>
           <th>Status</th>
@@ -217,6 +218,7 @@ const ListRestaurantPayment = () => {
             <tr key={payment.id} className={payment.is_void ? "void-row" : ""}>
               <td>{sale.id}</td>
               <td>{payment.id}</td>
+              <td>{sale.total_amount}</td>
               <td>₦{Number(payment.amount_paid).toLocaleString()}</td>
               <td>{payment.payment_mode}</td>
               <td>{payment.paid_by && payment.paid_by.trim() !== "" ? payment.paid_by : "N/A"}</td>

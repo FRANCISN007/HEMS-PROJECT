@@ -23,7 +23,7 @@ const RestaurantPayment = () => {
       .catch((err) => console.error("Failed to fetch locations:", err));
   }, []);
 
-  // ✅ Fetch sales from backend (use backend-provided balance/amount_paid)
+  // ✅ Fetch sales from backend (use backend-provided balance/amount_paid + payments)
   const fetchSales = async (locationId) => {
     if (!locationId) {
       setSales([]);
@@ -63,7 +63,7 @@ const RestaurantPayment = () => {
   // ✅ Submit payment
   const handlePaymentSubmit = async () => {
     try {
-      await axiosWithAuth().post(
+      const res = await axiosWithAuth().post(
         `/restpayment/sales/${currentSale.id}/payments`,
         {
           amount: parseFloat(paymentData.amount) || 0,
@@ -74,10 +74,20 @@ const RestaurantPayment = () => {
 
       alert("✅ Payment recorded successfully!");
 
-      setTimeout(() => {
-        closePaymentModal();
-        fetchSales(selectedLocation); // ✅ refresh list with new balance
-      }, 500);
+      // 🔄 Refresh sales & modal data after payment
+      const updated = await axiosWithAuth().get(
+        `/restaurant/sales/outstanding?location_id=${selectedLocation}`
+      );
+      setSales(updated.data.sales || []);
+      setSummary(updated.data.summary || null);
+
+      // Update currentSale with the new record
+      const refreshedSale = updated.data.sales.find(
+        (s) => s.id === currentSale.id
+      );
+      if (refreshedSale) setCurrentSale(refreshedSale);
+
+      setPaymentData({ amount: "", payment_mode: "cash", paid_by: "" });
     } catch (err) {
       console.error("Payment failed:", err.response?.data || err);
       alert(
@@ -164,25 +174,17 @@ const RestaurantPayment = () => {
         selectedLocation && <p>No outstanding sales for this location.</p>
       )}
 
-      {/* ✅ Payment Modal */}
       {showPaymentModal && currentSale && (
-        <div className="payment-modal-overlay">
-          <div className="payment-modal">
-            <h3>Make Payment for Sale #{currentSale.id}</h3>
+      <div className="payment-modal-overlay">
+        <div className="payment-modal">
+          <h3>Make Payment for Sale #{currentSale.id}</h3>
 
+          {/* ✅ Scrollable section */}
+          <div className="payment-modal-content">
             <div className="sale-summary">
-              <p>
-                <strong>Total:</strong> ₦
-                {Number(currentSale.total_amount).toLocaleString()}
-              </p>
-              <p>
-                <strong>Already Paid:</strong> ₦
-                {Number(currentSale.amount_paid).toLocaleString()}
-              </p>
-              <p>
-                <strong>Balance:</strong> ₦
-                {Number(currentSale.balance).toLocaleString()}
-              </p>
+              <p><strong>Total:</strong> ₦{Number(currentSale.total_amount).toLocaleString()}</p>
+              <p><strong>Already Paid:</strong> ₦{Number(currentSale.amount_paid).toLocaleString()}</p>
+              <p><strong>Balance:</strong> ₦{Number(currentSale.balance).toLocaleString()}</p>
             </div>
 
             <label>Amount:</label>
@@ -215,21 +217,53 @@ const RestaurantPayment = () => {
               }
             />
 
-            <div className="modal-actions">
-              <button
-                onClick={handlePaymentSubmit}
-                className="btn btn-primary"
-                disabled={!paymentData.amount || parseFloat(paymentData.amount) <= 0}
-              >
-                Submit
-              </button>
-              <button onClick={closePaymentModal} className="btn btn-secondary">
-                Cancel
-              </button>
-            </div>
+            {/* ✅ Payment History */}
+            {currentSale.payments && currentSale.payments.length > 0 && (
+              <div className="payment-history">
+                <h4>Payment History</h4>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Amount</th>
+                      <th>Mode</th>
+                      <th>Paid By</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentSale.payments.map((p) => (
+                      <tr key={p.id} style={{ color: p.is_void ? "red" : "" }}>
+                        <td>{p.id}</td>
+                        <td>₦{Number(p.amount_paid).toLocaleString()}</td>
+                        <td>{p.payment_mode}</td>
+                        <td>{p.paid_by || "N/A"}</td>
+                        <td>{new Date(p.created_at).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* ✅ Footer stays fixed */}
+          <div className="modal-actions">
+            <button
+              onClick={handlePaymentSubmit}
+              className="btn btn-primary"
+              disabled={!paymentData.amount || parseFloat(paymentData.amount) <= 0}
+            >
+              Submit
+            </button>
+            <button onClick={closePaymentModal} className="btn btn-secondary">
+              Cancel
+            </button>
           </div>
         </div>
-      )}
+      </div>
+    )}
+
     </div>
   );
 };

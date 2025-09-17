@@ -69,13 +69,13 @@ body, html {
 
 .heading-line1 {
   font-size: 1.8rem;
-  color: #8ea527;
+  color: #2623c7;
   margin: 0;
 }
 
 .heading-line2 {
   font-size: 1.2rem;
-  color: #8ea527;
+  color: #2623c7;
   margin: 0;
 }
 
@@ -96,8 +96,11 @@ body, html {
 
 
 .proceed-button {
-  margin-top: 20px;
-  padding: 12px 30px;
+  position: fixed;             /* take it out of normal flow */
+  top: 50%;                    /* vertical center */
+  right: 20px;                 /* stick to right edge */
+  transform: translateY(-50%); /* adjust for vertical centering */
+  padding: 14px 32px;
   font-size: 18px;
   font-weight: bold;
   color: white;
@@ -106,8 +109,23 @@ body, html {
   border-radius: 8px;
   cursor: pointer;
   transition: background-color 0.3s ease;
+  z-index: 1000;
 }
 
 .proceed-button:hover {
   background-color: rgb(98, 149, 204);
+}
+
+/* 📱 Responsive for phones */
+@media (max-width: 768px) {
+  .proceed-button {
+    top: auto;                  /* remove vertical centering */
+    bottom: 20px;               /* move to bottom */
+    right: 50%;                 /* align center horizontally */
+    transform: translateX(50%); /* perfectly center */
+    width: 80%;                 /* wider for touch devices */
+    max-width: 300px;
+    font-size: 16px;            /* slightly smaller font */
+    padding: 12px 20px;
+  }
 }

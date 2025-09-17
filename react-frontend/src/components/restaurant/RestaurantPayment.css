@@ -99,23 +99,23 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 999;
+  z-index: 1000;
 }
 
-/* Payment Modal Box */
 .payment-modal {
   background: #fff;
-  padding: 22px;
-  border-radius: 12px;
-  width: 360px;
-  max-width: 95%;
-  box-shadow: 0px 6px 16px rgba(0,0,0,0.25);
-  animation: fadeIn 0.3s ease-in-out;
+  padding: 20px;
+  width: 600px;
+  max-height: 80vh; /* keep modal height manageable */
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
 }
+
 
 .payment-modal h3 {
   margin-bottom: 18px;
@@ -124,6 +124,22 @@
   font-size: 18px;
   font-weight: 600;
 }
+
+.payment-modal-content {
+  flex: 1;
+  overflow-y: auto; /* ✅ vertical scroll */
+  margin-bottom: 15px;
+  padding-right: 10px; /* space for scrollbar */
+}
+
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: auto;
+}
+
 
 .payment-modal label {
   display: block;

@@ -493,7 +493,7 @@ def list_outstanding(
 
         if order:
             location_id = order.location_id
-            guest_name = order.guest_name  # ✅ guest name from MealOrder
+            guest_name = order.guest_name
             if order.location:
                 location_name = order.location.name
             items = [
@@ -502,7 +502,8 @@ def list_outstanding(
             ]
 
         # ✅ Compute payments excluding voided ones
-        amount_paid = sum(payment.amount_paid for payment in sale.payments if not payment.is_void)
+        valid_payments = [p for p in sale.payments if not p.is_void]
+        amount_paid = sum(p.amount_paid for p in valid_payments)
         balance = sale.total_amount - amount_paid
 
         if balance <= 0:
@@ -513,21 +514,30 @@ def list_outstanding(
         total_paid_amount += amount_paid
         total_balance += balance
 
-        sale_display = RestaurantSaleDisplay(
-            id=sale.id,
-            order_id=sale.order_id,
-            guest_name=guest_name,
-            location_id=location_id,
-            # location_name=location_name,  # uncomment if you want
-            served_by=sale.served_by,
-            total_amount=sale.total_amount,
-            amount_paid=amount_paid,
-            balance=balance,
-            status=sale.status,
-            served_at=sale.served_at,
-            created_at=sale.created_at,
-            items=items,
-        )
+        sale_display = {
+            "id": sale.id,
+            "order_id": sale.order_id,
+            "guest_name": guest_name,
+            "location_id": location_id,
+            "served_by": sale.served_by,
+            "total_amount": sale.total_amount,
+            "amount_paid": amount_paid,
+            "balance": balance,
+            "status": sale.status,
+            "served_at": sale.served_at,
+            "created_at": sale.created_at,
+            "items": items,
+            "payments": [  # ✅ NEW: Payment history
+                {
+                    "id": p.id,
+                    "amount_paid": p.amount_paid,
+                    "payment_mode": p.payment_mode,
+                    "paid_by": p.paid_by,
+                    "created_at": p.created_at,
+                }
+                for p in valid_payments
+            ]
+        }
         result.append(sale_display)
 
     summary = {
@@ -537,6 +547,7 @@ def list_outstanding(
     }
 
     return {"sales": result, "summary": summary}
+
 
 
 @router.get("/sales/{sale_id}", response_model=RestaurantSaleDisplay)
