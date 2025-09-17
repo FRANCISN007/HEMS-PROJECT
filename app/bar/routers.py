@@ -321,6 +321,8 @@ def update_selling_price(
 # BAR SALES
 # ----------------------------
 
+from app.store import models as store_models   # 👈 add this import
+
 @router.post("/sales", response_model=bar_schemas.BarSaleDisplay)
 def create_bar_sale(
     sale_data: bar_schemas.BarSaleCreate,
@@ -339,7 +341,6 @@ def create_bar_sale(
         db.flush()
 
         for item_data in sale_data.items:
-            # Step 1: Get BarInventory record (for stock validation only)
             inventory = db.query(bar_models.BarInventory).filter_by(
                 bar_id=sale_data.bar_id,
                 item_id=item_data.item_id
@@ -347,17 +348,19 @@ def create_bar_sale(
 
             if not inventory:
                 db.rollback()
+                item_obj = db.query(store_models.StoreItem).filter_by(id=item_data.item_id).first()
+                item_name = item_obj.name if item_obj else f"Item {item_data.item_id}"
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Bar {sale_data.bar_id} does not have item ID {item_data.item_id} in stock."
+                    detail=f"{sale.bar.name if sale.bar else f'Bar {sale_data.bar_id}'} does not have {item_name} in stock."
                 )
 
-            # Step 2: Check stock availability
             if inventory.quantity < item_data.quantity:
                 db.rollback()
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Not enough stock for item '{inventory.item.name}' "
+                    detail=f"Not enough {inventory.item.name} in stock at "
+                           f"{sale.bar.name if sale.bar else f'Bar {sale_data.bar_id}'} "
                            f"(requested: {item_data.quantity}, available: {inventory.quantity})."
                 )
 

@@ -1,33 +1,62 @@
 .list-bar-payment-container {
-  padding: 10px;
+  padding: 15px;
   background: #f5f2f2;
   border-radius: 8px;
-  box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
 }
 
+/* Header */
 .list-bar-payment-container h2 {
   margin-bottom: 16px;
   font-size: 1.5rem;
+  font-weight: 600;
   color: #333;
 }
 
+/* Filter section */
+.filter-section {
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.filter-section label {
+  font-size: 14px;
+  font-weight: 500;
+  margin-right: 4px;
+}
+
+.filter-section select,
+.filter-section input[type="date"] {
+  padding: 6px 8px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+/* Table styles */
 .bar-payment-table {
   width: 100%;
   border-collapse: collapse;
+  margin-bottom: 20px;
 }
 
 .bar-payment-table th,
 .bar-payment-table td {
   border: 1px solid #ddd;
-  padding: 2px 3px;
+  padding: 6px 8px;
   text-align: center;
+  font-size: 13px;
 }
 
 .bar-payment-table th {
   background-color: #f4f4f4;
-  font-weight: bold;
+  font-weight: 600;
 }
 
+/* Status colors */
 .status.unpaid {
   color: red;
   font-weight: bold;
@@ -48,25 +77,22 @@
   font-style: italic;
 }
 
-.status.voided {
-  color: gray;
-  font-style: italic;
-}
-
+/* Action buttons */
 .btn-edit,
-.btn-delete {
-  padding: 2px 4px;
+.btn-delete,
+.btn-void {
+  padding: 3px 6px;
   border: none;
   border-radius: 6px;
   cursor: pointer;
   margin: 2px;
+  font-size: 12px;
 }
 
 .btn-edit {
   background: #4caf50;
   color: white;
 }
-
 .btn-edit:hover {
   background: #45a049;
 }
@@ -75,65 +101,112 @@
   background: #f44336;
   color: white;
 }
-
 .btn-delete:hover {
   background: #da190b;
 }
 
+.btn-void {
+  background: #ff9800;
+  color: white;
+}
+.btn-void:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* Error message */
 .error {
   color: red;
   margin: 10px 0;
+  font-weight: 500;
 }
 
+/* Summary Box (only bottom) */
+.summary-box {
+  margin-top: 15px;
+  padding: 14px 16px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+  width: fit-content;
+  box-shadow: 0px 2px 6px rgba(0,0,0,0.08);
+}
 
-.modal {
+.summary-box h3 {
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Payment modes stacked */
+.payment-modes p {
+  margin: 2px 0;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  justify-content: space-between;
+  width: 200px;
+}
+
+/* Modal overlay */
+.modal-overlay3 {
   position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background: rgba(0,0,0,0.5);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.35);
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
+  z-index: 999; /* ensure it overlays */
 }
 
-.modal-content {
+/* Modal box */
+.modal3 {
   background: #fff;
-  padding: 20px;
-  border-radius: 12px;
+  padding: 18px;
+  border-radius: 6px;
   width: 400px;
-  box-shadow: 0px 4px 12px rgba(0,0,0,0.3);
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
-.modal-content h3 {
-  margin-bottom: 15px;
-}
-
-.modal-content label {
+.modal3 label {
   display: block;
-  margin: 8px 0 4px;
-  font-weight: bold;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 6px 0 2px;
 }
 
-.modal-content input {
+.modal3 input,
+.modal3 select {
   width: 100%;
-  padding: 8px;
+  padding: 6px;
+  font-size: 13px;
   margin-bottom: 10px;
   border: 1px solid #ccc;
-  border-radius: 6px;
+  border-radius: 5px;
 }
 
-.modal-actions {
+.modal-actions3 {
+  margin-top: 10px;
   display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  justify-content: space-between;
 }
 
+/* Summary Box Grid Layout */
+.summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* left & right */
+  gap: 10px 50px; /* space between rows & columns */
+}
 
-.modal-content select {
-  width: 100%;
-  padding: 8px;
-  margin-bottom: 10px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  background: #fff;
+.summary-left p,
+.summary-right p {
+  margin: 4px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
 }

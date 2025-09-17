@@ -143,121 +143,127 @@ const ListBarPayment = () => {
       {error && <p className="error">{error}</p>}
 
       
-
-      {!loading && payments.length === 0 ? (
-      <p>No payment records found.</p>
-    ) : (
-      <>
-        <table className="bar-payment-table">
-          <thead>
-            <tr>
-              <th>PayID</th>
-              <th>Sale ID</th>
-              <th>Sale Amount</th>
-              <th>Paid</th>
-              <th>Balance Due</th>
-              <th>Method</th>
-              <th>Note</th>
-              <th>Date Paid</th>
-              <th>Created By</th>
-              <th>Status</th>
-              <th>Actions</th>
+      {!loading && payments.length > 0 && (
+      <table className="bar-payment-table">
+        <thead>
+          <tr>
+            <th>PayID</th>
+            <th>Sale ID</th>
+            <th>Sale Amount</th>
+            <th>Paid</th>
+            <th>Balance Due</th>
+            <th>Method</th>
+            <th>Note</th>
+            <th>Date Paid</th>
+            <th>Created By</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {payments.map((p) => (
+            <tr key={p.id}>
+              <td>{p.id}</td>
+              <td>{p.bar_sale_id}</td>
+              <td>{formatAmount(p.sale_amount)}</td>
+              <td>{formatAmount(p.amount_paid)}</td>
+              <td style={{ color: p.balance_due > 0 ? "red" : "green" }}>
+                {formatAmount(p.balance_due)}
+              </td>
+              <td>{p.payment_method || "-"}</td>
+              <td>{p.note || "-"}</td>
+              <td>{p.date_paid ? new Date(p.date_paid).toLocaleDateString() : "-"}</td>
+              <td>{p.created_by || "-"}</td>
+              <td className={`status ${p.status?.toLowerCase().replace(/\s+/g, "-")}`}>
+                {p.status}
+              </td>
+              <td>
+                <button className="btn-edit" onClick={() => handleEdit(p)}>✏️ Edit</button>
+                <button className="btn-delete" onClick={() => handleDelete(p.id)}>🗑️ Delete</button>
+                <button
+                  className="btn-void"
+                  onClick={() => handleVoid(p.id)}
+                  disabled={p.status === "voided"}
+                >
+                  🚫 Void
+                </button>
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {payments.map((p) => (
-              <tr key={p.id}>
-                <td>{p.id}</td>
-                <td>{p.bar_sale_id}</td>
-                <td>{formatAmount(p.sale_amount)}</td>
-                <td>{formatAmount(p.amount_paid)}</td>
-                <td style={{ color: p.balance_due > 0 ? "red" : "green" }}>
-                  {formatAmount(p.balance_due)}
-                </td>
-                <td>{p.payment_method || "-"}</td>
-                <td>{p.note || "-"}</td>
-                <td>{p.date_paid ? new Date(p.date_paid).toLocaleDateString() : "-"}</td>
-                <td>{p.created_by || "-"}</td>
-                <td className={`status ${p.status?.toLowerCase().replace(/\s+/g, "-")}`}>
-                  {p.status}
-                </td>
-                <td>
-                  <button className="btn-edit" onClick={() => handleEdit(p)}>✏️ Edit</button>
-                  <button className="btn-delete" onClick={() => handleDelete(p.id)}>🗑️ Delete</button>
-                  <button
-                    className="btn-void"
-                    onClick={() => handleVoid(p.id)}
-                    disabled={p.status === "voided"}
-                  >
-                    🚫 Void
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* ✅ Payment Summary (below table) */}
-        {summary && (
-          <div className="summary-box">
-            <h3>📊 Payment Summary</h3>
-            <div className="summary-grid">
-              <div className="summary-left">
-                <p><strong>Total Sales:</strong> {formatAmount(summary.total_sales)}</p>
-                <p><strong>Total Paid:</strong> {formatAmount(summary.total_paid)}</p>
-                <p><strong>Total Due:</strong> {formatAmount(summary.total_due)}</p>
-              </div>
-              <div className="summary-right">
-                <p><strong>Cash:</strong> {formatAmount(summary.total_cash)}</p>
-                <p><strong>POS:</strong> {formatAmount(summary.total_pos)}</p>
-                <p><strong>Transfer:</strong> {formatAmount(summary.total_transfer)}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-      </>
+          ))}
+        </tbody>
+      </table>
     )}
 
-      {/* ✅ Edit Modal with Overlay like Sales */}
-      {editingPayment && (
-        <div className="modal-overlay3">
-          <div className="modal3">
-            <h3>Edit Payment #{editingPayment.id}</h3>
-            <form onSubmit={handleSave}>
-              <label>Amount Paid</label>
-              <input
-                type="number"
-                value={formData.amount_paid}
-                onChange={(e) => setFormData({ ...formData, amount_paid: e.target.value })}
-              />
+{/* ✅ Move Summary BELOW the table */}
+{summary && (
+  <div className="summary-box">
+    <h3>📊 Payment Summary</h3>
+    <p><strong>Total Sales:</strong> {formatAmount(summary.total_sales)}</p>
+    <p><strong>Total Paid:</strong> {formatAmount(summary.total_paid)}</p>
+    <p><strong>Total Due:</strong> {formatAmount(summary.total_due)}</p>
 
-              <label>Payment Method</label>
-              <select
-                value={formData.payment_method || ""}
-                onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
+    {/* ✅ Stacked payment modes */}
+    <div className="payment-modes">
+      <p><strong>Cash:</strong> {formatAmount(summary.total_cash)}</p>
+      <p><strong>POS:</strong> {formatAmount(summary.total_pos)}</p>
+      <p><strong>Transfer:</strong> {formatAmount(summary.total_transfer)}</p>
+    </div>
+  </div>
+)}
+
+    {editingPayment && (
+      <div className="modal">
+        <div className="modal-content">
+          <h3>Edit Payment #{editingPayment.id}</h3>
+
+          <form onSubmit={handleSave}>
+            <label>Amount Paid</label>
+            <input
+              type="number"
+              value={formData.amount_paid}
+              onChange={(e) =>
+                setFormData({ ...formData, amount_paid: e.target.value })
+              }
+            />
+
+            <label>Payment Method</label>
+            <select
+              value={formData.payment_method || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, payment_method: e.target.value })
+              }
+            >
+              <option value="">-- Select Method --</option>
+              <option value="cash">Cash</option>
+              <option value="pos">POS</option>
+              <option value="transfer">Transfer</option>
+            </select>
+
+            <label>Note</label>
+            <input
+              type="text"
+              value={formData.note}
+              onChange={(e) =>
+                setFormData({ ...formData, note: e.target.value })
+              }
+            />
+
+            <div className="modal-actions">
+              <button type="submit" className="btn-edit">💾 Save</button>
+              <button
+                type="button"
+                onClick={() => setEditingPayment(null)}
+                className="btn-delete"
               >
-                <option value="">-- Select Method --</option>
-                <option value="cash">Cash</option>
-                <option value="pos">POS</option>
-                <option value="transfer">Transfer</option>
-              </select>
-
-              <label>Note</label>
-              <input
-                type="text"
-                value={formData.note}
-                onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-              />
-
-              <div className="modal-actions3">
-                <button type="submit" className="btn-edit">💾 Save</button>
-                <button type="button" onClick={() => setEditingPayment(null)} className="btn-delete">❌ Cancel</button>
-              </div>
-            </form>
-          </div>
+                ❌ Cancel
+              </button>
+            </div>
+          </form>
         </div>
-      )}
+      </div>
+    )}
+
+
     </div>
   );
 };
