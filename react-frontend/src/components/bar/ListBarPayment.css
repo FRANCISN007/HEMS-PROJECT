@@ -210,3 +210,16 @@
   font-weight: 500;
   color: #333;
 }
+
+.btn-print {
+  background: #2196f3;
+  color: white;
+  padding: 3px 6px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.btn-print:hover {
+  background: #1976d2;
+}

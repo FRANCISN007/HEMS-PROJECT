@@ -108,6 +108,69 @@ const ListBarPayment = () => {
     }
   };
 
+  // ✅ Add inside your component
+const handlePrint = (payment) => {
+  const receiptWindow = window.open("", "_blank");
+  receiptWindow.document.write(`
+    <html>
+      <head>
+        <title>Bar Payment Receipt</title>
+        <style>
+          body { 
+            font-family: monospace, Arial, sans-serif; 
+            padding: 5px; 
+            margin: 0;
+            width: 80mm; /* ✅ thermal printer size */
+          }
+          h2 { 
+            text-align: center; 
+            font-size: 14px; 
+            margin: 5px 0; 
+          }
+          p { 
+            margin: 2px 0; 
+            font-size: 12px; 
+          }
+          hr { 
+            border: 1px dashed #000; 
+            margin: 6px 0; 
+          }
+          .void { 
+            color: red; 
+            font-weight: bold; 
+          }
+        </style>
+      </head>
+      <body>
+        <h2>BAR PAYMENT RECEIPT</h2>
+        <hr/>
+        <p><strong>Pay ID:</strong> ${payment.id}</p>
+        <p><strong>Sale ID:</strong> ${payment.bar_sale_id}</p>
+        <p><strong>Sale Amount:</strong> ₦${Number(payment.sale_amount).toLocaleString()}</p>
+        <p><strong>Paid:</strong> ₦${Number(payment.amount_paid).toLocaleString()}</p>
+        <p><strong>Balance:</strong> ₦${Number(payment.balance_due).toLocaleString()}</p>
+        <p><strong>Method:</strong> ${payment.payment_method}</p>
+        <p><strong>Note:</strong> ${payment.note || "-"}</p>
+        <p><strong>Status:</strong> ${
+          payment.status?.toLowerCase() === "voided"
+            ? '<span class="void">VOIDED</span>'
+            : payment.status
+        }</p>
+        <p><strong>Date:</strong> ${
+          payment.date_paid
+            ? new Date(payment.date_paid).toLocaleString()
+            : "-"
+        }</p>
+        <hr/>
+        <p style="text-align:center;">Thank you!</p>
+      </body>
+    </html>
+  `);
+  receiptWindow.document.close();
+  receiptWindow.print();
+};
+
+
   return (
     <div className="list-bar-payment-container">
       <h2>📃 Bar Payment Records</h2>
@@ -182,16 +245,18 @@ const ListBarPayment = () => {
                   {p.status}
                 </td>
                 <td>
-                  <button className="btn-edit" onClick={() => handleEdit(p)}>✏️ Edit</button>
-                  <button className="btn-delete" onClick={() => handleDelete(p.id)}>🗑️ Delete</button>
-                  <button
-                    className="btn-void"
-                    onClick={() => handleVoid(p.id)}
-                    disabled={p.status === "voided"}
-                  >
-                    🚫 Void
-                  </button>
-                </td>
+                <button className="btn-edit" onClick={() => handleEdit(p)}>✏️ Edit</button>
+                <button className="btn-delete" onClick={() => handleDelete(p.id)}>🗑️ Delete</button>
+                <button 
+                  className="btn-void" 
+                  onClick={() => handleVoid(p.id)} 
+                  disabled={p.status === "voided"}
+                >
+                  🚫 Void
+                </button>
+                <button className="btn-print" onClick={() => handlePrint(p)}>🖨 Print</button>
+              </td>
+
               </tr>
             ))}
           </tbody>

@@ -118,24 +118,86 @@ const fetchSalesWithDates = async (from, to) => {
     setSelectedSale(null);
   };
 
-  // ✅ Print receipt-style content
+  // ✅ Print receipt-style content optimized for 80mm
   const printModalContent = () => {
-    if (!printRef.current) return;
+    if (!printRef.current || !selectedSale) return;
 
     const printWindow = window.open("", "_blank", "width=400,height=600");
     printWindow.document.write(`
       <html>
         <head>
-          <title>Receipt #${selectedSale.id}</title>
+          <title>Sale Receipt #${selectedSale.id}</title>
           <style>
-            ${document.querySelector("style")?.innerHTML || ""}
+            body {
+              font-family: monospace, Arial, sans-serif;
+              margin: 0;
+              padding: 5px;
+              width: 80mm;   /* ✅ thermal printer width */
+            }
+            h2 {
+              text-align: center;
+              font-size: 14px;
+              margin: 2px 0;
+            }
+            p {
+              margin: 2px 0;
+              font-size: 12px;
+            }
+            hr {
+              border: 1px dashed #000;
+              margin: 6px 0;
+            }
+            .receipt-item {
+              display: flex;
+              justify-content: space-between;
+              font-size: 12px;
+            }
+            .grand-total {
+              font-weight: bold;
+            }
+            .footer {
+              text-align: center;
+              margin-top: 6px;
+              font-size: 11px;
+            }
           </style>
         </head>
         <body>
-          ${printRef.current.innerHTML}
+          <h2>Destone Hotel & Suite</h2>
+          <p style="text-align:center;">Bar / Restaurant</p>
+          <p style="text-align:center;">${new Date(selectedSale.created_at).toLocaleString()}</p>
+          <hr />
+
+          <p><strong>Sale No:</strong> ${selectedSale.id}</p>
+          <p><strong>Guest:</strong> ${selectedSale.guest_name || "N/A"}</p>
+          <p><strong>Served by:</strong> ${selectedSale.served_by}</p>
+          <hr />
+
+          ${selectedSale.items && selectedSale.items.length > 0
+            ? selectedSale.items.map(
+                (item) => `
+                  <div class="receipt-item">
+                    <span>${item.quantity} × ${item.meal_name}</span>
+                    <span>₦${Number(item.total_price).toLocaleString()}</span>
+                  </div>`
+              ).join("")
+            : "<p>No items</p>"
+          }
+
+          <hr />
+          <p class="receipt-item"><span>Subtotal</span> <span>₦${Number(selectedSale.total_amount).toLocaleString()}</span></p>
+          <p class="receipt-item"><span>Paid</span> <span>₦${Number(selectedSale.amount_paid).toLocaleString()}</span></p>
+          <p class="receipt-item grand-total"><span>Balance</span> <span>₦${Number(selectedSale.balance).toLocaleString()}</span></p>
+          <hr />
+
+          <div class="footer">
+            <p>Thank you for your patronage!</p>
+            <p>Powered by HEMS</p>
+          </div>
         </body>
       </html>
     `);
+
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();

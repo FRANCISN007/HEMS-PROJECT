@@ -444,11 +444,11 @@ def get_bar_payment_status(
 def delete_bar_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
-    # ✅ Allow only admins
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can delete payments")
+    ## ✅ Allow only admins
+    #if current_user.role != "admin":
+        #raise HTTPException(status_code=403, detail="Only admins can delete payments")
 
     payment = db.query(models.BarPayment).filter(models.BarPayment.id == payment_id).first()
     

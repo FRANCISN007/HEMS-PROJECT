@@ -115,39 +115,57 @@ const ListRestaurantPayment = () => {
   };
 
   const handlePrint = (payment) => {
-    const receiptWindow = window.open("", "_blank");
-    receiptWindow.document.write(`
-      <html>
-        <head>
-          <title>Payment Receipt</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            h2 { margin-bottom: 10px; }
-            p { margin: 5px 0; }
-            .void { color: red; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <h2>Payment Receipt</h2>
-          <p><strong>Sale ID:</strong> ${payment.sale_id}</p>
-          <p><strong>Payment ID:</strong> ${payment.id}</p>
-          <p><strong>Amount Paid:</strong> ₦${Number(payment.amount_paid).toLocaleString()}</p>
-          <p><strong>Payment Mode:</strong> ${payment.payment_mode}</p>
-          <p><strong>Paid By:</strong> ${payment.paid_by}</p>
-          <p><strong>Status:</strong> ${
-            payment.is_void ? '<span class="void">VOIDED</span>' : "VALID"
-          }</p>
-          <p><strong>Date:</strong> ${new Date(
-            payment.created_at
-          ).toLocaleString()}</p>
-          <hr/>
-          <p>Thank you for your payment.</p>
-        </body>
-      </html>
-    `);
-    receiptWindow.document.close();
-    receiptWindow.print();
-  };
+  const receiptWindow = window.open("", "_blank");
+  receiptWindow.document.write(`
+    <html>
+      <head>
+        <title>Restaurant Payment Receipt</title>
+        <style>
+          body { 
+            font-family: monospace, Arial, sans-serif; 
+            padding: 5px; 
+            margin: 0;
+            width: 80mm; /* ✅ thermal printer size */
+          }
+          h2 { 
+            text-align: center; 
+            font-size: 14px; 
+            margin: 5px 0; 
+          }
+          p { 
+            margin: 2px 0; 
+            font-size: 12px; 
+          }
+          hr { 
+            border: 1px dashed #000; 
+            margin: 6px 0; 
+          }
+          .void { 
+            color: red; 
+            font-weight: bold; 
+          }
+        </style>
+      </head>
+      <body>
+        <h2>RESTAURANT PAYMENT RECEIPT</h2>
+        <hr/>
+        <p><strong>Sale ID:</strong> ${payment.sale_id}</p>
+        <p><strong>Payment ID:</strong> ${payment.id}</p>
+        <p><strong>Amount Paid:</strong> ₦${Number(payment.amount_paid).toLocaleString()}</p>
+        <p><strong>Mode:</strong> ${payment.payment_mode}</p>
+        <p><strong>Paid By:</strong> ${payment.paid_by || "N/A"}</p>
+        <p><strong>Status:</strong> ${
+          payment.is_void ? '<span class="void">VOIDED</span>' : "VALID"
+        }</p>
+        <p><strong>Date:</strong> ${new Date(payment.created_at).toLocaleString()}</p>
+        <hr/>
+        <p style="text-align:center;">Thank you!</p>
+      </body>
+    </html>
+  `);
+  receiptWindow.document.close();
+  receiptWindow.print();
+};
 
   if (loading) return <p>Loading payments...</p>;
   if (error) return <p>{error}</p>;
