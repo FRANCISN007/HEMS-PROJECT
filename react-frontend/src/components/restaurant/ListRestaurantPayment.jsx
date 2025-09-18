@@ -114,58 +114,62 @@ const ListRestaurantPayment = () => {
     }
   };
 
-  const handlePrint = (payment) => {
-  const receiptWindow = window.open("", "_blank");
-  receiptWindow.document.write(`
-    <html>
-      <head>
-        <title>Restaurant Payment Receipt</title>
-        <style>
-          body { 
-            font-family: monospace, Arial, sans-serif; 
-            padding: 5px; 
-            margin: 0;
-            width: 80mm; /* ✅ thermal printer size */
-          }
-          h2 { 
-            text-align: center; 
-            font-size: 14px; 
-            margin: 5px 0; 
-          }
-          p { 
-            margin: 2px 0; 
-            font-size: 12px; 
-          }
-          hr { 
-            border: 1px dashed #000; 
-            margin: 6px 0; 
-          }
-          .void { 
-            color: red; 
-            font-weight: bold; 
-          }
-        </style>
-      </head>
-      <body>
-        <h2>RESTAURANT PAYMENT RECEIPT</h2>
-        <hr/>
-        <p><strong>Sale ID:</strong> ${payment.sale_id}</p>
-        <p><strong>Payment ID:</strong> ${payment.id}</p>
-        <p><strong>Amount Paid:</strong> ₦${Number(payment.amount_paid).toLocaleString()}</p>
-        <p><strong>Mode:</strong> ${payment.payment_mode}</p>
-        <p><strong>Paid By:</strong> ${payment.paid_by || "N/A"}</p>
-        <p><strong>Status:</strong> ${
-          payment.is_void ? '<span class="void">VOIDED</span>' : "VALID"
-        }</p>
-        <p><strong>Date:</strong> ${new Date(payment.created_at).toLocaleString()}</p>
-        <hr/>
-        <p style="text-align:center;">Thank you!</p>
-      </body>
-    </html>
-  `);
-  receiptWindow.document.close();
-  receiptWindow.print();
-};
+  // ✅ Updated handlePrint
+  const handlePrint = (sale, payment) => {
+    const receiptWindow = window.open("", "_blank");
+    receiptWindow.document.write(`
+      <html>
+        <head>
+          <title>Restaurant Payment Receipt</title>
+          <style>
+            body { 
+              font-family: monospace, Arial, sans-serif; 
+              padding: 5px; 
+              margin: 0;
+              width: 80mm; /* ✅ thermal printer size */
+            }
+            h2 { 
+              text-align: center; 
+              font-size: 14px; 
+              margin: 5px 0; 
+            }
+            p { 
+              margin: 2px 0; 
+              font-size: 12px; 
+            }
+            hr { 
+              border: 1px dashed #000; 
+              margin: 6px 0; 
+            }
+            .void { 
+              color: red; 
+              font-weight: bold; 
+            }
+          </style>
+        </head>
+        <body>
+          <h2>RESTAURANT PAYMENT RECEIPT</h2>
+          <hr/>
+          <p><strong>Sale ID:</strong> ${sale.id}</p>
+          <p><strong>Payment ID:</strong> ${payment.id}</p>
+          <p><strong>Sales Amount:</strong> ₦${Number(sale.total_amount).toLocaleString()}</p>
+          <p><strong>Amount Paid:</strong> ₦${Number(payment.amount_paid).toLocaleString()}</p>
+          <p><strong>Total Paid:</strong> ₦${Number(sale.amount_paid).toLocaleString()}</p>
+          <p><strong>Balance:</strong> ₦${Number(sale.balance).toLocaleString()}</p>
+          <p><strong>Mode:</strong> ${payment.payment_mode}</p>
+          <p><strong>Paid By:</strong> ${payment.paid_by || "N/A"}</p>
+          <p><strong>Status:</strong> ${
+            payment.is_void ? '<span class="void">VOIDED</span>' : "VALID"
+          }</p>
+          <p><strong>Date:</strong> ${new Date(payment.created_at).toLocaleString()}</p>
+          <hr/>
+          <p style="text-align:center;">Thank you!</p>
+        </body>
+      </html>
+    `);
+    receiptWindow.document.close();
+    receiptWindow.print();
+  };
 
   if (loading) return <p>Loading payments...</p>;
   if (error) return <p>{error}</p>;
@@ -264,7 +268,7 @@ const ListRestaurantPayment = () => {
                 </button>
                 <button
                   className="btn print"
-                  onClick={() => handlePrint(payment)}
+                  onClick={() => handlePrint(sale, payment)}
                 >
                   Print
                 </button>
