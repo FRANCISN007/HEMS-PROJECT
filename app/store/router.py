@@ -1142,12 +1142,13 @@ def delete_adjustment(
 @router.get("/bar-balance-stock", response_model=List[bar_schemas.BarStockBalance])
 def get_bar_stock_balance(
     category_id: Optional[int] = Query(None),
+    bar_id: Optional[int] = Query(None),   # ✅ New filter
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     try:
         # -----------------------------
-        # 1) Fetch issued items (what bars received from store)
+        # 1) Fetch issued items
         # -----------------------------
         issued_query = (
             db.query(
@@ -1156,11 +1157,13 @@ def get_bar_stock_balance(
                 func.sum(store_models.StoreIssueItem.quantity).label("total_received"),
             )
             .join(store_models.StoreIssue)
-            .join(store_models.StoreItem)   # ✅ ensure StoreItem is available for category filter
+            .join(store_models.StoreItem)
         )
 
         if category_id:
             issued_query = issued_query.filter(store_models.StoreItem.category_id == category_id)
+        if bar_id:  # ✅ filter by bar
+            issued_query = issued_query.filter(store_models.StoreIssue.issued_to_id == bar_id)
 
         issued_query = issued_query.group_by(
             store_models.StoreIssueItem.item_id,
@@ -1182,11 +1185,13 @@ def get_bar_stock_balance(
             )
             .join(bar_models.BarSaleItem.bar_inventory)
             .join(bar_models.BarSaleItem.sale)
-            .join(store_models.StoreItem, bar_models.BarInventory.item_id == store_models.StoreItem.id)  # ✅ join to filter by category
+            .join(store_models.StoreItem, bar_models.BarInventory.item_id == store_models.StoreItem.id)
         )
 
         if category_id:
             sold_query = sold_query.filter(store_models.StoreItem.category_id == category_id)
+        if bar_id:  # ✅ filter by bar
+            sold_query = sold_query.filter(bar_models.BarSale.bar_id == bar_id)
 
         sold_query = sold_query.group_by(
             bar_models.BarInventory.item_id,
@@ -1203,11 +1208,13 @@ def get_bar_stock_balance(
                 bar_models.BarInventoryAdjustment.bar_id,
                 func.sum(bar_models.BarInventoryAdjustment.quantity_adjusted).label("total_adjusted"),
             )
-            .join(store_models.StoreItem, bar_models.BarInventoryAdjustment.item_id == store_models.StoreItem.id)  # ✅ join for filter
+            .join(store_models.StoreItem, bar_models.BarInventoryAdjustment.item_id == store_models.StoreItem.id)
         )
 
         if category_id:
             adjusted_query = adjusted_query.filter(store_models.StoreItem.category_id == category_id)
+        if bar_id:  # ✅ filter by bar
+            adjusted_query = adjusted_query.filter(bar_models.BarInventoryAdjustment.bar_id == bar_id)
 
         adjusted_query = adjusted_query.group_by(
             bar_models.BarInventoryAdjustment.item_id,
@@ -1230,18 +1237,16 @@ def get_bar_stock_balance(
             adjusted = adjusted_data.get((item_id, b_id), 0)
             balance = issued - sold - adjusted
 
-            # ✅ fetch item with category filter applied
             item_q = db.query(store_models.StoreItem).filter(store_models.StoreItem.id == item_id)
             if category_id:
                 item_q = item_q.filter(store_models.StoreItem.category_id == category_id)
             item = item_q.first()
 
-            if not item:  # if category filter excludes item
+            if not item:
                 continue
 
             bar = db.query(bar_models.Bar).get(b_id)
 
-            # ✅ Get last unit price
             latest_entry = (
                 db.query(store_models.StoreStockEntry)
                 .filter(store_models.StoreStockEntry.item_id == item_id)
@@ -1270,3 +1275,4 @@ def get_bar_stock_balance(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve stock balance: {str(e)}")
+
