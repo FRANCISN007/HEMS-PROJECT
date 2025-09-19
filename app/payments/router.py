@@ -47,6 +47,9 @@ def create_payment(
     lagos_tz = pytz.timezone("Africa/Lagos")
     transaction_time = datetime.now(lagos_tz)
 
+    # Force payment_date to be actual current Lagos time
+    payment_date = transaction_time
+
     # Validate that payment_date is timezone-aware
     if payment_request.payment_date.tzinfo is None:
         raise HTTPException(
@@ -63,12 +66,13 @@ def create_payment(
      # Convert payment date to Lagos time zone for proper comparison
     payment_date = payment_request.payment_date.astimezone(lagos_tz)
     
-     # Restrict non-admin users to posting only for the current full day
-    if payment_date.date() < transaction_time.date() and current_user.role != "admin":
+     # Only admin can backdate payments (past dates)
+    if payment_date.date() < transaction_time.date() and "admin" not in current_user.roles:
         raise HTTPException(
             status_code=400,
             detail="Only admin is allowed to enter a past date for payments."
         )
+
 
     # Fetch the booking record
     booking_record = db.query(booking_models.Booking).filter(
@@ -145,7 +149,7 @@ def create_payment(
                 amount_paid=payment_request.amount_paid,
                 discount_allowed=payment_request.discount_allowed,
                 payment_method=payment_request.payment_method,
-                payment_date=payment_request.payment_date,
+                payment_date=payment_date,  # ✅ always actual Lagos payment time
             
             ),
             booking_id=booking_id,
@@ -737,10 +741,10 @@ def get_payment_by_id(
 def void_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    #if current_user.role != "admin":
+        #raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     try:
         # Retrieve the payment record by ID

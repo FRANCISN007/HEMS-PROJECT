@@ -22,43 +22,45 @@ const LicensePage = () => {
   }, [location]);
 
   const handleVerify = async () => {
-    setMessage("");
-    setError("");
+  setMessage("");
+  setError("");
 
-    if (!licenseKey) {
-      setError("Please enter a license key.");
-      return;
-    }
+  if (!licenseKey) {
+    setError("Please enter a license key.");
+    return;
+  }
 
-    try {
-      const data = await verifyLicense(licenseKey); // Expects { valid: true, expires_on }
+  try {
+    const data = await verifyLicense(licenseKey); // { valid, expires_on }
 
-      if (data.valid) {
-        setMessage("License verified successfully.");
-        localStorage.setItem("license_verified", "true");
-
-        if (data.expires_on) {
-          localStorage.setItem("license_valid_until", data.expires_on);
-        }
-
-        setLicenseKey("");
-        setPassword("");
-
-        // ✅ Add this line:
-        if (typeof setIsLicenseVerified === "function") {
-          setIsLicenseVerified(true);
-        }
-
-        setTimeout(() => {
-          navigate("/login");
-        }, 2000);
-      } else {
-        setError(data.message || "Verification failed.");
+    if (data.valid) {
+      let expiryMsg = "";
+      if (data.expires_on) {
+        const expiryDate = new Date(data.expires_on);
+        expiryMsg = ` (valid until ${expiryDate.toLocaleDateString()})`;
+        localStorage.setItem("license_valid_until", data.expires_on);
       }
-    } catch (err) {
-      setError(err.message || "Verification failed.");
+
+      setMessage(`License verified successfully${expiryMsg}.`);
+      localStorage.setItem("license_verified", "true");
+
+      setLicenseKey("");
+      setPassword("");
+
+      if (typeof setIsLicenseVerified === "function") {
+        setIsLicenseVerified(true);
+      }
+
+      setTimeout(() => {
+        navigate("/login");
+      }, 2000);
+    } else {
+      setError(data.message || "Verification failed.");
     }
-  };
+  } catch (err) {
+    setError(err.message || "Verification failed.");
+  }
+};
 
     const handleGenerate = async () => {
     setMessage("");
