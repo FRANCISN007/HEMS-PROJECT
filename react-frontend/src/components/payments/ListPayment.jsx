@@ -21,6 +21,27 @@ const ListPayment = () => {
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [showPopup, setShowPopup] = useState(false);
 
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("dashboard"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to list booking payment.</p>
+    </div>
+  );
+}
+
 
 
 

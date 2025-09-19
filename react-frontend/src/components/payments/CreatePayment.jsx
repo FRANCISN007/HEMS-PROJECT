@@ -22,6 +22,27 @@ const CreatePayment = ({ booking: bookingProp, onClose, onSuccess }) => {
   const [message, setMessage] = useState("");
   const [disableForm, setDisableForm] = useState(false);
 
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("dashboard"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to create booking payment.</p>
+    </div>
+  );
+}
+
   if (!booking) {
     return (
       <div className="payment-form-overlay">

@@ -15,6 +15,27 @@ const VoidPayment = () => {
   const [showDialog, setShowDialog] = useState(false);
   const [voiding, setVoiding] = useState(false);
 
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("dashboard"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to void booking payment.</p>
+    </div>
+  );
+}
+
   const fetchVoidedEligiblePayments = async () => {
     if (!startDate || !endDate) {
       setError("Please select both start and end dates.");

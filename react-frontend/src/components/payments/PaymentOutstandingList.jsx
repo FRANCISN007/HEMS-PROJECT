@@ -13,6 +13,27 @@ const PaymentOutstandingList = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("dashboard"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to ctreate booking payment.</p>
+    </div>
+  );
+}
+
   useEffect(() => {
     const fetchOutstanding = async () => {
       try {
