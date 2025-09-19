@@ -1,3 +1,5 @@
+// src/components/bar/BarPaymentCreate.jsx
+
 import React, { useEffect, useState } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./BarPaymentCreate.css";
@@ -11,9 +13,23 @@ const BarPayment = () => {
   const [selectedSale, setSelectedSale] = useState(null);
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
-  const [note, setNote] = useState(""); // ✅ new state
+  const [note, setNote] = useState(""); 
   const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState(""); // success | error | warning
+  const [messageType, setMessageType] = useState(""); 
+
+  // ✅ Get user roles from localStorage
+  const user = JSON.parse(localStorage.getItem("user")) || {};
+  const roles = user.roles || [];
+
+  // ✅ Restrict access: only admin and bar can create payments
+  if (!(roles.includes("admin") || roles.includes("bar"))) {
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to create bar payments.</p>
+      </div>
+    );
+  }
 
   // Fetch bars
   useEffect(() => {
@@ -71,7 +87,7 @@ const BarPayment = () => {
         bar_sale_id: selectedSale.bar_sale_id,
         amount_paid: parseFloat(amountPaid),
         payment_method: paymentMethod,
-        note: note, // ✅ include note
+        note: note,
       };
 
       await axiosWithAuth().post("/barpayment/", payload);
@@ -83,7 +99,7 @@ const BarPayment = () => {
       setSelectedSale(null);
       setAmountPaid("");
       setPaymentMethod("");
-      setNote(""); // ✅ reset note
+      setNote("");
 
       // Refresh sales
       const res = await axiosWithAuth().get(
@@ -227,7 +243,7 @@ const BarPayment = () => {
                 <option value="transfer">Transfer</option>
               </select>
 
-              {/* ✅ New Note field */}
+              {/* ✅ Note field */}
               <label>Note:</label>
               <textarea
                 value={note}

@@ -15,6 +15,28 @@ const EventUpdate = () => {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("event"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to update event.</p>
+    </div>
+  );
+}
+
+
   useEffect(() => {
     if (!event) {
       alert("No event selected.");

@@ -9,6 +9,27 @@ const RestaurantPayment = () => {
   const [summary, setSummary] = useState(null); // ✅ summary totals from backend
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [currentSale, setCurrentSale] = useState(null);
+
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("restaurant"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to create restaurant payment.</p>
+    </div>
+  );
+}
   const [paymentData, setPaymentData] = useState({
     amount: "",
     payment_mode: "cash",

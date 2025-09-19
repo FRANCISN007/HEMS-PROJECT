@@ -11,6 +11,27 @@ const ListRestaurantPayment = () => {
   const [editPayment, setEditPayment] = useState(null);
   const [newAmount, setNewAmount] = useState("");
 
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("restaurant"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to list restaurant payment.</p>
+    </div>
+  );
+}
+
   // ✅ get today date helper
   const getToday = () => {
     const today = new Date();

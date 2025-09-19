@@ -21,6 +21,27 @@ const ListItem = () => {
 
   const [selectedSimpleItemId, setSelectedSimpleItemId] = useState(""); // <-- new
 
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("store"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to manage items.</p>
+    </div>
+  );
+}
+
   useEffect(() => {
     fetchItems();
     fetchCategories();

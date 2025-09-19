@@ -22,7 +22,7 @@ const BarSalesCreate = () => {
     return (
       <div className="unauthorized">
         <h2>🚫 Access Denied</h2>
-        <p>You do not have permission to record bar sales.</p>
+        <p>You do not have permission to create bar sales.</p>
       </div>
     );
   }

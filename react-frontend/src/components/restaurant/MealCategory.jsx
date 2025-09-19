@@ -9,6 +9,27 @@ const MealCategory = ({ onClose }) => {
   const [editCategory, setEditCategory] = useState({ name: "" });
   const [message, setMessage] = useState("");
 
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("restaurant"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to create meal category.</p>
+    </div>
+  );
+}
+
   useEffect(() => {
     fetchCategories();
   }, []);

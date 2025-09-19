@@ -26,6 +26,28 @@ const CreateBooking = () => {
   const [guestResults, setGuestResults] = useState([]);
   const [guestIndex, setGuestIndex] = useState(0);
 
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("dashboard"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to create bookings.</p>
+    </div>
+  );
+}
+
+
   // ✅ Handle input changes
   const handleChange = (e) => {
     const { name, value, files } = e.target;

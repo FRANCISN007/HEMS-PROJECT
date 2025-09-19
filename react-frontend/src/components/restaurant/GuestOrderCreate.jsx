@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./GuestOrderCreate.css";
 
+
+
 const currencyNGN = (value) =>
   new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" })
     .format(Number(value || 0));
@@ -13,6 +15,27 @@ const GuestOrderCreate = () => {
 
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [message, setMessage] = useState("");
+
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("restaurant"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to create guest order.</p>
+    </div>
+  );
+}
 
   const [order, setOrder] = useState({
     location_id: "",

@@ -10,6 +10,28 @@ const ViewEventForm = () => {
   const navigate = useNavigate();
   const event = location.state?.event;
 
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("event"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to view event form.</p>
+    </div>
+  );
+}
+
+
   const handlePrint = () => {
     if (!event) {
       alert("No event data provided.");

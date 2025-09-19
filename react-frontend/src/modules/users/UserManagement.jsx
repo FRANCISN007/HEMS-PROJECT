@@ -26,6 +26,27 @@ const [resetUser, setResetUser] = useState(null);
 const [resetPassword, setResetPassword] = useState("");
 const [confirmPassword, setConfirmPassword] = useState("");
 
+const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("admin"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to manage users.</p>
+    </div>
+  );
+}
+
 
 
   const navigate = useNavigate();

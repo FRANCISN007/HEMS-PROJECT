@@ -9,6 +9,28 @@ const CheckoutGuest = () => {
   const [totalEntries, setTotalEntries] = useState(0);
   const [totalBookingCost, setTotalBookingCost] = useState(0);
 
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("dashboard"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to checkout guest.</p>
+    </div>
+  );
+}
+
+
   useEffect(() => {
     fetchUnavailableRooms();
   }, []);

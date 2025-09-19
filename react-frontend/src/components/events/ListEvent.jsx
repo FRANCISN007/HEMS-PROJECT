@@ -17,6 +17,28 @@ const ListEvent = () => {
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [summary, setSummary] = useState({ total_entries: 0, total_booking_amount: 0 });
 
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("event"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to list event.</p>
+    </div>
+  );
+}
+
+
   const fetchEvents = async () => {
     setLoading(true);
     setError(null);

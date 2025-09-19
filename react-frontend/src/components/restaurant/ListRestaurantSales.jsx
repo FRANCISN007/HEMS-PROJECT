@@ -26,6 +26,27 @@ const ListRestaurantSales = () => {
   const [startDate, setStartDate] = useState(getToday());
   const [endDate, setEndDate] = useState(getToday());
 
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("restaurant"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to list restaurant sales.</p>
+    </div>
+  );
+}
+
   // ✅ Format numbers with commas (12,000 instead of 12000)
   const formatAmount = (value) => {
     if (value === null || value === undefined || value === "") return "0";

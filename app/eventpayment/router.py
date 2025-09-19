@@ -206,16 +206,21 @@ def list_event_payments(
             .scalar()
         ) or 0
 
-        event_amount = float(event.event_amount)
-        balance_due = event_amount - (float(total_paid) + float(total_discount))
+        event_amount = float(event.event_amount or 0)
+        caution_fee = float(event.caution_fee or 0)
+        total_due = event_amount + caution_fee
+
+        balance_due = total_due - (float(total_paid) + float(total_discount))
 
         formatted_payments.append({
             "id": payment.id,
             "event_id": payment.event_id,
             "organiser": payment.organiser,
-            "event_amount": event_amount,
-            "amount_paid": float(payment.amount_paid),
-            "discount_allowed": float(payment.discount_allowed),
+            "event_amount": event_amount,     # always number
+            "caution_fee": caution_fee,       # always number
+            "total_due": total_due,
+            "amount_paid": float(payment.amount_paid or 0),
+            "discount_allowed": float(payment.discount_allowed or 0),
             "balance_due": balance_due,
             "payment_method": payment.payment_method,
             "payment_status": payment.payment_status,
@@ -268,6 +273,69 @@ def list_event_payments(
 
 
 
+@router.get("/eventpayment/{payment_id}", response_model=dict)
+def get_event_payment(
+    payment_id: int,
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["event"]))
+):
+    # ✅ Fetch the payment
+    payment = db.query(eventpayment_models.EventPayment).filter(
+        eventpayment_models.EventPayment.id == payment_id
+    ).first()
+
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+
+    # ✅ Fetch the related event
+    event = db.query(event_models.Event).filter(
+        event_models.Event.id == payment.event_id
+    ).first()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # ✅ Compute totals just like list_event_payments
+    total_paid = (
+        db.query(func.sum(eventpayment_models.EventPayment.amount_paid))
+        .filter(
+            eventpayment_models.EventPayment.event_id == payment.event_id,
+            eventpayment_models.EventPayment.payment_status != "voided"
+        )
+        .scalar()
+    ) or 0
+
+    total_discount = (
+        db.query(func.sum(eventpayment_models.EventPayment.discount_allowed))
+        .filter(
+            eventpayment_models.EventPayment.event_id == payment.event_id,
+            eventpayment_models.EventPayment.payment_status != "voided"
+        )
+        .scalar()
+    ) or 0
+
+    event_amount = float(event.event_amount or 0)
+    caution_fee = float(event.caution_fee or 0)
+    total_due = event_amount + caution_fee
+
+    balance_due = total_due - (float(total_paid) + float(total_discount))
+
+    # ✅ Return consistent response
+    return {
+        "id": payment.id,
+        "event_id": payment.event_id,
+        "organiser": payment.organiser,
+        "event_amount": event_amount,
+        "caution_fee": caution_fee,
+        "total_due": total_due,
+        "amount_paid": float(payment.amount_paid or 0),
+        "discount_allowed": float(payment.discount_allowed or 0),
+        "balance_due": balance_due,
+        "payment_method": payment.payment_method,
+        "payment_status": payment.payment_status,
+        "payment_date": payment.payment_date.isoformat() if payment.payment_date else None,
+        "created_by": payment.created_by,
+    }
 
 
 

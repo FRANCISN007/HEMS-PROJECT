@@ -13,6 +13,21 @@ const StoreToBarControl = () => {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
+  // ✅ Get user roles from localStorage
+  const user = JSON.parse(localStorage.getItem("user")) || {};
+  const roles = user.roles || [];
+
+  // ✅ Restrict access: only admin and bar can create payments
+  if (!(roles.includes("admin") || roles.includes("bar"))) {
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to view store control</p>
+      </div>
+    );
+  }
+
+
   // ⏬ fetch list of bars for dropdown
   useEffect(() => {
     const fetchBars = async () => {

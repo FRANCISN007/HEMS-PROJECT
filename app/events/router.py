@@ -170,8 +170,8 @@ def cancel_event(
     db: Session = Depends(get_db), 
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["event"]))
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can cancel events")
+    #if current_user.role != "admin":
+        #raise HTTPException(status_code=403, detail="Only admins can cancel events")
 
     # Fetch the event by ID
     db_event = db.query(event_models.Event).filter(event_models.Event.id == event_id).first()

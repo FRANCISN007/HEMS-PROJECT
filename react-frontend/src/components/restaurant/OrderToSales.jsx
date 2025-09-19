@@ -10,6 +10,27 @@ const OrderToSales = () => {
   const [locations, setLocations] = useState([]);   // ✅ store available locations
   const [totals, setTotals] = useState({ total_entries: 0, total_amount: 0 });
 
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
+  roles = roles.map((r) => r.toLowerCase());
+
+
+  if (!(roles.includes("admin") || roles.includes("restaurant"))) {
+  return (
+    <div className="unauthorized">
+      <h2>🚫 Access Denied</h2>
+      <p>You do not have permission to create restaurant sales.</p>
+    </div>
+  );
+}
+
   // Fetch available locations
   const fetchLocations = async () => {
     try {
