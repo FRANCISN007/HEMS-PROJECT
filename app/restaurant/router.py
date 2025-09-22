@@ -465,7 +465,8 @@ def list_outstanding(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
-    query = db.query(RestaurantSale).filter(RestaurantSale.status.in_(["unpaid", "partial"]))
+    # ✅ Get all sales (not filtering by status, we’ll compute balance ourselves)
+    query = db.query(RestaurantSale)
 
     # ✅ Filter by location if provided
     if location_id:
@@ -504,15 +505,15 @@ def list_outstanding(
         # ✅ Compute payments excluding voided ones
         valid_payments = [p for p in sale.payments if not p.is_void]
         amount_paid = sum(p.amount_paid for p in valid_payments)
-        balance = sale.total_amount - amount_paid
+        balance = float(sale.total_amount or 0) - float(amount_paid or 0)
 
         if balance <= 0:
-            continue  # ✅ Skip fully paid sales
+            continue  # ✅ Only list sales with positive balance
 
         # Update totals
-        total_sales_amount += sale.total_amount
-        total_paid_amount += amount_paid
-        total_balance += balance
+        total_sales_amount += float(sale.total_amount or 0)
+        total_paid_amount += float(amount_paid or 0)
+        total_balance += float(balance or 0)
 
         sale_display = {
             "id": sale.id,
@@ -520,17 +521,17 @@ def list_outstanding(
             "guest_name": guest_name,
             "location_id": location_id,
             "served_by": sale.served_by,
-            "total_amount": sale.total_amount,
-            "amount_paid": amount_paid,
-            "balance": balance,
-            "status": sale.status,
+            "total_amount": float(sale.total_amount or 0),
+            "amount_paid": float(amount_paid or 0),
+            "balance": float(balance or 0),
+            "status": "partial" if amount_paid > 0 else "unpaid",  # ✅ Dynamic status
             "served_at": sale.served_at,
             "created_at": sale.created_at,
             "items": items,
-            "payments": [  # ✅ NEW: Payment history
+            "payments": [
                 {
                     "id": p.id,
-                    "amount_paid": p.amount_paid,
+                    "amount_paid": float(p.amount_paid or 0),
                     "payment_mode": p.payment_mode,
                     "paid_by": p.paid_by,
                     "created_at": p.created_at,
@@ -541,13 +542,12 @@ def list_outstanding(
         result.append(sale_display)
 
     summary = {
-        "total_sales_amount": total_sales_amount,
-        "total_paid_amount": total_paid_amount,
-        "total_balance": total_balance,
+        "total_sales_amount": float(total_sales_amount),
+        "total_paid_amount": float(total_paid_amount),
+        "total_balance": float(total_balance),
     }
 
     return {"sales": result, "summary": summary}
-
 
 
 @router.get("/sales/{sale_id}", response_model=RestaurantSaleDisplay)

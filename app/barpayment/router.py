@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
+from sqlalchemy.sql import func
+from datetime import date, timedelta
 from typing import Optional, List
 from sqlalchemy import func
 from app.database import get_db
@@ -40,7 +42,7 @@ def create_bar_payment(
     db.commit()
     db.refresh(db_payment)
 
-    # Total paid so far (only ACTIVE payments)
+    # ✅ Total paid so far (only ACTIVE payments)
     total_paid = (
         db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
         .filter(models.BarPayment.bar_sale_id == payment.bar_sale_id)
@@ -50,6 +52,7 @@ def create_bar_payment(
 
     balance_due = float(sale.total_amount) - float(total_paid)
 
+    # ✅ Recalculate sale-level status
     if total_paid == 0:
         status = "unpaid"
     elif total_paid < sale.total_amount:
@@ -61,7 +64,8 @@ def create_bar_payment(
         "id": db_payment.id,
         "bar_sale_id": db_payment.bar_sale_id,
         "sale_amount": float(sale.total_amount),
-        "amount_paid": float(total_paid),  # cumulative paid
+        "amount_paid": float(db_payment.amount_paid),   # this transaction
+        "cumulative_paid": float(total_paid),           # ✅ total active payments
         "balance_due": float(balance_due),
         "payment_method": db_payment.payment_method,
         "note": db_payment.note,
@@ -70,13 +74,6 @@ def create_bar_payment(
         "status": status,
     }
 
-
-
-from sqlalchemy.sql import func
-
-from datetime import date
-
-from datetime import date, timedelta
 
 @router.get("/")
 def list_bar_payments(
@@ -153,22 +150,26 @@ def list_bar_payments(
                 elif method == "transfer":
                     total_transfer += float(p.amount_paid)
 
-        # ✅ Decide sale-level payment status
+        # ✅ Decide sale-level payment status (recalculated)
         if total_paid_for_sale == 0:
-            payment_status = "unpaid"
+            sale_status = "unpaid"
         elif total_paid_for_sale < sale.total_amount:
-            payment_status = "part payment"
+            sale_status = "part payment"
         else:
-            payment_status = "fully paid"
+            sale_status = "fully paid"
 
-        # ✅ Row status (voided rows should appear as voided)
-        row_status = "voided" if p.status == "voided" else payment_status
+        # ✅ Row status
+        if p.status == "voided":
+            row_status = "voided"
+        else:
+            row_status = sale_status
 
         response.append({
             "id": p.id,
             "bar_sale_id": p.bar_sale_id,
             "sale_amount": float(sale.total_amount),
-            "amount_paid": float(p.amount_paid),
+            "amount_paid": float(p.amount_paid),           # this transaction
+            "cumulative_paid": float(total_paid_for_sale), # ✅ total active payments
             "balance_due": float(balance_due),
             "payment_method": p.payment_method,
             "note": p.note,
@@ -179,7 +180,7 @@ def list_bar_payments(
 
     return {
         "payments": response,
-        "summary": {   # ✅ now excludes voided payments
+        "summary": {   # ✅ excludes voided payments
             "total_sales": total_sales,
             "total_paid": total_paid_all,
             "total_due": total_due_all,
@@ -193,6 +194,7 @@ def list_bar_payments(
             "end_date": end_date,
         }
     }
+
 
 from fastapi import Query
 

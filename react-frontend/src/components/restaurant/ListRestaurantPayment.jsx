@@ -22,15 +22,14 @@ const ListRestaurantPayment = () => {
 
   roles = roles.map((r) => r.toLowerCase());
 
-
   if (!(roles.includes("admin") || roles.includes("restaurant"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to list restaurant payment.</p>
-    </div>
-  );
-}
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to list restaurant payment.</p>
+      </div>
+    );
+  }
 
   // ✅ get today date helper
   const getToday = () => {
@@ -53,7 +52,10 @@ const ListRestaurantPayment = () => {
       if (startDate) params.start_date = startDate;
       if (endDate) params.end_date = endDate;
 
-      const response = await axiosWithAuth().get("/restpayment/sales/payments", { params });
+      const response = await axiosWithAuth().get(
+        "/restpayment/sales/payments",
+        { params }
+      );
 
       // ✅ Normalize: recalc amount_paid & filter voided
       const normalizedSales = (response.data.sales || []).map((sale) => {
@@ -72,7 +74,6 @@ const ListRestaurantPayment = () => {
           balance: (Number(sale.total_amount) || 0) - amountPaid,
         };
       });
-
 
       setPayments(normalizedSales);
       setSummary(response.data.summary || {});
@@ -128,7 +129,9 @@ const ListRestaurantPayment = () => {
   const handleVoid = async (paymentId) => {
     if (!window.confirm("Are you sure you want to void this payment?")) return;
     try {
-      await axiosWithAuth().put(`/restpayment/sales/payments/${paymentId}/void`);
+      await axiosWithAuth().put(
+        `/restpayment/sales/payments/${paymentId}/void`
+      );
       fetchPayments();
     } catch (err) {
       alert("Failed to void payment");
@@ -143,29 +146,11 @@ const ListRestaurantPayment = () => {
         <head>
           <title>Restaurant Payment Receipt</title>
           <style>
-            body { 
-              font-family: monospace, Arial, sans-serif; 
-              padding: 5px; 
-              margin: 0;
-              width: 80mm; /* ✅ thermal printer size */
-            }
-            h2 { 
-              text-align: center; 
-              font-size: 14px; 
-              margin: 5px 0; 
-            }
-            p { 
-              margin: 2px 0; 
-              font-size: 12px; 
-            }
-            hr { 
-              border: 1px dashed #000; 
-              margin: 6px 0; 
-            }
-            .void { 
-              color: red; 
-              font-weight: bold; 
-            }
+            body { font-family: monospace, Arial, sans-serif; padding: 5px; margin: 0; width: 80mm; }
+            h2 { text-align: center; font-size: 14px; margin: 5px 0; }
+            p { margin: 2px 0; font-size: 12px; }
+            hr { border: 1px dashed #000; margin: 6px 0; }
+            .void { color: red; font-weight: bold; }
           </style>
         </head>
         <body>
@@ -182,7 +167,9 @@ const ListRestaurantPayment = () => {
           <p><strong>Status:</strong> ${
             payment.is_void ? '<span class="void">VOIDED</span>' : "VALID"
           }</p>
-          <p><strong>Date:</strong> ${new Date(payment.created_at).toLocaleString()}</p>
+          <p><strong>Date:</strong> ${new Date(
+            payment.created_at
+          ).toLocaleString()}</p>
           <hr/>
           <p style="text-align:center;">Thank you!</p>
         </body>
@@ -241,75 +228,91 @@ const ListRestaurantPayment = () => {
 
       <table className="payment-table">
         <thead>
-        <tr>
-          <th>Sale ID</th>
-          <th>Pay ID</th>
-          <th>Sales Amount</th>
-          <th>Amount Paid</th>
-          <th>Mode</th>
-          <th>Paid By</th>
-          <th>Status</th>
-          <th>Date</th>
-          <th>Total Paid</th>   {/* NEW */}
-          <th>Balance</th>     {/* NEW */}
-          <th className="th-actions">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {payments.map((sale) =>
-          sale.payments.map((payment) => (
-            <tr key={payment.id} className={payment.is_void ? "void-row" : ""}>
-              <td>{sale.id}</td>
-              <td>{payment.id}</td>
-              <td>{sale.total_amount}</td>
-              <td>₦{Number(payment.amount_paid).toLocaleString()}</td>
-              <td>{payment.payment_mode}</td>
-              <td>{payment.paid_by && payment.paid_by.trim() !== "" ? payment.paid_by : "N/A"}</td>
-              <td className={payment.is_void ? "void-text" : ""}>
-                {payment.is_void ? "VOID" : "VALID"}
-              </td>
-              <td>{new Date(payment.created_at).toLocaleString()}</td>
-              <td>₦{Number(sale.balance).toLocaleString()}</td>     {/* NEW */}
-              <td>₦{Number(sale.amount_paid).toLocaleString()}</td> {/* NEW */}
-              
-              <td className="row-actions">
-                <button
-                  className="btn edit"
-                  onClick={() => openEditModal(payment)}
-                  disabled={payment.is_void}
-                >
-                  Edit
-                </button>
-                <button
-                  className="btn void"
-                  onClick={() => handleVoid(payment.id)}
-                  disabled={payment.is_void}
-                >
-                  Void
-                </button>
-                <button
-                  className="btn print"
-                  onClick={() => handlePrint(sale, payment)}
-                >
-                  Print
-                </button>
-              </td>
-            </tr>
-          ))
-        )}
-      </tbody>
-
+          <tr>
+            <th>Sale ID</th>
+            <th>Pay ID</th>
+            <th>Sales Amount</th>
+            <th>Amount Paid</th>
+            <th>Mode</th>
+            <th>Paid By</th>
+            <th>Status</th>
+            <th>Date</th>
+            <th>Total Paid</th>
+            <th>Balance</th>
+            <th className="th-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {payments.map((sale) =>
+            sale.payments.map((payment) => (
+              <tr
+                key={payment.id}
+                className={payment.is_void ? "void-row" : ""}
+              >
+                <td>{sale.id}</td>
+                <td>{payment.id}</td>
+                <td>₦{Number(sale.total_amount).toLocaleString()}</td>
+                <td>₦{Number(payment.amount_paid).toLocaleString()}</td>
+                <td>{payment.payment_mode}</td>
+                <td>
+                  {payment.paid_by && payment.paid_by.trim() !== ""
+                    ? payment.paid_by
+                    : "N/A"}
+                </td>
+                <td className={payment.is_void ? "void-text" : ""}>
+                  {payment.is_void ? "VOID" : "VALID"}
+                </td>
+                <td>{new Date(payment.created_at).toLocaleString()}</td>
+                <td>₦{Number(sale.amount_paid).toLocaleString()}</td>
+                <td>₦{Number(sale.balance).toLocaleString()}</td>
+                <td className="row-actions">
+                  <button
+                    className="btn edit"
+                    onClick={() => openEditModal(payment)}
+                    disabled={payment.is_void}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="btn void"
+                    onClick={() => handleVoid(payment.id)}
+                    disabled={payment.is_void}
+                  >
+                    Void
+                  </button>
+                  <button
+                    className="btn print"
+                    onClick={() => handlePrint(sale, payment)}
+                  >
+                    Print
+                  </button>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
       </table>
 
       <div className="payment-summary">
         <h2>Summary</h2>
         <ul>
-          {Object.entries(summary).map(([mode, amount]) => (
-            <li key={mode}>
-              {mode}: ₦{Number(amount).toLocaleString()}
-            </li>
-          ))}
+          {Object.entries(summary).map(([mode, amount]) => {
+            if (mode === "Total Outstanding") return null; // skip, we render separately
+            return (
+              <li key={mode}>
+                {mode}: ₦{Number(amount).toLocaleString()}
+              </li>
+            );
+          })}
         </ul>
+
+        {/* ✅ Always show Total Outstanding clearly */}
+        {summary["Total Outstanding"] !== undefined && (
+          <div className="outstanding">
+            <strong>Total Outstanding:</strong>{" "}
+            ₦{Number(summary["Total Outstanding"]).toLocaleString()}
+          </div>
+        )}
       </div>
 
       {/* ✅ Edit Modal */}
@@ -368,7 +371,10 @@ const ListRestaurantPayment = () => {
                     type="text"
                     value={editPayment.paid_by || ""}
                     onChange={(e) =>
-                      setEditPayment({ ...editPayment, paid_by: e.target.value })
+                      setEditPayment({
+                        ...editPayment,
+                        paid_by: e.target.value,
+                      })
                     }
                     className="input"
                   />
@@ -377,7 +383,10 @@ const ListRestaurantPayment = () => {
             </div>
 
             <div className="modal-footer">
-              <button className="btn void" onClick={() => setEditPayment(null)}>
+              <button
+                className="btn void"
+                onClick={() => setEditPayment(null)}
+              >
                 Cancel
               </button>
               <button className="btn edit" onClick={handleEditSave}>

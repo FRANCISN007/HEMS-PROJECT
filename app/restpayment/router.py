@@ -97,16 +97,19 @@ def list_payments_with_items(
     if location_id:
         query = query.filter(RestaurantSale.location_id == location_id)
 
-    # ✅ Keep voided payments too (for history)
     payments = query.order_by(RestaurantSalePayment.created_at.desc()).all()
 
     payment_summary = defaultdict(float)
     total_amount = 0.0
+    total_outstanding = 0.0
     sales_map = {}
 
     for p in payments:
         sale = p.sale
+        if not sale:
+            continue
 
+        # Ensure sale entry exists in map
         if sale.id not in sales_map:
             sales_map[sale.id] = {
                 "id": sale.id,
@@ -115,8 +118,29 @@ def list_payments_with_items(
                 "amount_paid": 0.0,
                 "balance": float(sale.total_amount or 0),
                 "payments": [],
+                "status": "unpaid",  # will update later
             }
 
+        # ✅ Count only non-voided payments
+        if not p.is_void:
+            sales_map[sale.id]["amount_paid"] += float(p.amount_paid or 0)
+            payment_summary[p.payment_mode] += float(p.amount_paid or 0.0)
+            total_amount += float(p.amount_paid or 0.0)
+
+        # ✅ Recalculate balance dynamically
+        sales_map[sale.id]["balance"] = (
+            sales_map[sale.id]["total_amount"] - sales_map[sale.id]["amount_paid"]
+        )
+
+        # ✅ Update payment status
+        if sales_map[sale.id]["balance"] == 0:
+            sales_map[sale.id]["status"] = "paid"
+        elif sales_map[sale.id]["amount_paid"] > 0:
+            sales_map[sale.id]["status"] = "partial"
+        else:
+            sales_map[sale.id]["status"] = "unpaid"
+
+        # ✅ Add payment dict, include the current sale balance
         payment_dict = {
             "id": p.id,
             "sale_id": p.sale_id,
@@ -125,50 +149,27 @@ def list_payments_with_items(
             "paid_by": p.paid_by,
             "is_void": p.is_void,
             "created_at": p.created_at,
+            "balance": sales_map[sale.id]["balance"],  # 👈 inject same balance for all payments
         }
         sales_map[sale.id]["payments"].append(payment_dict)
 
-        # ✅ Only count non-void payments toward totals
-        if not p.is_void:
-            sales_map[sale.id]["amount_paid"] += float(p.amount_paid or 0)
-            payment_summary[p.payment_mode] += float(p.amount_paid or 0.0)
-            total_amount += float(p.amount_paid or 0.0)
+    # ✅ Compute total outstanding once per sale
+    for sale_data in sales_map.values():
+        total_outstanding += sale_data["balance"]
 
-        # ✅ Update balance after every payment
-        sales_map[sale.id]["balance"] = (
-            sales_map[sale.id]["total_amount"] - sales_map[sale.id]["amount_paid"]
-        )
-
-    # ✅ Clean summary
     summary = {k: float(v) for k, v in payment_summary.items()}
-    summary["Total"] = float(total_amount)
+    summary["Total Paid"] = float(total_amount)
+    summary["Total Outstanding"] = float(total_outstanding)
 
-    return {"sales": list(sales_map.values()), "summary": summary}
+    # ✅ Redisplay sales with balance > 0 for more payments
+    redisplay_sales = [s for s in sales_map.values() if s["balance"] > 0]
 
+    return {
+        "sales": list(sales_map.values()),
+        "summary": summary,
+        "redisplay_sales": redisplay_sales
+    }
 
-
-@router.get("/sales/{sale_id}/payments", response_model=List[RestaurantSalePaymentDisplay])
-def get_payments_for_sale(sale_id: int, 
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
-):
-    sale = db.query(RestaurantSale).filter(RestaurantSale.id == sale_id).first()
-    if not sale:
-        raise HTTPException(status_code=404, detail="Sale not found")
-
-    return sale.payments
-
-
-@router.get("/sales/{sale_id}/details", response_model=RestaurantSaleWithPaymentsDisplay)
-def get_sale_with_payments(sale_id: int, 
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
-):
-    sale = db.query(RestaurantSale).filter(RestaurantSale.id == sale_id).first()
-    if not sale:
-        raise HTTPException(status_code=404, detail="Sale not found")
-
-    return sale
 
 
 from typing import List

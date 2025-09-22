@@ -8,11 +8,9 @@ const ListBarPayment = () => {
   const [bars, setBars] = useState([]);
   const [selectedBar, setSelectedBar] = useState("");
 
-  // ✅ Get user roles from localStorage
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const roles = user.roles || [];
 
-  // ✅ Restrict access: only admin and bar can create payments
   if (!(roles.includes("admin") || roles.includes("bar"))) {
     return (
       <div className="unauthorized">
@@ -22,8 +20,6 @@ const ListBarPayment = () => {
     );
   }
 
-
-  // ✅ Default both start and end date to today
   const today = new Date().toISOString().split("T")[0];
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
@@ -48,7 +44,7 @@ const ListBarPayment = () => {
     }
   };
 
-  // ✅ Fetch payments with filters
+  // ✅ Fetch payments
   const fetchPayments = async (barId = "", start = "", end = "") => {
     setLoading(true);
     try {
@@ -68,13 +64,11 @@ const ListBarPayment = () => {
     }
   };
 
-  // ✅ On first load, fetch with today’s date only
   useEffect(() => {
     fetchBars();
     fetchPayments("", today, today);
   }, []);
 
-  // ✅ Re-fetch whenever filters change
   useEffect(() => {
     fetchPayments(selectedBar, startDate, endDate);
   }, [selectedBar, startDate, endDate]);
@@ -123,183 +117,151 @@ const ListBarPayment = () => {
     }
   };
 
-  // ✅ Add inside your component
-const handlePrint = (payment) => {
-  const receiptWindow = window.open("", "_blank");
-  receiptWindow.document.write(`
-    <html>
-      <head>
-        <title>Bar Payment Receipt</title>
-        <style>
-          body { 
-            font-family: monospace, Arial, sans-serif; 
-            padding: 5px; 
-            margin: 0;
-            width: 80mm; /* ✅ thermal printer size */
-          }
-          h2 { 
-            text-align: center; 
-            font-size: 14px; 
-            margin: 5px 0; 
-          }
-          p { 
-            margin: 2px 0; 
-            font-size: 12px; 
-          }
-          hr { 
-            border: 1px dashed #000; 
-            margin: 6px 0; 
-          }
-          .void { 
-            color: red; 
-            font-weight: bold; 
-          }
-        </style>
-      </head>
-      <body>
-        <h2>BAR PAYMENT RECEIPT</h2>
-        <hr/>
-        <p><strong>Pay ID:</strong> ${payment.id}</p>
-        <p><strong>Sale ID:</strong> ${payment.bar_sale_id}</p>
-        <p><strong>Sale Amount:</strong> ₦${Number(payment.sale_amount).toLocaleString()}</p>
-        <p><strong>Paid:</strong> ₦${Number(payment.amount_paid).toLocaleString()}</p>
-        <p><strong>Balance:</strong> ₦${Number(payment.balance_due).toLocaleString()}</p>
-        <p><strong>Method:</strong> ${payment.payment_method}</p>
-        <p><strong>Note:</strong> ${payment.note || "-"}</p>
-        <p><strong>Status:</strong> ${
-          payment.status?.toLowerCase() === "voided"
-            ? '<span class="void">VOIDED</span>'
-            : payment.status
-        }</p>
-        <p><strong>Date:</strong> ${
-          payment.date_paid
-            ? new Date(payment.date_paid).toLocaleString()
-            : "-"
-        }</p>
-        <hr/>
-        <p style="text-align:center;">Thank you!</p>
-      </body>
-    </html>
-  `);
-  receiptWindow.document.close();
-  receiptWindow.print();
-};
+  // ✅ Print Receipt
+  const handlePrint = (payment) => {
+    const salePayments = payments.filter((p) => p.bar_sale_id === payment.bar_sale_id);
+    const totalPaid = salePayments
+      .filter((p) => p.status?.toLowerCase() !== "voided")
+      .reduce((sum, p) => sum + (p.amount_paid || 0), 0);
 
+    const saleAmount = payment.sale_amount;
+    const netBalance = saleAmount - totalPaid;
+
+    const receiptWindow = window.open("", "_blank");
+    receiptWindow.document.write(`
+      <html>
+        <head>
+          <title>Bar Payment Receipt</title>
+          <style>
+            body { font-family: monospace, Arial; width: 80mm; }
+            h2 { text-align: center; font-size: 14px; margin: 5px 0; }
+            p { margin: 2px 0; font-size: 12px; }
+            hr { border: 1px dashed #000; margin: 6px 0; }
+            .void { color: red; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <h2>BAR PAYMENT RECEIPT</h2>
+          <hr/>
+          <p><strong>Pay ID:</strong> ${payment.id}</p>
+          <p><strong>Sale ID:</strong> ${payment.bar_sale_id}</p>
+          <p><strong>Sale Amount:</strong> ₦${Number(saleAmount).toLocaleString()}</p>
+          <p><strong>Current Paid:</strong> ₦${Number(payment.amount_paid).toLocaleString()}</p>
+          <p><strong>Total Paid So Far:</strong> ₦${Number(totalPaid).toLocaleString()}</p>
+          <p><strong>Net Balance:</strong> ₦${Number(netBalance).toLocaleString()}</p>
+          <p><strong>Method:</strong> ${payment.payment_method}</p>
+          <p><strong>Note:</strong> ${payment.note || "-"}</p>
+          <p><strong>Status:</strong> ${
+            payment.status?.toLowerCase() === "voided"
+              ? '<span class="void">VOIDED</span>'
+              : payment.status
+          }</p>
+          <p><strong>Date:</strong> ${
+            payment.date_paid ? new Date(payment.date_paid).toLocaleString() : "-"
+          }</p>
+          <hr/>
+          <p style="text-align:center;">✅ Thank you!</p>
+        </body>
+      </html>
+    `);
+    receiptWindow.document.close();
+    receiptWindow.print();
+  };
 
   return (
     <div className="list-bar-payment-container">
       <h2>📃 Bar Payment Records</h2>
 
-      {/* ✅ Filter Section */}
+      {/* ✅ Filters */}
       <div className="filter-section">
         <label>Filter by Bar: </label>
         <select value={selectedBar} onChange={(e) => setSelectedBar(e.target.value)}>
           <option value="">-- All Bars --</option>
           {bars.map((bar) => (
-            <option key={bar.id} value={bar.id}>
-              {bar.name}
-            </option>
+            <option key={bar.id} value={bar.id}>{bar.name}</option>
           ))}
         </select>
 
         <label>Start Date: </label>
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-        />
-
+        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         <label>End Date: </label>
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-        />
+        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
       </div>
 
       {loading && <p>⏳ Loading payments...</p>}
       {error && <p className="error">{error}</p>}
 
-      
-
       {!loading && payments.length === 0 ? (
-      <p>No payment records found.</p>
-    ) : (
-      <>
-        <table className="bar-payment-table">
-          <thead>
-            <tr>
-              <th>PayID</th>
-              <th>Sale ID</th>
-              <th>Sale Amount</th>
-              <th>Paid</th>
-              <th>Balance Due</th>
-              <th>Method</th>
-              <th>Note</th>
-              <th>Date Paid</th>
-              <th>Created By</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {payments.map((p) => (
-              <tr key={p.id}>
-                <td>{p.id}</td>
-                <td>{p.bar_sale_id}</td>
-                <td>{formatAmount(p.sale_amount)}</td>
-                <td>{formatAmount(p.amount_paid)}</td>
-                <td style={{ color: p.balance_due > 0 ? "red" : "green" }}>
-                  {formatAmount(p.balance_due)}
-                </td>
-                <td>{p.payment_method || "-"}</td>
-                <td>{p.note || "-"}</td>
-                <td>{p.date_paid ? new Date(p.date_paid).toLocaleDateString() : "-"}</td>
-                <td>{p.created_by || "-"}</td>
-                <td className={`status ${p.status?.toLowerCase().replace(/\s+/g, "-")}`}>
-                  {p.status}
-                </td>
-                <td>
-                <button className="btn-edit" onClick={() => handleEdit(p)}>✏️ Edit</button>
-                <button className="btn-delete" onClick={() => handleDelete(p.id)}>🗑️ Delete</button>
-                <button 
-                  className="btn-void" 
-                  onClick={() => handleVoid(p.id)} 
-                  disabled={p.status === "voided"}
-                >
-                  🚫 Void
-                </button>
-                <button className="btn-print" onClick={() => handlePrint(p)}>🖨 Print</button>
-              </td>
-
+        <p>No payment records found.</p>
+      ) : (
+        <>
+          <table className="bar-payment-table">
+            <thead>
+              <tr>
+                <th>PayID</th>
+                <th>Sale ID</th>
+                <th>Sale Amount</th>
+                <th>Paid</th>
+                <th>Cumulative Paid</th> {/* ✅ NEW COLUMN */}
+                <th>Balance Due</th>
+                <th>Method</th>
+                <th>Note</th>
+                <th>Date Paid</th>
+                <th>Created By</th>
+                <th>Status</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {payments.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.id}</td>
+                  <td>{p.bar_sale_id}</td>
+                  <td>{formatAmount(p.sale_amount)}</td>
+                  <td>{formatAmount(p.amount_paid)}</td>
+                  <td>{formatAmount(p.cumulative_paid)}</td> {/* ✅ DISPLAY cumulative */}
+                  <td style={{ color: p.balance_due > 0 ? "red" : "green" }}>
+                    {formatAmount(p.balance_due)}
+                  </td>
+                  <td>{p.payment_method || "-"}</td>
+                  <td>{p.note || "-"}</td>
+                  <td>{p.date_paid ? new Date(p.date_paid).toLocaleDateString() : "-"}</td>
+                  <td>{p.created_by || "-"}</td>
+                  <td className={`status ${p.status?.toLowerCase().replace(/\s+/g, "-")}`}>
+                    {p.status}
+                  </td>
+                  <td>
+                    <button className="btn-edit" onClick={() => handleEdit(p)}>✏️ Edit</button>
+                    <button className="btn-delete" onClick={() => handleDelete(p.id)}>🗑️ Delete</button>
+                    <button className="btn-void" onClick={() => handleVoid(p.id)} disabled={p.status === "voided"}>🚫 Void</button>
+                    <button className="btn-print" onClick={() => handlePrint(p)}>🖨 Print</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
-        {/* ✅ Payment Summary (below table) */}
-        {summary && (
-          <div className="summary-box">
-            <h3>📊 Payment Summary</h3>
-            <div className="summary-grid">
-              <div className="summary-left">
-                <p><strong>Total Sales:</strong> {formatAmount(summary.total_sales)}</p>
-                <p><strong>Total Paid:</strong> {formatAmount(summary.total_paid)}</p>
-                <p><strong>Total Due:</strong> {formatAmount(summary.total_due)}</p>
-              </div>
-              <div className="summary-right">
-                <p><strong>Cash:</strong> {formatAmount(summary.total_cash)}</p>
-                <p><strong>POS:</strong> {formatAmount(summary.total_pos)}</p>
-                <p><strong>Transfer:</strong> {formatAmount(summary.total_transfer)}</p>
+          {summary && (
+            <div className="summary-box">
+              <h3>📊 Payment Summary</h3>
+              <div className="summary-grid">
+                <div className="summary-left">
+                  <p><strong>Total Sales:</strong> {formatAmount(summary.total_sales)}</p>
+                  <p><strong>Total Paid:</strong> {formatAmount(summary.total_paid)}</p>
+                  <p><strong>Total Due:</strong> {formatAmount(summary.total_due)}</p>
+                </div>
+                <div className="summary-right">
+                  <p><strong>Cash:</strong> {formatAmount(summary.total_cash)}</p>
+                  <p><strong>POS:</strong> {formatAmount(summary.total_pos)}</p>
+                  <p><strong>Transfer:</strong> {formatAmount(summary.total_transfer)}</p>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </>
+      )}
 
-      </>
-    )}
-
-      {/* ✅ Edit Modal with Overlay like Sales */}
+      {/* ✅ Edit Modal */}
       {editingPayment && (
         <div className="modal-overlay3">
           <div className="modal3">

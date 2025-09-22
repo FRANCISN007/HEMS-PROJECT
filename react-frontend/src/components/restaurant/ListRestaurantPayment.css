@@ -174,3 +174,11 @@
 .filters .btn.filter:hover {
   background: #0056b3;
 }
+
+
+.payment-summary .outstanding {
+  margin-top: 10px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #b22222; /* dark red */
+}
