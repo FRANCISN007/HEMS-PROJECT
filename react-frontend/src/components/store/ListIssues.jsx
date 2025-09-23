@@ -11,12 +11,18 @@ const ListIssues = () => {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [editingIssue, setEditingIssue] = useState(null);
+
+  const getToday = () => {
+  const today = new Date();
+  return today.toISOString().split("T")[0];
+};
+
   const [formData, setFormData] = useState({
-    issue_to: "bar",
-    issued_to_id: "",
-    issue_date: "",
-    issue_items: [],
-  });
+  issue_to: "bar",
+  issued_to_id: "",
+  issue_date: getToday(),  // 👈 default to today
+  issue_items: [],
+});
 
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];

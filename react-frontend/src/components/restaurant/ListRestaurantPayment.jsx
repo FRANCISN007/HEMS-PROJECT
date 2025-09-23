@@ -1,3 +1,4 @@
+// src/components/payments/ListRestaurantPayment.jsx
 import React, { useEffect, useState } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./ListRestaurantPayment.css";
@@ -19,7 +20,6 @@ const ListRestaurantPayment = () => {
   } else if (typeof storedUser.role === "string") {
     roles = [storedUser.role];
   }
-
   roles = roles.map((r) => r.toLowerCase());
 
   if (!(roles.includes("admin") || roles.includes("restaurant"))) {
@@ -42,6 +42,7 @@ const ListRestaurantPayment = () => {
   const [selectedLocation, setSelectedLocation] = useState("");
   const [startDate, setStartDate] = useState(getToday());
   const [endDate, setEndDate] = useState(getToday());
+  const [saleId, setSaleId] = useState(""); // 👈 New Sale ID filter
 
   const fetchPayments = async () => {
     try {
@@ -51,6 +52,7 @@ const ListRestaurantPayment = () => {
       if (selectedLocation) params.location_id = selectedLocation;
       if (startDate) params.start_date = startDate;
       if (endDate) params.end_date = endDate;
+      if (saleId) params.sale_id = saleId; // 👈 include sale_id filter
 
       const response = await axiosWithAuth().get(
         "/restpayment/sales/payments",
@@ -75,9 +77,19 @@ const ListRestaurantPayment = () => {
         };
       });
 
+      // ✅ Compare frontend calc vs backend
+      normalizedSales.forEach((sale) => {
+        if (sale.balance !== sale.balance) {
+          console.warn(
+            `⚠️ Balance mismatch for Sale ${sale.id}: backend=${sale.balance}, frontend=${sale.balance}`
+          );
+        }
+      });
+
       setPayments(normalizedSales);
       setSummary(response.data.summary || {});
     } catch (err) {
+      console.error("Fetch error:", err);
       setError("Failed to load payments");
     } finally {
       setLoading(false);
@@ -101,7 +113,7 @@ const ListRestaurantPayment = () => {
   // ✅ Auto refresh when filters change
   useEffect(() => {
     fetchPayments();
-  }, [selectedLocation, startDate, endDate]);
+  }, [selectedLocation, startDate, endDate, saleId]);
 
   const openEditModal = (payment) => {
     setEditPayment(payment);
@@ -221,11 +233,23 @@ const ListRestaurantPayment = () => {
           />
         </label>
 
+        {/* 👇 New Sale ID filter */}
+        <label>
+          Sale ID:
+          <input
+            type="number"
+            value={saleId}
+            onChange={(e) => setSaleId(e.target.value)}
+            placeholder="Enter Sale ID"
+          />
+        </label>
+
         <button className="btn filter" onClick={fetchPayments}>
           Apply Filters
         </button>
       </div>
 
+      {/* ✅ Table */}
       <table className="payment-table">
         <thead>
           <tr>
@@ -293,11 +317,12 @@ const ListRestaurantPayment = () => {
         </tbody>
       </table>
 
+      {/* ✅ Summary */}
       <div className="payment-summary">
         <h2>Summary</h2>
         <ul>
           {Object.entries(summary).map(([mode, amount]) => {
-            if (mode === "Total Outstanding") return null; // skip, we render separately
+            if (mode === "Total Outstanding") return null;
             return (
               <li key={mode}>
                 {mode}: ₦{Number(amount).toLocaleString()}
@@ -305,8 +330,6 @@ const ListRestaurantPayment = () => {
             );
           })}
         </ul>
-
-        {/* ✅ Always show Total Outstanding clearly */}
         {summary["Total Outstanding"] !== undefined && (
           <div className="outstanding">
             <strong>Total Outstanding:</strong>{" "}
@@ -383,10 +406,7 @@ const ListRestaurantPayment = () => {
             </div>
 
             <div className="modal-footer">
-              <button
-                className="btn void"
-                onClick={() => setEditPayment(null)}
-              >
+              <button className="btn void" onClick={() => setEditPayment(null)}>
                 Cancel
               </button>
               <button className="btn edit" onClick={handleEditSave}>

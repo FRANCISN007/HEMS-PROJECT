@@ -591,15 +591,17 @@ from datetime import datetime, date
 def supply_to_bars(
     issue_data: store_schemas.IssueCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "admin"]))  # ✅ allow both
 ):
-    # ✅ Date Control: Allow only today's date
     today = date.today()
+
+    # ✅ Date Control: only today's date unless admin
     if issue_data.issue_date and issue_data.issue_date.date() != today:
-        raise HTTPException(
-            status_code=400,
-            detail="❌ You can only make issues for today's date."
-        )
+        if "admin" not in current_user.roles:  # ✅ check list of roles
+            raise HTTPException(
+                status_code=400,
+                detail="❌ Only admins can post issues for a past date."
+            )
 
     issue = StoreIssue(
         issue_to=issue_data.issue_to,
@@ -675,6 +677,8 @@ def supply_to_bars(
     return issue
 
 
+
+
 from typing import Optional, List
 from fastapi import Query
 
@@ -698,7 +702,8 @@ def list_issues(
     if bar_name:
         query = query.join(StoreIssue.issued_to).filter(Bar.name.ilike(f"%{bar_name}%"))
 
-    issues = query.order_by(StoreIssue.issue_date.desc()).all()
+    # ✅ Order by ID DESC (newest on top)
+    issues = query.order_by(StoreIssue.id.desc()).all()
     return issues if issues else []
 
 

@@ -76,14 +76,19 @@ app.add_middleware(
 )
 
 
-# Static files (uploads)
-app.mount("/files", StaticFiles(directory="uploads"), name="files")
-#app.mount("/attachments", StaticFiles(directory="uploads/attachments"), name="attachments")
-
 # Static React frontend
-react_build_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "react-frontend", "build"))
+react_build_dir = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "react-frontend", "build")
+)
 react_static_dir = os.path.join(react_build_dir, "static")
-app.mount("/static", StaticFiles(directory=react_static_dir), name="static")
+
+# ✅ Only mount if directory exists
+if os.path.isdir(react_static_dir):
+    app.mount("/static", StaticFiles(directory=react_static_dir), name="static")
+    print(f"[INFO] Serving static files from {react_static_dir}")
+else:
+    print(f"[WARNING] React static directory not found: {react_static_dir} — skipping static mount")
+
 
 # Routers
 app.include_router(user_router, prefix="/users", tags=["Users"])
@@ -121,11 +126,8 @@ async def serve_spa(full_path: str):
         return JSONResponse(status_code=404, content={"detail": "This is an API route, not SPA."})
 
     index_file = os.path.join(react_build_dir, "index.html")
-    return FileResponse(index_file)
-
-# Entry point
-if __name__ == "__main__":
-    
-    uvicorn.run("app.main:app", host=SERVER_IP, port=8000, log_level="info", access_log=False)
-
+    if os.path.isfile(index_file):
+        return FileResponse(index_file)
+    else:
+        return JSONResponse(status_code=404, content={"detail": "Frontend not built or missing."})
 

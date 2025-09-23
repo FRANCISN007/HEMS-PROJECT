@@ -182,3 +182,15 @@
   font-weight: bold;
   color: #b22222; /* dark red */
 }
+
+
+/* Existing styles ... */
+
+.void-text {
+  color: red;
+  font-weight: bold;
+}
+
+.void-row {
+  background-color: #ffe6e6; /* light red background for voided rows */
+}

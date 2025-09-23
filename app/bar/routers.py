@@ -70,7 +70,7 @@ def list_bars(
 @router.get("/bars/simple", response_model=List[bar_schemas.BarDisplaySimple])
 def list_bars(
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    #current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     return db.query(bar_models.Bar).order_by(bar_models.Bar.id.asc()).all()
 

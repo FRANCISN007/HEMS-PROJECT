@@ -84,6 +84,7 @@ def list_payments_with_items(
 ):
     query = db.query(RestaurantSalePayment).join(RestaurantSale)
 
+    # ✅ Apply filters
     if sale_id:
         query = query.filter(RestaurantSale.id == sale_id)
     if start_date:
@@ -99,40 +100,35 @@ def list_payments_with_items(
 
     payments = query.order_by(RestaurantSalePayment.created_at.desc()).all()
 
-    payment_summary = defaultdict(float)
-    total_amount = 0.0
-    total_outstanding = 0.0
     sales_map = {}
 
+    # Step 1: Organize payments under their sales
     for p in payments:
         sale = p.sale
         if not sale:
             continue
 
-        # Ensure sale entry exists in map
         if sale.id not in sales_map:
             sales_map[sale.id] = {
                 "id": sale.id,
                 "guest_name": sale.guest_name,
                 "total_amount": float(sale.total_amount or 0),
-                "amount_paid": 0.0,
+                "amount_paid": 0.0,  # will be accumulated
                 "balance": float(sale.total_amount or 0),
                 "payments": [],
-                "status": "unpaid",  # will update later
+                "status": "unpaid",
             }
 
-        # ✅ Count only non-voided payments
+        # Only count valid payments toward amount_paid
         if not p.is_void:
             sales_map[sale.id]["amount_paid"] += float(p.amount_paid or 0)
-            payment_summary[p.payment_mode] += float(p.amount_paid or 0.0)
-            total_amount += float(p.amount_paid or 0.0)
 
-        # ✅ Recalculate balance dynamically
+        # Balance = total - non-voided payments
         sales_map[sale.id]["balance"] = (
             sales_map[sale.id]["total_amount"] - sales_map[sale.id]["amount_paid"]
         )
 
-        # ✅ Update payment status
+        # Update payment status
         if sales_map[sale.id]["balance"] == 0:
             sales_map[sale.id]["status"] = "paid"
         elif sales_map[sale.id]["amount_paid"] > 0:
@@ -140,7 +136,7 @@ def list_payments_with_items(
         else:
             sales_map[sale.id]["status"] = "unpaid"
 
-        # ✅ Add payment dict, include the current sale balance
+        # Add payment dict, with same balance reflected in every row
         payment_dict = {
             "id": p.id,
             "sale_id": p.sale_id,
@@ -149,19 +145,28 @@ def list_payments_with_items(
             "paid_by": p.paid_by,
             "is_void": p.is_void,
             "created_at": p.created_at,
-            "balance": sales_map[sale.id]["balance"],  # 👈 inject same balance for all payments
+            "balance": sales_map[sale.id]["balance"],
         }
         sales_map[sale.id]["payments"].append(payment_dict)
 
-    # ✅ Compute total outstanding once per sale
+    # Step 2: Build summary
+    total_paid = 0.0
+    total_outstanding = 0.0
+    payment_summary = defaultdict(float)
+
     for sale_data in sales_map.values():
+        total_paid += sale_data["amount_paid"]
         total_outstanding += sale_data["balance"]
 
+        for p in sale_data["payments"]:
+            if not p["is_void"]:
+                payment_summary[p["payment_mode"]] += p["amount_paid"]
+
     summary = {k: float(v) for k, v in payment_summary.items()}
-    summary["Total Paid"] = float(total_amount)
+    summary["Total Paid"] = float(total_paid)
     summary["Total Outstanding"] = float(total_outstanding)
 
-    # ✅ Redisplay sales with balance > 0 for more payments
+    # Step 3: Redisplay sales with balance > 0
     redisplay_sales = [s for s in sales_map.values() if s["balance"] > 0]
 
     return {
@@ -169,8 +174,6 @@ def list_payments_with_items(
         "summary": summary,
         "redisplay_sales": redisplay_sales
     }
-
-
 
 from typing import List
 
