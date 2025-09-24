@@ -1151,8 +1151,8 @@ def delete_adjustment(
 
 @router.get("/bar-balance-stock", response_model=List[bar_schemas.BarStockBalance])
 def get_bar_stock_balance(
-    category_id: Optional[int] = Query(None),
-    bar_id: Optional[int] = Query(None),   # ✅ New filter
+    item_id: Optional[int] = Query(None, description="Filter by specific item"),
+    bar_id: Optional[int] = Query(None, description="Filter by bar"),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
@@ -1170,9 +1170,9 @@ def get_bar_stock_balance(
             .join(store_models.StoreItem)
         )
 
-        if category_id:
-            issued_query = issued_query.filter(store_models.StoreItem.category_id == category_id)
-        if bar_id:  # ✅ filter by bar
+        if item_id:
+            issued_query = issued_query.filter(store_models.StoreItem.id == item_id)
+        if bar_id:
             issued_query = issued_query.filter(store_models.StoreIssue.issued_to_id == bar_id)
 
         issued_query = issued_query.group_by(
@@ -1198,9 +1198,9 @@ def get_bar_stock_balance(
             .join(store_models.StoreItem, bar_models.BarInventory.item_id == store_models.StoreItem.id)
         )
 
-        if category_id:
-            sold_query = sold_query.filter(store_models.StoreItem.category_id == category_id)
-        if bar_id:  # ✅ filter by bar
+        if item_id:
+            sold_query = sold_query.filter(store_models.StoreItem.id == item_id)
+        if bar_id:
             sold_query = sold_query.filter(bar_models.BarSale.bar_id == bar_id)
 
         sold_query = sold_query.group_by(
@@ -1221,9 +1221,9 @@ def get_bar_stock_balance(
             .join(store_models.StoreItem, bar_models.BarInventoryAdjustment.item_id == store_models.StoreItem.id)
         )
 
-        if category_id:
-            adjusted_query = adjusted_query.filter(store_models.StoreItem.category_id == category_id)
-        if bar_id:  # ✅ filter by bar
+        if item_id:
+            adjusted_query = adjusted_query.filter(store_models.StoreItem.id == item_id)
+        if bar_id:
             adjusted_query = adjusted_query.filter(bar_models.BarInventoryAdjustment.bar_id == bar_id)
 
         adjusted_query = adjusted_query.group_by(
@@ -1241,17 +1241,13 @@ def get_bar_stock_balance(
         all_keys = set(issued_data.keys()) | set(sold_data.keys()) | set(adjusted_data.keys())
         results = []
 
-        for (item_id, b_id) in all_keys:
-            issued = issued_data.get((item_id, b_id), {"total_received": 0})["total_received"]
-            sold = sold_data.get((item_id, b_id), 0)
-            adjusted = adjusted_data.get((item_id, b_id), 0)
+        for (i_id, b_id) in all_keys:
+            issued = issued_data.get((i_id, b_id), {"total_received": 0})["total_received"]
+            sold = sold_data.get((i_id, b_id), 0)
+            adjusted = adjusted_data.get((i_id, b_id), 0)
             balance = issued - sold - adjusted
 
-            item_q = db.query(store_models.StoreItem).filter(store_models.StoreItem.id == item_id)
-            if category_id:
-                item_q = item_q.filter(store_models.StoreItem.category_id == category_id)
-            item = item_q.first()
-
+            item = db.query(store_models.StoreItem).filter(store_models.StoreItem.id == i_id).first()
             if not item:
                 continue
 
@@ -1259,7 +1255,7 @@ def get_bar_stock_balance(
 
             latest_entry = (
                 db.query(store_models.StoreStockEntry)
-                .filter(store_models.StoreStockEntry.item_id == item_id)
+                .filter(store_models.StoreStockEntry.item_id == i_id)
                 .order_by(store_models.StoreStockEntry.purchase_date.desc())
                 .first()
             )
@@ -1269,7 +1265,7 @@ def get_bar_stock_balance(
             results.append(bar_schemas.BarStockBalance(
                 bar_id=b_id,
                 bar_name=bar.name if bar else "Unknown",
-                item_id=item_id,
+                item_id=i_id,
                 item_name=item.name if item else "Unknown",
                 category_name=item.category.name if item and item.category else "Uncategorized",
                 unit=item.unit if item else "-",
@@ -1281,8 +1277,10 @@ def get_bar_stock_balance(
                 balance_total_amount=balance_total_amount,
             ))
 
+        # ✅ Sort results by item_name then bar_name
+        results.sort(key=lambda x: (x.item_name.lower(), x.bar_name.lower()))
+
         return results
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve stock balance: {str(e)}")
-

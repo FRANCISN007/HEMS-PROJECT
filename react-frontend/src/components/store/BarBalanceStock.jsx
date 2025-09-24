@@ -4,9 +4,9 @@ import "./BarBalanceStock.css";
 
 const BarBalanceStock = () => {
   const [balances, setBalances] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [items, setItems] = useState([]); // 🔹 replaced categories with items
   const [bars, setBars] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedItem, setSelectedItem] = useState(""); // 🔹 filter by item
   const [selectedBar, setSelectedBar] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -22,33 +22,32 @@ const BarBalanceStock = () => {
 
   roles = roles.map((r) => r.toLowerCase());
 
-
   if (!(roles.includes("admin") || roles.includes("store"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to view bar stock.</p>
-    </div>
-  );
-}
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to view bar stock.</p>
+      </div>
+    );
+  }
 
   useEffect(() => {
-    fetchCategories();
+    fetchItems();
     fetchBars();
   }, []);
 
   useEffect(() => {
-    // Whenever category or bar changes, fetch filtered balances
-    fetchStockBalances(selectedCategory, selectedBar);
-  }, [selectedCategory, selectedBar]);
+    // Whenever item or bar changes, fetch filtered balances
+    fetchStockBalances(selectedItem, selectedBar);
+  }, [selectedItem, selectedBar]);
 
-  const fetchCategories = async () => {
+  const fetchItems = async () => {
     try {
       const axios = axiosWithAuth();
-      const res = await axios.get("/store/categories");
-      setCategories(res.data || []);
+      const res = await axios.get("/store/items/simple");
+      setItems(res.data || []);
     } catch (error) {
-      console.error("Error fetching categories:", error);
+      console.error("Error fetching items:", error);
     }
   };
 
@@ -62,13 +61,13 @@ const BarBalanceStock = () => {
     }
   };
 
-  const fetchStockBalances = async (categoryId = "", barId = "") => {
+  const fetchStockBalances = async (itemId = "", barId = "") => {
     try {
       setLoading(true);
       const axios = axiosWithAuth();
 
       let url = `/store/bar-balance-stock?`;
-      if (categoryId) url += `category_id=${categoryId}&`;
+      if (itemId) url += `item_id=${itemId}&`; // 🔹 filter by item_id
       if (barId) url += `bar_id=${barId}`;
 
       const res = await axios.get(url);
@@ -82,16 +81,22 @@ const BarBalanceStock = () => {
     }
   };
 
-  const handleCategoryChange = (e) => {
-    setSelectedCategory(e.target.value);
+  const handleItemChange = (e) => {
+    setSelectedItem(e.target.value);
   };
 
   const handleBarChange = (e) => {
     setSelectedBar(e.target.value);
   };
 
+  // 🔹 Compute totals
   const totalStockAmount = balances.reduce(
     (sum, item) => sum + (item.balance_total_amount || 0),
+    0
+  );
+
+  const totalStockBalance = balances.reduce(
+    (sum, item) => sum + (item.balance || 0),
     0
   );
 
@@ -104,16 +109,16 @@ const BarBalanceStock = () => {
 
         <div className="filter-frame">
           <div className="filter-group">
-            <label htmlFor="categoryFilter">Category:</label>
+            <label htmlFor="itemFilter">Item:</label>
             <select
-              id="categoryFilter"
-              value={selectedCategory}
-              onChange={handleCategoryChange}
+              id="itemFilter"
+              value={selectedItem}
+              onChange={handleItemChange}
             >
-              <option value="">All</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
+              <option value="">All Items</option>
+              {items.map((itm) => (
+                <option key={itm.id} value={itm.id}>
+                  {itm.name}
                 </option>
               ))}
             </select>
@@ -136,10 +141,16 @@ const BarBalanceStock = () => {
           </div>
         </div>
 
-
+        {/* 🔹 Totals Display */}
         <div className="total-stock">
-          Total Stock Value:{" "}
-          <strong>₦{totalStockAmount.toLocaleString()}</strong>
+          <div>
+            Total Stock Value:{" "}
+            <strong>₦{totalStockAmount.toLocaleString()}</strong>
+          </div>
+          <div>
+            Stock Balance (Quantity):{" "}
+            <strong>{totalStockBalance.toLocaleString()}</strong>
+          </div>
         </div>
       </div>
 
