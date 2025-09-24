@@ -375,11 +375,14 @@ async def receive_inventory(
 
 
 
+from fastapi import Request
+
 @router.get("/purchases")
 def list_purchases(
     start_date: date = Query(None),
     end_date: date = Query(None),
     invoice_number: str = Query(None),
+    request: Request = None,  # ✅ to build absolute URLs
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
@@ -388,7 +391,7 @@ def list_purchases(
         selectinload(store_models.StoreStockEntry.item),
     )
 
-    # Filter by purchase date range
+    # 🔎 Apply filters
     if start_date and end_date:
         query = query.filter(
             store_models.StoreStockEntry.purchase_date >= start_date,
@@ -399,19 +402,20 @@ def list_purchases(
     elif end_date:
         query = query.filter(store_models.StoreStockEntry.purchase_date <= end_date)
 
-    # Filter by invoice number
     if invoice_number:
         query = query.filter(store_models.StoreStockEntry.invoice_number.ilike(f"%{invoice_number}%"))
 
     purchases = query.order_by(store_models.StoreStockEntry.created_at.desc()).all()
 
-    results = []
-    total_amount = 0
+    results, total_amount = [], 0
     for purchase in purchases:
-        attachment_url = (
-            f"/files/{os.path.relpath(purchase.attachment, 'uploads').replace(os.sep, '/')}"
-            if purchase.attachment else None
-        )
+        attachment_url = None
+        if purchase.attachment:
+            # ✅ Normalize to forward slashes
+            rel_path = os.path.relpath(purchase.attachment, "uploads").replace("\\", "/")
+            # ✅ Build full URL
+            base_url = str(request.base_url).rstrip("/")
+            attachment_url = f"{base_url}/files/{rel_path}"
 
         total_amount += purchase.total_amount or 0
 
@@ -420,7 +424,7 @@ def list_purchases(
             "item_id": purchase.item_id,
             "item_name": purchase.item.name if purchase.item else "",
             "invoice_number": purchase.invoice_number,
-            "quantity": purchase.original_quantity,  # Show original purchased qty
+            "quantity": purchase.original_quantity,  # original purchased qty
             "unit_price": purchase.unit_price,
             "total_amount": purchase.total_amount,
             "vendor_id": purchase.vendor_id,
@@ -436,6 +440,7 @@ def list_purchases(
         "total_purchase": total_amount,
         "purchases": results
     }
+
 
 from fastapi import HTTPException, UploadFile, File, Form
 from datetime import datetime

@@ -1,225 +1,259 @@
+/* src/components/payments/ListBarPayment.css
+   Compact variant: tighter paddings, smaller font, sticky header, scrollable body, zebra + grid lines
+*/
+
 .list-bar-payment-container {
-  padding: 15px;
+  padding: 10px;
   background: #f5f2f2;
   border-radius: 8px;
-  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.05);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  color: #222;
 }
 
 /* Header */
 .list-bar-payment-container h2 {
-  margin-bottom: 16px;
-  font-size: 1.5rem;
+  margin-bottom: 10px;
+  font-size: 1.15rem;
   font-weight: 600;
-  color: #333;
+  color: #222;
 }
 
-/* Filter section */
+/* Filters */
 .filter-section {
-  margin-bottom: 18px;
+  margin-bottom: 10px;
   display: flex;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
 }
-
-.filter-section label {
-  font-size: 14px;
-  font-weight: 500;
-  margin-right: 4px;
-}
-
+.filter-section label { font-size: 13px; font-weight: 500; }
 .filter-section select,
 .filter-section input[type="date"] {
   padding: 6px 8px;
-  font-size: 14px;
-  border: 1px solid #ccc;
+  font-size: 13px;
+  border: 1px solid #d5d5d5;
   border-radius: 6px;
+  background: #fff;
 }
 
-/* Table styles */
-.bar-payment-table {
+/* Table wrapper (scrolling area) */
+.list-bar-payment-container .table-scroll {
+  max-height: 52vh;           /* adjust height as needed */
+  overflow: auto;
+  border: 1px solid #e6e6e6;
+  border-radius: 6px;
+  background: #fff;
+}
+
+/* Compact table */
+.list-bar-payment-container .bar-payment-table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 20px;
+  margin: 0;
+  font-size: 12px;            /* compact font */
+  table-layout: auto;
+  min-width: 900px;          /* allow horizontal scroll on very narrow screens */
 }
 
-.bar-payment-table th,
-.bar-payment-table td {
-  border: 1px solid #ddd;
-  padding: 3px 5px;
+/* Grid lines for header and body cells */
+.list-bar-payment-container .bar-payment-table th,
+.list-bar-payment-container .bar-payment-table td {
+  border: 1px solid #e6e6e6;
+  padding: 6px 8px;         /* compact padding */
   text-align: center;
-  font-size: 13px;
+  vertical-align: middle;
+  white-space: nowrap;       /* keep cells single-line for compactness */
 }
 
-.bar-payment-table th {
-  background-color: #f4f4f4;
-  font-weight: 600;
+/* Sticky header so column titles stay visible while scrolling */
+.list-bar-payment-container .bar-payment-table thead th {
+  position: sticky;
+  top: 0;
+  background-color: #2f3b46;
+  color: #ffffff;
+  z-index: 5;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+}
+
+/* Zebra striping - keep void/exception rows separate */
+.list-bar-payment-container .bar-payment-table tbody tr:not(.void-row):nth-of-type(odd) {
+  background-color: #fbfbfb;
+}
+.list-bar-payment-container .bar-payment-table tbody tr:not(.void-row):nth-of-type(even) {
+  background-color: #ffffff;
+}
+
+/* Hover effect (applies to any row) */
+.list-bar-payment-container .bar-payment-table tbody tr:hover {
+  background-color: #eef9ff;
+}
+
+/* Void row accent (overrides zebra) */
+.list-bar-payment-container .bar-payment-table tbody tr.void-row {
+  background-color: #fff0f0 !important;
+}
+
+/* Status badge - smaller */
+.list-bar-payment-container .status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 11px;
 }
 
 /* Status colors */
-.status.unpaid {
-  color: red;
-  font-weight: bold;
-}
+.list-bar-payment-container .status.unpaid { background: #fff0f0; color: #d32f2f; }
+.list-bar-payment-container .status.part-payment { background: #fff7e6; color: #ff9800; }
+.list-bar-payment-container .status.fully-paid { background: #e8f6ea; color: #2e7d32; }
+.list-bar-payment-container .status.voided { background: #f2f2f2; color: #7a7a7a; font-style: italic; }
 
-.status.part-payment {
-  color: orange;
-  font-weight: bold;
-}
-
-.status.fully-paid {
-  color: green;
-  font-weight: bold;
-}
-
-.status.voided {
-  color: gray;
-  font-style: italic;
-}
-
-/* Action buttons */
-.btn-edit,
-.btn-delete,
-.btn-void {
-  padding: 3px 6px;
+/* Compact action buttons */
+.list-bar-payment-container .btn-edit,
+.list-bar-payment-container .btn-delete,
+.list-bar-payment-container .btn-void,
+.list-bar-payment-container .btn-print {
+  padding: 4px 6px;
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  margin: 2px;
-  font-size: 12px;
+  margin: 1px;
+  font-size: 11px;
+  line-height: 1;
 }
 
-.btn-edit {
-  background: #4caf50;
-  color: white;
-}
-.btn-edit:hover {
-  background: #45a049;
-}
+/* Button colors */
+.list-bar-payment-container .btn-edit { background: #2e7d32; color: #fff; }
+.list-bar-payment-container .btn-delete { background: #d32f2f; color: #fff; }
+.list-bar-payment-container .btn-void { background: #ff9800; color: #fff; }
+.list-bar-payment-container .btn-void:disabled { background: #cfcfcf; cursor: not-allowed; }
+.list-bar-payment-container .btn-print { background: #1976d2; color: #fff; }
 
-.btn-delete {
-  background: #f44336;
-  color: white;
-}
-.btn-delete:hover {
-  background: #da190b;
-}
-
-.btn-void {
-  background: #ff9800;
-  color: white;
-}
-.btn-void:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-}
-
-/* Error message */
-.error {
-  color: red;
-  margin: 10px 0;
-  font-weight: 500;
-}
-
-/* Summary Box (only bottom) */
-.summary-box {
-  margin-top: 15px;
-  padding: 14px 16px;
-  border: 1px solid #ddd;
+/* Summary box - slim */
+.list-bar-payment-container .summary-box {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #e6e6e6;
   border-radius: 8px;
-  background: #fafafa;
-  width: fit-content;
-  box-shadow: 0px 2px 6px rgba(0,0,0,0.08);
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+  font-size: 13px;
 }
 
-.summary-box h3 {
-  margin-bottom: 10px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
+/* Modal styling (slim) */
+.modal-overlay3 { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; z-index: 999; }
+.modal3 { background: #fff; padding: 14px; border-radius: 8px; width: 380px; max-height: 90vh; overflow:auto; }
+
+/* Responsiveness */
+@media (max-width: 1100px) {
+  .list-bar-payment-container .bar-payment-table { font-size: 11px; min-width: 760px; }
+  .list-bar-payment-container .bar-payment-table th,
+  .list-bar-payment-container .bar-payment-table td { padding: 5px 6px; }
+  .filter-section label { font-size: 12px; }
 }
 
-/* Payment modes stacked */
-.payment-modes p {
-  margin: 2px 0;
-  font-size: 14px;
-  font-weight: 500;
-  display: flex;
-  justify-content: space-between;
-  width: 200px;
+@media (max-width: 700px) {
+  .list-bar-payment-container .table-scroll { max-height: 60vh; }
+  .list-bar-payment-container .bar-payment-table { min-width: 900px; } /* allow horizontal scroll */
 }
 
-/* Modal overlay */
+
+/* ✅ Modal Overlay */
 .modal-overlay3 {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.6); /* dim background */
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 999; /* ensure it overlays */
+  z-index: 2000;
 }
 
-/* Modal box */
+/* ✅ Modal Box */
 .modal3 {
   background: #fff;
-  padding: 18px;
-  border-radius: 6px;
-  width: 400px;
-  max-height: 90vh;
-  overflow-y: auto;
+  padding: 25px;
+  border-radius: 10px;
+  width: 420px;
+  max-width: 95%;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  animation: fadeIn 0.3s ease-in-out;
 }
 
-.modal3 label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  margin: 6px 0 2px;
+/* ✅ Modal Title */
+.modal3 h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.3rem;
+  font-weight: bold;
+  color: #333;
+  text-align: center;
 }
 
+/* ✅ Inputs & Select */
 .modal3 input,
 .modal3 select {
   width: 100%;
-  padding: 6px;
-  font-size: 13px;
-  margin-bottom: 10px;
+  padding: 10px;
+  margin: 6px 0 12px;
   border: 1px solid #ccc;
-  border-radius: 5px;
+  border-radius: 6px;
+  font-size: 1rem;
 }
 
+.modal3 input:focus,
+.modal3 select:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+/* ✅ Modal Actions */
 .modal-actions3 {
-  margin-top: 10px;
   display: flex;
   justify-content: space-between;
+  margin-top: 15px;
 }
 
-/* Summary Box Grid Layout */
-.summary-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr; /* left & right */
-  gap: 10px 50px; /* space between rows & columns */
-}
-
-.summary-left p,
-.summary-right p {
-  margin: 4px 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-}
-
-.btn-print {
-  background: #2196f3;
-  color: white;
-  padding: 3px 6px;
+/* ✅ Save Button */
+.btn-edit {
+  background-color: #28a745;
+  color: #fff;
+  padding: 10px 16px;
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.95rem;
+  transition: background 0.2s ease-in-out;
 }
-.btn-print:hover {
-  background: #1976d2;
+
+.btn-edit:hover {
+  background-color: #218838;
+}
+
+/* ✅ Cancel Button */
+.btn-delete {
+  background-color: #dc3545;
+  color: #fff;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background 0.2s ease-in-out;
+}
+
+.btn-delete:hover {
+  background-color: #c82333;
+}
+
+/* ✅ Animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
 }

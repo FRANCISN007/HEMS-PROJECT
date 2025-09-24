@@ -75,6 +75,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/files", StaticFiles(directory="uploads"), name="files")
+
 
 # Static React frontend
 react_build_dir = os.path.abspath(

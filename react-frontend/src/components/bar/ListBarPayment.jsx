@@ -195,15 +195,16 @@ const ListBarPayment = () => {
         <p>No payment records found.</p>
       ) : (
         <>
+        <div className="table-scroll">
           <table className="bar-payment-table">
             <thead>
               <tr>
                 <th>PayID</th>
                 <th>Sale ID</th>
-                <th>Sale Amount</th>
+                <th>Sale Amt</th>
                 <th>Paid</th>
-                <th>Cumulative Paid</th> {/* ✅ NEW COLUMN */}
-                <th>Balance Due</th>
+                <th>Total Paid</th> {/* ✅ NEW COLUMN */}
+                <th>Bal Due</th>
                 <th>Method</th>
                 <th>Note</th>
                 <th>Date Paid</th>
@@ -240,6 +241,7 @@ const ListBarPayment = () => {
               ))}
             </tbody>
           </table>
+        </div>
 
           {summary && (
             <div className="summary-box">
