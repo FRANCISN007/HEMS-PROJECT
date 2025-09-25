@@ -85,8 +85,7 @@ react_build_dir = os.path.abspath(
 react_static_dir = os.path.join(react_build_dir, "static")
 
 # ✅ Only mount if directory exists
-# Serve entire React build dir
-if os.path.isdir(react_build_dir):
+if os.path.isdir(react_static_dir):
     app.mount("/static", StaticFiles(directory=react_static_dir), name="static")
     print(f"[INFO] Serving static files from {react_static_dir}")
 else:
@@ -120,16 +119,16 @@ app.include_router(system_router,  prefix="/system", tags=["System"])
 def debug_ping():
     return {"status": "ok"}
 
+# ✅ Route fallback for SPA (React frontend)
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
+    # Skip fallback for known API/static routes
+    known_paths = [route.path for route in app.routes if isinstance(route, APIRoute)]
+    if any(full_path == path.strip("/") or full_path.startswith(path.strip("/") + "/") for path in known_paths):
+        return JSONResponse(status_code=404, content={"detail": "This is an API route, not SPA."})
+
     index_file = os.path.join(react_build_dir, "index.html")
-    request_file = os.path.join(react_build_dir, full_path)
-
-    # If the file exists in build (manifest.json, favicon.ico, etc.), serve it
-    if os.path.isfile(request_file):
-        return FileResponse(request_file)
-
-    # Otherwise serve React index.html (SPA fallback)
     if os.path.isfile(index_file):
         return FileResponse(index_file)
-    return JSONResponse(status_code=404, content={"detail": "Frontend not built or missing."})
+    else:
+        return JSONResponse(status_code=404, content={"detail": "Frontend not built or missing."})

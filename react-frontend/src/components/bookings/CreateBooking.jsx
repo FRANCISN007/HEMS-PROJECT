@@ -6,21 +6,26 @@ import { useNavigate } from "react-router-dom";
 const CreateBooking = () => {
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({
-    room_number: "",
-    guest_name: "",
-    gender: "",
-    mode_of_identification: "",
-    identification_number: "",
-    address: "",
-    arrival_date: "",
-    departure_date: "",
-    booking_type: "",
-    phone_number: "",
-    vehicle_no: "",
-    attachment: "", // ✅ previous attachment filename if available
-  });
+const today = new Date();
+const tomorrow = new Date();
+tomorrow.setDate(today.getDate() + 1);
 
+const formatDate = (date) => date.toISOString().split("T")[0];
+
+const [formData, setFormData] = useState({
+  room_number: "",
+  guest_name: "",
+  gender: "",
+  mode_of_identification: "",
+  identification_number: "",
+  address: "",
+  arrival_date: formatDate(today),      // ✅ default to today
+  departure_date: formatDate(tomorrow), // ✅ default to tomorrow
+  booking_type: "",
+  phone_number: "",
+  vehicle_no: "",
+  attachment: "",
+});
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [message, setMessage] = useState("");
   const [guestResults, setGuestResults] = useState([]);
