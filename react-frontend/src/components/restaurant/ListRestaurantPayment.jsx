@@ -289,7 +289,15 @@ const handlePrint = (sale, payment) => {
                 </td>
                 <td>{new Date(payment.created_at).toLocaleString()}</td>
                 <td>₦{Number(sale.amount_paid).toLocaleString()}</td>
-                <td>₦{Number(sale.balance).toLocaleString()}</td>
+                <td
+                  style={{
+                    color: Number(sale.balance) === 0 ? "green" : "red",
+                    fontWeight: "bold",
+                  }}
+                >
+                  ₦{Number(sale.balance).toLocaleString()}
+                </td>
+
                 <td className="row-actions">
                   <button
                     className="btn edit"
