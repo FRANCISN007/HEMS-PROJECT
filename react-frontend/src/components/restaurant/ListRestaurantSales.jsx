@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./ListRestaurantSales.css";
 import "./Receipt.css"; // ✅ Receipt styles
+import { HOTEL_NAME } from "../../config/constants";
 
 const ListRestaurantSales = () => {
   const printRef = useRef(); // Reference for receipt content
@@ -338,8 +339,8 @@ const fetchSalesWithDates = async (from, to) => {
           <div className="print-modal" onClick={(e) => e.stopPropagation()}>
             <div ref={printRef} className="receipt-container">
               <div className="receipt-header">
-                <h2>Destone Hotel & Suite</h2>
-                <p>Bar / Restaurant</p>
+                <h2>{HOTEL_NAME}</h2>
+                <p>Restaurant Sales & Payment</p>
                 <p>{new Date(selectedSale.created_at).toLocaleString()}</p>
                 <hr />
               </div>

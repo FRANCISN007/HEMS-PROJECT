@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./ListBarPayment.css";
+import { HOTEL_NAME } from "../../config/constants";
+
+
 
 const ListBarPayment = () => {
   const [payments, setPayments] = useState([]);
@@ -141,7 +144,8 @@ const ListBarPayment = () => {
           </style>
         </head>
         <body>
-          <h2>BAR PAYMENT RECEIPT</h2>
+          <h2>${HOTEL_NAME.toUpperCase()}</h2>   <!-- 👈 use global hotel name -->
+          <h2>Bar Payment Receipt</h2>
           <hr/>
           <p><strong>Pay ID:</strong> ${payment.id}</p>
           <p><strong>Sale ID:</strong> ${payment.bar_sale_id}</p>

@@ -4,6 +4,10 @@ import { checkLicenseStatus } from "../api/licenseApi";
 import backgroundImage from "../assets/images/hotel-bg.jpg";
 import "./HomePage.css";
 
+import { HOTEL_NAME } from "../config/constants";
+
+
+
 const HomePage = () => {
   const navigate = useNavigate();
 
@@ -64,9 +68,8 @@ const HomePage = () => {
           justifyContent: "space-between",
         }}
       >
-        <div className="hotel-name-banner">
-           The Grand Plaza Hotel
-        </div>
+        {/* ✅ hotel name is now global */}
+        <div className="hotel-name-banner">{HOTEL_NAME}</div>
 
         <div className="home-card">
           <div className="hems-text">

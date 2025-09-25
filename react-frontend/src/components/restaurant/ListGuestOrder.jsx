@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./ListGuestOrder.css";
 import "./Receipt.css"; // ✅ Reuse receipt styles
+import { HOTEL_NAME } from "../../config/constants";
 
 // Currency formatter for NGN
 const currencyNGN = (value) =>
@@ -391,6 +392,7 @@ const fetchOrders = () => fetchOrdersWithDates(startDate, endDate);
           <div className="print-modal" onClick={(e) => e.stopPropagation()}>
             <div ref={printRef} className="receipt-container">
               <div className="receipt-header">
+                <h2>{HOTEL_NAME.toUpperCase()}</h2>  
                 <h2>Kitchen Order</h2>
                 <p>{printTime.toLocaleString()}</p>
                 <hr />
