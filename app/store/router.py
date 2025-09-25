@@ -211,7 +211,7 @@ from typing import List
 @router.get("/items/simple", response_model=List[store_schemas.StoreItemOut])
 def list_items_simple(
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
+    #current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     try:
         # Subquery to get the latest stock entry (unit_price) for each item
@@ -574,7 +574,7 @@ async def update_purchase(
 def delete_purchase(
     entry_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     entry = db.query(store_models.StoreStockEntry).filter_by(id=entry_id).first()
     if not entry:
@@ -821,7 +821,7 @@ def update_issue(
 def delete_issue(
     issue_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     issue = db.query(StoreIssue).filter_by(id=issue_id).first()
     if not issue:

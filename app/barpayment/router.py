@@ -75,6 +75,7 @@ def create_bar_payment(
     }
 
 
+
 @router.get("/")
 def list_bar_payments(
     bar_id: int | None = None,
@@ -119,7 +120,7 @@ def list_bar_payments(
         if not sale:
             continue
 
-        # ✅ Compute total paid for this sale (exclude voided)
+        # ✅ Compute total paid for this sale (exclude voided) → ALL-TIME, not filtered
         total_paid_for_sale = (
             db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
             .filter(
@@ -136,7 +137,7 @@ def list_bar_payments(
             total_due_all += balance_due
             processed_sales.add(sale.id)
 
-        # ✅ Only count ACTIVE payments in totals
+        # ✅ Only count ACTIVE payments in totals (but only those inside the filter)
         if p.status == "active":
             total_paid_all += float(p.amount_paid)
 
@@ -150,7 +151,7 @@ def list_bar_payments(
                 elif method == "transfer":
                     total_transfer += float(p.amount_paid)
 
-        # ✅ Decide sale-level payment status (recalculated)
+        # ✅ Decide sale-level payment status (recalculated ALL-TIME)
         if total_paid_for_sale == 0:
             sale_status = "unpaid"
         elif total_paid_for_sale < sale.total_amount:
@@ -168,9 +169,9 @@ def list_bar_payments(
             "id": p.id,
             "bar_sale_id": p.bar_sale_id,
             "sale_amount": float(sale.total_amount),
-            "amount_paid": float(p.amount_paid),           # this transaction
-            "cumulative_paid": float(total_paid_for_sale), # ✅ total active payments
-            "balance_due": float(balance_due),
+            "amount_paid": float(p.amount_paid),            # this transaction
+            "cumulative_paid": float(total_paid_for_sale),  # ✅ total active payments (all-time)
+            "balance_due": float(balance_due),              # ✅ outstanding (all-time)
             "payment_method": p.payment_method,
             "note": p.note,
             "date_paid": p.date_paid,
@@ -183,7 +184,7 @@ def list_bar_payments(
         "summary": {   # ✅ excludes voided payments
             "total_sales": total_sales,
             "total_paid": total_paid_all,
-            "total_due": total_due_all,
+            "total_due": total_due_all,   # ✅ now reflects all-time outstanding
             "total_cash": total_cash,
             "total_pos": total_pos,
             "total_transfer": total_transfer,

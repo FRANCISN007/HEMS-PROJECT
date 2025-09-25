@@ -249,7 +249,7 @@ def delete_bar_inventory(inventory_id: int, db: Session = Depends(get_db),
 @router.get("/items/simple", response_model=List[bar_schemas.BarSaleItemSummary])
 def get_bar_items(
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    #current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     # Get latest selling_price per item (avoid duplicates)
     subquery = (
@@ -704,11 +704,11 @@ def update_bar_sale(
 def delete_bar_sale(
     sale_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     # ✅ Only admin can delete
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can delete sales")
+    #if current_user.role != "admin":
+        #raise HTTPException(status_code=403, detail="Only admin can delete sales")
 
     sale = db.query(bar_models.BarSale).filter_by(id=sale_id).first()
     if not sale:

@@ -60,22 +60,13 @@ const ListRestaurantPayment = () => {
       );
 
       // ✅ Normalize: recalc amount_paid & filter voided
-      const normalizedSales = (response.data.sales || []).map((sale) => {
-        const allPayments = sale.payments || [];
+      const normalizedSales = (response.data.sales || []).map((sale) => ({
+      ...sale,
+      total_amount: Number(sale.total_amount) || 0,
+      amount_paid: Number(sale.amount_paid) || 0, // ✅ trust backend
+      balance: Number(sale.balance) || 0,         // ✅ trust backend
+    }));
 
-        // ✅ Sum only valid payments
-        const amountPaid = allPayments
-          .filter((p) => !p.is_void)
-          .reduce((sum, p) => sum + Number(p.amount_paid || 0), 0);
-
-        return {
-          ...sale,
-          payments: allPayments, // ✅ keep voided for display
-          total_amount: Number(sale.total_amount) || 0,
-          amount_paid: amountPaid,
-          balance: (Number(sale.total_amount) || 0) - amountPaid,
-        };
-      });
 
       // ✅ Compare frontend calc vs backend
       normalizedSales.forEach((sale) => {
@@ -151,45 +142,51 @@ const ListRestaurantPayment = () => {
   };
 
   // ✅ Updated handlePrint
-  const handlePrint = (sale, payment) => {
-    const receiptWindow = window.open("", "_blank");
-    receiptWindow.document.write(`
-      <html>
-        <head>
-          <title>Restaurant Payment Receipt</title>
-          <style>
-            body { font-family: monospace, Arial, sans-serif; padding: 5px; margin: 0; width: 80mm; }
-            h2 { text-align: center; font-size: 14px; margin: 5px 0; }
-            p { margin: 2px 0; font-size: 12px; }
-            hr { border: 1px dashed #000; margin: 6px 0; }
-            .void { color: red; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <h2>RESTAURANT PAYMENT RECEIPT</h2>
-          <hr/>
-          <p><strong>Sale ID:</strong> ${sale.id}</p>
-          <p><strong>Payment ID:</strong> ${payment.id}</p>
-          <p><strong>Sales Amount:</strong> ₦${Number(sale.total_amount).toLocaleString()}</p>
-          <p><strong>Amount Paid:</strong> ₦${Number(payment.amount_paid).toLocaleString()}</p>
-          <p><strong>Total Paid:</strong> ₦${Number(sale.amount_paid).toLocaleString()}</p>
-          <p><strong>Balance:</strong> ₦${Number(sale.balance).toLocaleString()}</p>
-          <p><strong>Mode:</strong> ${payment.payment_mode}</p>
-          <p><strong>Paid By:</strong> ${payment.paid_by || "N/A"}</p>
-          <p><strong>Status:</strong> ${
-            payment.is_void ? '<span class="void">VOIDED</span>' : "VALID"
-          }</p>
-          <p><strong>Date:</strong> ${new Date(
-            payment.created_at
-          ).toLocaleString()}</p>
-          <hr/>
-          <p style="text-align:center;">Thank you!</p>
-        </body>
-      </html>
-    `);
-    receiptWindow.document.close();
-    receiptWindow.print();
-  };
+const handlePrint = (sale, payment) => {
+  const receiptWindow = window.open("", "_blank");
+
+  // Ensure numeric safety
+  const totalAmount = Number(sale.total_amount) || 0;
+  const currentPayment = Number(payment.amount_paid) || 0;
+  const totalPaid = Number(sale.amount_paid) || 0;   // ✅ backend-driven
+  const balance = Number(sale.balance) || 0;         // ✅ backend-driven
+
+  receiptWindow.document.write(`
+    <html>
+      <head>
+        <title>Restaurant Payment Receipt</title>
+        <style>
+          body { font-family: monospace, Arial, sans-serif; padding: 5px; margin: 0; width: 80mm; }
+          h2 { text-align: center; font-size: 14px; margin: 5px 0; }
+          p { margin: 2px 0; font-size: 12px; }
+          hr { border: 1px dashed #000; margin: 6px 0; }
+          .void { color: red; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <h2>RESTAURANT PAYMENT RECEIPT</h2>
+        <hr/>
+        <p><strong>Sale ID:</strong> ${sale.id}</p>
+        <p><strong>Payment ID:</strong> ${payment.id}</p>
+        <p><strong>Sales Amount:</strong> ₦${totalAmount.toLocaleString()}</p>
+        <p><strong>Current Payment:</strong> ₦${currentPayment.toLocaleString()}</p>
+        <p><strong>Total Paid So Far:</strong> ₦${totalPaid.toLocaleString()}</p>
+        <p><strong>Outstanding Balance:</strong> ₦${balance.toLocaleString()}</p>
+        <p><strong>Mode:</strong> ${payment.payment_mode}</p>
+        <p><strong>Paid By:</strong> ${payment.paid_by || "N/A"}</p>
+        <p><strong>Status:</strong> ${
+          payment.is_void ? '<span class="void">VOIDED</span>' : "VALID"
+        }</p>
+        <p><strong>Date:</strong> ${new Date(payment.created_at).toLocaleString()}</p>
+        <hr/>
+        <p style="text-align:center;">Thank you!</p>
+      </body>
+    </html>
+  `);
+
+  receiptWindow.document.close();
+  receiptWindow.print();
+};
 
   if (loading) return <p>Loading payments...</p>;
   if (error) return <p>{error}</p>;

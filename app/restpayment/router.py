@@ -109,34 +109,37 @@ def list_payments_with_items(
             continue
 
         if sale.id not in sales_map:
+            # ✅ Get true all-time paid (exclude voided)
+            total_paid_for_sale = (
+                db.query(func.coalesce(func.sum(RestaurantSalePayment.amount_paid), 0))
+                .filter(
+                    RestaurantSalePayment.sale_id == sale.id,
+                    RestaurantSalePayment.is_void == False
+                )
+                .scalar()
+            )
+
+            balance = float(sale.total_amount or 0) - float(total_paid_for_sale)
+
+            # Decide sale status (all-time)
+            if total_paid_for_sale == 0:
+                status = "unpaid"
+            elif total_paid_for_sale < sale.total_amount:
+                status = "partial"
+            else:
+                status = "paid"
+
             sales_map[sale.id] = {
                 "id": sale.id,
                 "guest_name": sale.guest_name,
                 "total_amount": float(sale.total_amount or 0),
-                "amount_paid": 0.0,  # will be accumulated
-                "balance": float(sale.total_amount or 0),
+                "amount_paid": float(total_paid_for_sale),
+                "balance": balance,
                 "payments": [],
-                "status": "unpaid",
+                "status": status,
             }
 
-        # Only count valid payments toward amount_paid
-        if not p.is_void:
-            sales_map[sale.id]["amount_paid"] += float(p.amount_paid or 0)
-
-        # Balance = total - non-voided payments
-        sales_map[sale.id]["balance"] = (
-            sales_map[sale.id]["total_amount"] - sales_map[sale.id]["amount_paid"]
-        )
-
-        # Update payment status
-        if sales_map[sale.id]["balance"] == 0:
-            sales_map[sale.id]["status"] = "paid"
-        elif sales_map[sale.id]["amount_paid"] > 0:
-            sales_map[sale.id]["status"] = "partial"
-        else:
-            sales_map[sale.id]["status"] = "unpaid"
-
-        # Add payment dict, with same balance reflected in every row
+        # Add payment dict, but use all-time balance for consistency
         payment_dict = {
             "id": p.id,
             "sale_id": p.sale_id,
@@ -145,7 +148,7 @@ def list_payments_with_items(
             "paid_by": p.paid_by,
             "is_void": p.is_void,
             "created_at": p.created_at,
-            "balance": sales_map[sale.id]["balance"],
+            "balance": sales_map[sale.id]["balance"],  # ✅ always true outstanding
         }
         sales_map[sale.id]["payments"].append(payment_dict)
 
@@ -166,7 +169,7 @@ def list_payments_with_items(
     summary["Total Paid"] = float(total_paid)
     summary["Total Outstanding"] = float(total_outstanding)
 
-    # Step 3: Redisplay sales with balance > 0
+    # Step 3: Redisplay only outstanding sales if needed
     redisplay_sales = [s for s in sales_map.values() if s["balance"] > 0]
 
     return {
@@ -174,6 +177,8 @@ def list_payments_with_items(
         "summary": summary,
         "redisplay_sales": redisplay_sales
     }
+
+
 
 from typing import List
 
