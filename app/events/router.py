@@ -103,13 +103,31 @@ def list_events(
     for event in events:
         if event.payment_status == "cancelled":
             continue
-        payment_statuses = [p.payment_status.lower() for p in event.payments if p.payment_status]
-        if "complete" in payment_statuses:
-            event.payment_status = "complete"
-        elif "incomplete" in payment_statuses:
+
+        # ✅ Total due = event_amount + caution_fee
+        total_due = float(event.event_amount or 0) + float(event.caution_fee or 0)
+
+        # ✅ Sum all payments (excluding voided) for this event
+        total_paid = sum(
+            float(p.amount_paid or 0)
+            for p in event.payments
+            if p.payment_status != "voided"
+        )
+        total_discount = sum(
+            float(p.discount_allowed or 0)
+            for p in event.payments
+            if p.payment_status != "voided"
+        )
+
+        balance_due = total_due - (total_paid + total_discount)
+
+        # ✅ Recompute payment status dynamically
+        if balance_due > 0:
             event.payment_status = "incomplete"
+        elif balance_due == 0:
+            event.payment_status = "complete"
         else:
-            event.payment_status = "active"
+            event.payment_status = "excess"
 
     # Compute summary
     filtered_events = [e for e in events if e.payment_status != "cancelled"]

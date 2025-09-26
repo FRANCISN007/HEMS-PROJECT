@@ -63,8 +63,11 @@ def create_event_payment(
     new_total_paid = total_paid + payment_data.amount_paid
     new_total_discount = total_discount + payment_data.discount_allowed
 
-    # Compute balance due (excluding caution fee)
-    balance_due = event.event_amount - (new_total_paid + new_total_discount)
+        # ✅ Compute the total cost of the event (event amount + caution fee)
+    total_cost = event.event_amount + event.caution_fee
+
+    # Compute balance due based on the full cost
+    balance_due = total_cost - (new_total_paid + new_total_discount)
 
     # Determine payment status
     if balance_due > 0:
@@ -72,7 +75,7 @@ def create_event_payment(
     elif balance_due == 0:
         payment_status = "complete"
     else:
-        payment_status = "excess"  # Payment exceeded the event amount
+        payment_status = "excess"  # Overpayment beyond total cost
 
     # Proceed to create the payment since the event is active
     new_payment = eventpayment_models.EventPayment(
@@ -202,7 +205,10 @@ def list_event_payments(
 
         total_discount = (
             db.query(func.sum(eventpayment_models.EventPayment.discount_allowed))
-            .filter(eventpayment_models.EventPayment.event_id == payment.event_id)
+            .filter(
+                eventpayment_models.EventPayment.event_id == payment.event_id,
+                eventpayment_models.EventPayment.payment_status != "voided"
+            )
             .scalar()
         ) or 0
 
@@ -212,18 +218,26 @@ def list_event_payments(
 
         balance_due = total_due - (float(total_paid) + float(total_discount))
 
+        # ✅ Recompute payment status correctly
+        if balance_due > 0:
+            payment_status = "incomplete"
+        elif balance_due == 0:
+            payment_status = "complete"
+        else:
+            payment_status = "excess"
+
         formatted_payments.append({
             "id": payment.id,
             "event_id": payment.event_id,
             "organiser": payment.organiser,
-            "event_amount": event_amount,     # always number
-            "caution_fee": caution_fee,       # always number
+            "event_amount": event_amount,
+            "caution_fee": caution_fee,
             "total_due": total_due,
             "amount_paid": float(payment.amount_paid or 0),
             "discount_allowed": float(payment.discount_allowed or 0),
             "balance_due": balance_due,
             "payment_method": payment.payment_method,
-            "payment_status": payment.payment_status,
+            "payment_status": payment_status,   # ✅ recomputed
             "payment_date": payment.payment_date.isoformat(),
             "created_by": payment.created_by,
         })
