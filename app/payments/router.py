@@ -67,7 +67,7 @@ def create_payment(
     payment_date = payment_request.payment_date.astimezone(lagos_tz)
     
      # Only admin can backdate payments (past dates)
-    if payment_date.date() < transaction_time.date() and "admin" not in current_user.roles:
+    if payment_date.date() < datetime.now(lagos_tz).date() and "admin" not in current_user.roles:
         raise HTTPException(
             status_code=400,
             detail="Only admin is allowed to enter a past date for payments."
