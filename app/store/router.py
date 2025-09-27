@@ -930,29 +930,37 @@ def get_store_balances(
     # 4) Build Final Response
     response = []
     for item in received_q:
+        # Always pick the most recent stock entry for unit price
         latest_entry = (
             db.query(store_models.StoreStockEntry)
             .filter(store_models.StoreStockEntry.item_id == item.item_id)
-            .order_by(store_models.StoreStockEntry.purchase_date.desc())
+            .order_by(store_models.StoreStockEntry.purchase_date.desc(), store_models.StoreStockEntry.id.desc())
             .first()
         )
-        unit_price = float(latest_entry.unit_price) if latest_entry else None
-        balance_value = (unit_price * float(item.current_balance)) if unit_price is not None else None
+        
+        # Debug: Check the latest entry to verify it's correct
+        print(f"Item ID: {item.item_id} Latest Entry: {latest_entry}")  # Debug print
+
+        # Use the latest/current unit price
+        current_unit_price = float(latest_entry.unit_price) if latest_entry else 0.0
+        balance_value = current_unit_price * float(item.current_balance or 0)
 
         response.append({
             "item_id": item.item_id,
             "item_name": item.item_name,
             "category_name": item.category_name,
             "unit": item.unit,
-            "total_received": float(item.total_received or 0),   # All-time purchases
-            "total_issued": issued_map.get(item.item_id, 0),     # All-time issues (for info)
-            "total_adjusted": adjustment_map.get(item.item_id, 0), # All-time adjustments (for info)
-            "balance": float(item.current_balance or 0),         # Actual current stock
-            "last_unit_price": unit_price,
-            "balance_total_amount": round(balance_value, 2) if balance_value is not None else None,
+            "total_received": float(item.total_received or 0),       # All-time purchases
+            "total_issued": issued_map.get(item.item_id, 0),         # All-time issues
+            "total_adjusted": adjustment_map.get(item.item_id, 0),   # All-time adjustments
+            "balance": float(item.current_balance or 0),             # Actual current stock
+            "current_unit_price": current_unit_price,                # ✅ Always the latest unit price
+            "balance_total_amount": round(balance_value, 2),         # ✅ Cost at current unit price
         })
 
     return response
+
+
 
 
 @router.post("/adjust", response_model=StoreInventoryAdjustmentDisplay)
@@ -1253,14 +1261,54 @@ def get_bar_stock_balance(
 
             bar = db.query(bar_models.Bar).get(b_id)
 
+            # ---- Attempt 1: most recent entry WITH a non-null unit_price ----
             latest_entry = (
                 db.query(store_models.StoreStockEntry)
-                .filter(store_models.StoreStockEntry.item_id == i_id)
-                .order_by(store_models.StoreStockEntry.purchase_date.desc())
+                .filter(
+                    store_models.StoreStockEntry.item_id == i_id,
+                    store_models.StoreStockEntry.unit_price.isnot(None)
+                )
+                .order_by(store_models.StoreStockEntry.purchase_date.desc(), store_models.StoreStockEntry.id.desc())
                 .first()
             )
-            last_unit_price = float(latest_entry.unit_price) if latest_entry else None
-            balance_total_amount = balance * last_unit_price if last_unit_price is not None else None
+
+            # ---- Attempt 2: if none found, fall back to the most recent entry (regardless of unit_price) ----
+            if not latest_entry:
+                latest_entry = (
+                    db.query(store_models.StoreStockEntry)
+                    .filter(store_models.StoreStockEntry.item_id == i_id)
+                    .order_by(store_models.StoreStockEntry.purchase_date.desc(), store_models.StoreStockEntry.id.desc())
+                    .first()
+                )
+
+            # ---- Attempt 3: final fallback - any entry with non-null price ordered by id descending ----
+            if (not latest_entry) or (latest_entry and (latest_entry.unit_price is None)):
+                fallback = (
+                    db.query(store_models.StoreStockEntry)
+                    .filter(
+                        store_models.StoreStockEntry.item_id == i_id,
+                        store_models.StoreStockEntry.unit_price.isnot(None)
+                    )
+                    .order_by(store_models.StoreStockEntry.id.desc())
+                    .first()
+                )
+                if fallback:
+                    latest_entry = fallback
+
+            # parse price safely
+            unit_price = None
+            if latest_entry and latest_entry.unit_price is not None:
+                try:
+                    unit_price = float(latest_entry.unit_price)
+                except Exception:
+                    # if stored as Decimal/string, coerce via str then float
+                    try:
+                        unit_price = float(str(latest_entry.unit_price))
+                    except Exception:
+                        unit_price = None
+
+            # Compute balance total only when we have a price
+            balance_total_amount = round(balance * unit_price, 2) if unit_price is not None else None
 
             results.append(bar_schemas.BarStockBalance(
                 bar_id=b_id,
@@ -1273,7 +1321,7 @@ def get_bar_stock_balance(
                 total_sold=sold,
                 total_adjusted=adjusted,
                 balance=balance,
-                last_unit_price=last_unit_price,
+                last_unit_price=unit_price,               # note: this now holds the 'current' price if found
                 balance_total_amount=balance_total_amount,
             ))
 

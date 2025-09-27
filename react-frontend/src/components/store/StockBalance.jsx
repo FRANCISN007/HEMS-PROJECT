@@ -20,15 +20,14 @@ const StockBalance = () => {
 
   roles = roles.map((r) => r.toLowerCase());
 
-
   if (!(roles.includes("admin") || roles.includes("store"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to view store stock balance.</p>
-    </div>
-  );
-}
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to view store stock balance.</p>
+      </div>
+    );
+  }
 
   useEffect(() => {
     fetchCategories();
@@ -117,7 +116,7 @@ const StockBalance = () => {
             <th>Total Issued</th>
             <th>Total Adjusted</th>
             <th>Balance</th>
-            <th>Last Unit Price</th>
+            <th>Current Unit Price</th> {/* Updated column header */}
             <th>Balance Value</th>
           </tr>
         </thead>
@@ -135,9 +134,10 @@ const StockBalance = () => {
               <td>{item.total_adjusted}</td>
               <td>{item.balance}</td>
               <td>
-                {item.last_unit_price
-                  ? `₦${item.last_unit_price.toLocaleString()}`
-                  : "-"}
+                {item.current_unit_price
+                  ? `₦${item.current_unit_price.toLocaleString()}`
+                  : "-"}{" "}
+                {/* Use current_unit_price */}
               </td>
               <td>
                 {item.balance_total_amount

@@ -167,7 +167,7 @@ const BarBalanceStock = () => {
             <th>Total Sold</th>
             <th>Total Adjusted</th>
             <th>Balance</th>
-            <th>Last Unit Price</th>
+            <th>Current Unit Price</th>
             <th>Balance Value</th>
           </tr>
         </thead>
