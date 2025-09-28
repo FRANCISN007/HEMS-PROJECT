@@ -87,7 +87,7 @@ def start_backend():
 
 def open_browser(ip):
     """Open browser to the preferred IP"""
-    time.sleep(3)  # Wait for backend to start
+    time.sleep(5)  # Wait for backend to start
     print(f"[INFO] Opening browser at http://{ip}:8000")
     webbrowser.open(f"http://{ip}:8000")
 
