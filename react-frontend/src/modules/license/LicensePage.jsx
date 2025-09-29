@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { verifyLicense, generateLicense } from "../../api/licenseApi";
-import { updateApp } from "../../api/systemApi"; // ✅ import new API
 import "./LicensePage.css";
 
 const LicensePage = () => {
@@ -9,8 +8,6 @@ const LicensePage = () => {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [rebuildMessage, setRebuildMessage] = useState("");
-  const [isRebuilding, setIsRebuilding] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -22,7 +19,6 @@ const LicensePage = () => {
       setPassword("");
       setMessage("");
       setError("");
-      setRebuildMessage("");
     }
   }, [location]);
 
@@ -68,27 +64,6 @@ const LicensePage = () => {
     }
   };
 
-  // ✅ Trigger rebuild
-  const handleUpdateApp = async () => {
-    setRebuildMessage("Updating app... please wait");
-    setIsRebuilding(true);
-
-    try {
-      const data = await updateApp();
-      if (data.status === "success") {
-        setRebuildMessage("✅ Update successful! You can now verify your license.");
-      } else {
-        setRebuildMessage("❌ Update failed. Try again.");
-      }
-    } catch (err) {
-      setRebuildMessage(
-        "❌ Error during update: " + (err.response?.data?.detail || err.message)
-      );
-    } finally {
-      setIsRebuilding(false);
-    }
-  };
-
   // ✅ Generate license
   const handleGenerate = async () => {
     setMessage("");
@@ -128,24 +103,6 @@ const LicensePage = () => {
 
   return (
     <>
-      {/* ✅ Update App Button (top-right corner) */}
-      <div style={{ position: "absolute", top: "15px", right: "20px" }}>
-        <button
-          onClick={handleUpdateApp}
-          disabled={isRebuilding}
-          style={{
-            padding: "8px 12px",
-            backgroundColor: isRebuilding ? "#6c757d" : "#28a745",
-            color: "#fff",
-            border: "none",
-            borderRadius: "5px",
-            cursor: isRebuilding ? "not-allowed" : "pointer",
-          }}
-        >
-          {isRebuilding ? "Updating..." : "Update App"}
-        </button>
-      </div>
-
       <div className="hems-logo">H&nbsp;E&nbsp;M&nbsp; S</div>
       <div className="hems-subtitle">Hotel & Event Management System</div>
 
@@ -160,7 +117,6 @@ const LicensePage = () => {
             onChange={(e) => setLicenseKey(e.target.value)}
             placeholder="Enter license key"
             className="license-input"
-            disabled={isRebuilding}
           />
         </div>
 
@@ -172,23 +128,14 @@ const LicensePage = () => {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Enter admin password"
             className="license-input"
-            disabled={isRebuilding}
           />
         </div>
 
         <div className="license-button-group">
-          <button
-            className="license-button"
-            onClick={handleVerify}
-            disabled={isRebuilding}
-          >
+          <button className="license-button" onClick={handleVerify}>
             Verify License
           </button>
-          <button
-            className="license-button"
-            onClick={handleGenerate}
-            disabled={isRebuilding}
-          >
+          <button className="license-button" onClick={handleGenerate}>
             Generate License
           </button>
         </div>
@@ -196,20 +143,6 @@ const LicensePage = () => {
         {/* ✅ Messages */}
         {message && <p className="license-message success">{message}</p>}
         {error && <p className="license-message error">{error}</p>}
-        {rebuildMessage && (
-          <p
-            className={`license-message ${
-              rebuildMessage.startsWith("✅")
-                ? "success"
-                : rebuildMessage.startsWith("❌")
-                ? "error"
-                : ""
-            }`}
-          >
-            {isRebuilding && <span className="emoji-spinner">⏳</span>}{" "}
-            {rebuildMessage}
-          </p>
-        )}
       </div>
     </>
   );

@@ -139,7 +139,7 @@ body {
 }
 
 
-/* Rotate the ⏳ emoji */
+/* Rotate the ⏳ emoji 
 .emoji-spinner {
   display: inline-block;
   animation: spin 1.2s linear infinite;
@@ -155,3 +155,4 @@ body {
     transform: rotate(360deg);
   }
 }
+*/
