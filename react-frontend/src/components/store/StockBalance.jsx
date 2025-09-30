@@ -109,7 +109,7 @@ const StockBalance = () => {
       <table>
         <thead>
           <tr>
-            <th>Item</th>
+            <th>Items</th>
             <th>Unit</th>
             <th>Category</th>
             <th>Total Received</th>
