@@ -466,6 +466,80 @@ def list_sales(
     return {"sales": result, "summary": summary}
 
 
+@router.get("/sales/items-summary", response_model=dict)
+def summarize_items_sold(
+    status: Optional[str] = Query(None, description="Filter by status: unpaid, partial, paid"),
+    start_date: Optional[date] = Query(None, description="Start date in YYYY-MM-DD format"),
+    end_date: Optional[date] = Query(None, description="End date in YYYY-MM-DD format"),
+    location_id: Optional[int] = Query(None, description="Filter sales by restaurant location"),
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
+):
+    query = db.query(RestaurantSale)
+
+    # ✅ Apply same filters as /sales
+    if status:
+        query = query.filter(RestaurantSale.status == status)
+
+    if start_date:
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        query = query.filter(RestaurantSale.served_at >= start_dt)
+
+    if end_date:
+        end_dt = datetime.combine(end_date, datetime.max.time())
+        query = query.filter(RestaurantSale.served_at <= end_dt)
+
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=400, detail="Start date cannot be after end date")
+
+    sales = query.all()
+
+    # ✅ Aggregate items
+    item_summary = {}
+    grand_total = 0.0
+
+    for sale in sales:
+        order = sale.order
+        if not order:
+            continue
+
+        # ✅ Location filter
+        if location_id is not None and order.location_id != location_id:
+            continue
+
+        for item in order.items:
+            meal_item = MealOrderItemDisplay.from_orm_with_meal(item)
+
+            name = meal_item.meal_name
+            qty = meal_item.quantity
+            price = meal_item.price_per_unit   # ✅ use price_per_unit instead of price
+            amount = meal_item.total_price or (qty * (price or 0))
+
+            if name not in item_summary:
+                item_summary[name] = {"qty": 0, "price": price, "amount": 0}
+
+            item_summary[name]["qty"] += qty
+            item_summary[name]["amount"] += amount
+            grand_total += amount
+
+    # ✅ Convert dict → list
+    items_sold = [
+        {
+            "item": name,
+            "qty": data["qty"],
+            "price": data["price"],
+            "amount": data["amount"],
+        }
+        for name, data in item_summary.items()
+    ]
+
+    return {
+        "items_sold": items_sold,
+        "grand_total": grand_total
+    }
+
+
+
 
 @router.get("/sales/outstanding", response_model=dict)
 def list_outstanding(

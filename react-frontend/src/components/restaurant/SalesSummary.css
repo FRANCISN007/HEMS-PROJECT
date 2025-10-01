@@ -1,0 +1,55 @@
+.sales-summary-page {
+  padding: 10px 20px; /* reduce padding to give more space for table */
+}
+
+.sales-summary-page h2 {
+  margin-bottom: 10px; /* move heading closer to top */
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px; /* tighter spacing */
+  flex-wrap: wrap;
+}
+
+.filter-bar label {
+  font-weight: bold;
+}
+
+.summary-table-container {
+  margin-top: 10px;
+  overflow-x: auto;
+}
+
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.summary-table th,
+.summary-table td {
+  border: 1px solid #999; /* darker grid lines */
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.summary-table th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+}
+
+.summary-table tbody tr:nth-child(even) {
+  background-color: #fafafa; /* light gray for even rows */
+}
+
+.summary-table tbody tr:nth-child(odd) {
+  background-color: #ffffff; /* white for odd rows */
+}
+
+.grand-total-row {
+  background-color: #dce9ff; /* highlight totals */
+  font-weight: bold;
+}
