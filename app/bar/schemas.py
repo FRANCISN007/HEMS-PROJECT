@@ -168,6 +168,21 @@ class BarInventoryReceiptDisplay(BaseModel):
         from_attributes = True
 
 
+class BarItemSummarySchema(BaseModel):
+    item_id: int
+    item_name: str
+    total_quantity: int
+    selling_price: float
+    total_amount: float
+
+    class Config:
+        from_attributes = True
+
+class BarItemSummaryResponse(BaseModel):
+    items: List[BarItemSummarySchema]
+    grand_total: float
+
+
 #class BarSaleDisplay(BaseModel):
     #id: int
     #bar_id: int

@@ -20,7 +20,7 @@ from datetime import timedelta
 from app.barpayment import models as barpayment_models
 
 from app.store.models import StoreItem
-from app.bar.schemas import BarStockReceiveCreate, BarInventoryDisplay, BarItemSimple
+from app.bar.schemas import BarStockReceiveCreate, BarInventoryDisplay, BarItemSummarySchema, BarItemSummaryResponse
 from datetime import datetime
 from app.bar.schemas import  BarInventoryReceiptDisplay  # <- New response schema
 
@@ -73,7 +73,7 @@ def list_bars(
     #current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
     return db.query(bar_models.Bar).order_by(bar_models.Bar.id.asc()).all()
-
+#
 
 # ----------------------------
 # BAR INVENTORY (Replace BarItem)
@@ -502,6 +502,73 @@ def list_bar_sales(
         "total_sales_amount": total_sales_amount,
         "sales": results,
     }
+
+
+
+
+@router.get("/item-summary", response_model=BarItemSummaryResponse)
+def get_bar_item_summary(
+    bar_id: Optional[int] = Query(None, description="Filter by Bar ID"),
+    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+):
+    try:
+        query = (
+            db.query(
+                store_models.StoreItem.id.label("item_id"),
+                store_models.StoreItem.name.label("item_name"),
+                func.sum(bar_models.BarSaleItem.quantity).label("total_quantity"),
+                func.avg(bar_models.BarSaleItem.selling_price).label("selling_price"),
+                func.sum(bar_models.BarSaleItem.total_amount).label("total_amount"),
+            )
+            .join(bar_models.BarInventory, bar_models.BarInventory.item_id == store_models.StoreItem.id)
+            .join(bar_models.BarSaleItem, bar_models.BarSaleItem.bar_inventory_id == bar_models.BarInventory.id)
+            .join(bar_models.BarSale, bar_models.BarSale.id == bar_models.BarSaleItem.sale_id)
+        )
+
+        # Bar filter if provided
+        if bar_id:
+            query = query.filter(bar_models.BarSale.bar_id == bar_id)
+
+        # Date filters only apply if provided (empty params mean no date restriction)
+        if start_date and end_date:
+            query = query.filter(func.date(bar_models.BarSale.sale_date).between(start_date, end_date))
+        elif start_date:
+            query = query.filter(func.date(bar_models.BarSale.sale_date) >= start_date)
+        elif end_date:
+            query = query.filter(func.date(bar_models.BarSale.sale_date) <= end_date)
+
+        query = query.group_by(store_models.StoreItem.id, store_models.StoreItem.name)
+
+        results = query.all()
+
+        # Convert results to primitive dicts (Pydantic will also validate for response_model)
+        items = []
+        for row in results:
+            items.append({
+                "item_id": int(row.item_id),
+                "item_name": row.item_name,
+                "total_quantity": int(row.total_quantity or 0),
+                "selling_price": float(row.selling_price or 0.0),
+                "total_amount": float(row.total_amount or 0.0),
+            })
+
+        grand_total = sum(it["total_amount"] for it in items)
+
+        # optional: uncomment to debug server logs when testing
+        # print("DEBUG /bar/item-summary ->", {"items_len": len(items), "grand_total": grand_total})
+
+        return {"items": items, "grand_total": grand_total}
+
+    except Exception as e:
+        # log server-side error for easier debugging
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    
 
 
 @router.get("/unpaid_sales", response_model=bar_schemas.BarSaleListResponse)

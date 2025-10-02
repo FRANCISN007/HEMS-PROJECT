@@ -64,6 +64,7 @@ import BarSalesCreate from "./components/bar/BarSalesCreate";
 import ListBarSales from "./components/bar/ListBarSales";
 import BarPaymentCreate from "./components/bar/BarPaymentCreate";
 import ListBarPayment from "./components/bar/ListBarPayment";
+import BarSalesSummary from "./components/bar/BarSalesSummary";
 
 
 import RestaurantLocation from "./components/restaurant/RestaurantLocation";
@@ -138,8 +139,12 @@ const App = () => {
           <Route path="/bar/adjustment/list" element={<ListBarAdjustment />} />
           <Route path="/bar/sales/create" element={<BarSalesCreate />} />
           <Route path="/bar/sales/list" element={<ListBarSales />} />
+          <Route path="/bar/sales/SalesSummary" element={<BarSalesSummary />} />
+
           <Route path="/bar/payment/create" element={<BarPaymentCreate />} />
           <Route path="/bar/payment/list" element={<ListBarPayment />} />
+          
+        
         </Route>
 
         

@@ -81,6 +81,7 @@ const BarDashboardPage = () => {
       submenu: [
         { label: "➕ Create Sales", path: "/bar/sales/create" },
         { label: "📃 List Sales", path: "/bar/sales/list" },
+        { label: "📃 Sales Summary", path: "/bar/sales/SalesSummary" },
       ],
     },
     {

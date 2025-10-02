@@ -5,11 +5,10 @@
   "main": "postcss.config.js",
   "homepage": "./",
   "scripts": {
-  "start": "set HOST=0.0.0.0 && set BROWSER=chrome && react-scripts start",
-  "build": "react-scripts build",
-  "test": "echo \"Error: no test specified\" && exit 1"
-},
-
+    "start": "set HOST=0.0.0.0 && set BROWSER=chrome && react-scripts start",
+    "build": "react-scripts build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -37,5 +36,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "eslint-plugin-react-hooks": "^6.1.0"
   }
 }
