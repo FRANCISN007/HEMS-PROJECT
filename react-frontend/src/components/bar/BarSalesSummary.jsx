@@ -14,7 +14,12 @@ const BarSalesSummary = () => {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  // ✅ Fetch sales summary (memoized to avoid ESLint warning)
+  // ✅ Helper: get today's date as YYYY-MM-DD
+  const getToday = () => {
+    return new Date().toISOString().split("T")[0];
+  };
+
+  // ✅ Fetch sales summary
   const fetchSummary = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -48,11 +53,20 @@ const BarSalesSummary = () => {
     }
   }, []);
 
-  // ✅ Initial fetch
+  // ✅ On mount, set default to today
   useEffect(() => {
+    const today = getToday();
+    setStartDate(today);
+    setEndDate(today);
     fetchBars();
-    fetchSummary();
-  }, [fetchBars, fetchSummary]);
+  }, [fetchBars]);
+
+  // ✅ Whenever filters change (including default today), fetch summary
+  useEffect(() => {
+    if (startDate && endDate) {
+      fetchSummary();
+    }
+  }, [fetchSummary, startDate, endDate]);
 
   return (
     <div className="bar-sales-summary">
