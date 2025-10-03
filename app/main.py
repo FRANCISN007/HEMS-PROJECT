@@ -31,8 +31,16 @@ from datetime import datetime
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
+
+# Force load .env from the install directory (same as start.py)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))  # one level up
+env_path = os.path.join(ROOT_DIR, ".env")
+
+load_dotenv(env_path)
+
 # Load environment variables
-load_dotenv()
+#load_dotenv()
 
 SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
 print("Running on SERVER_IP:", SERVER_IP)
