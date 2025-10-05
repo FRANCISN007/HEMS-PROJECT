@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Outlet, useLocation } from "react-router-dom";
 import axios from "axios";
+import HotelPhoto3 from "../assets/images/HotelPhoto3.png";
 import "./DashboardPage.css";
 import { FaHotel } from "react-icons/fa";
 
@@ -279,7 +280,7 @@ const printContent = () => {
     { name: "📅 Bookings", path: "/dashboard/bookings" },
     { name: "💳 Payments", path: "/dashboard/payments" },
     { name: "🎉 Events", path: "/dashboard/events" },
-    { name: "🍷 Bar", path: "/bar" },
+    { name: "🍷 Bar & Lounge", path: "/bar" },
     { name: "🏪 Store", path: "/store" },
     { name: "🍽️ Restaurant", path: "/restaurant" }, // ✅ fixed
     { name: "🟩 Room Status", path: "/dashboard/rooms/status" }, // ⬅️ add this
@@ -508,9 +509,20 @@ const printContent = () => {
         </header>
 
 
-        <section className="content-area">
-          <Outlet />
-        </section>
+        <section
+                  className="content-area"
+                  style={{
+                    position: "relative",
+                    minHeight: "100%",
+                    backgroundImage:
+                      location.pathname === "/dashboard" ? `url(${HotelPhoto3})` : "none",
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    backgroundRepeat: "no-repeat",
+                  }}
+                >
+                  <Outlet />
+                </section>
       </main>
     </div>
   );

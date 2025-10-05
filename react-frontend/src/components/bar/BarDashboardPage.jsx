@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate, Outlet, useLocation } from "react-router-dom";
 import { FaFileExcel, FaPrint } from "react-icons/fa";
+import BarPhoto from "../../assets/images/BarPhoto.png";
+
 import { saveAs } from "file-saver";
 import ExcelJS from "exceljs";
 import "./BarDashboardPage.css";
@@ -185,9 +187,22 @@ const BarDashboardPage = () => {
           </div>
         </header>
 
-        <section className="content-area">
+        <section
+          className="content-area"
+          style={{
+            position: "relative",
+            minHeight: "100%",
+            backgroundImage:
+              location.pathname === "/bar" ? `url(${BarPhoto})` : "none",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+          }}
+        >
           <Outlet />
         </section>
+
+
       </main>
     </div>
   );
