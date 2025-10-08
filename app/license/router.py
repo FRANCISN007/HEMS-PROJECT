@@ -6,6 +6,7 @@ from app.license import models as license_models
 from app.security.passwords import verify_password
 from loguru import logger
 from datetime import datetime
+from fastapi import Form
 import os
 import json
 
@@ -46,14 +47,12 @@ def load_license_file():
 
 @router.post("/generate", response_model=license_schemas.LicenseResponse)
 def generate_license_key(
-    license_password: str,
-    key: str,
+    license_password: str = Form(...),
+    key: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    """
-    Generate a new license key (Admin only).
-    Requires providing the correct admin license password.
-    """
+    """Generate a new license key (Admin only). Requires correct admin license password."""
+
     if not ADMIN_LICENSE_PASSWORD_HASH:
         raise HTTPException(status_code=500, detail="Admin password not configured.")
 
