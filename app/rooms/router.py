@@ -224,7 +224,7 @@ import re
 @router.get("/available")
 def list_available_rooms(
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    #current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
     ):
     today = date.today()
 
@@ -288,7 +288,7 @@ def list_available_rooms(
     }
 
 
-import re
+
 
 
 

@@ -18,8 +18,20 @@ const AvailableRooms = ({ onClose }) => {
 
   const fetchAvailableRooms = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/rooms/available`);
+      const token = localStorage.getItem("token"); // or sessionStorage, depending on your login logic
+      const res = await fetch(`${API_BASE_URL}/rooms/available`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`Error ${res.status}: ${res.statusText}`);
+      }
+
       const data = await res.json();
+
       setAvailableRooms(data.available_rooms || []);
       setTotalAvailable(data.total_available_rooms || 0);
       setInfo(`${data.message} (${data.total_available_rooms})`);
