@@ -1,0 +1,84 @@
+// src/api/authService.js
+import axios from "axios";
+
+// Detect current host (IP or localhost)
+const host = window.location.hostname;
+
+// Try backend on current host, fallback to localhost
+const BASE_URL = `http://${host}:8000`;
+
+// 🧠 Fallback mechanism for network failure (e.g., IP unreachable)
+async function getSafeBaseUrl() {
+  try {
+    // Try current host
+    await fetch(`${BASE_URL}/`);
+    return BASE_URL;
+  } catch {
+    console.warn("⚠️ Network host unreachable, falling back to localhost");
+    return "http://localhost:8000";
+  }
+}
+
+// Create axios instance dynamically
+let authClient;
+
+(async () => {
+  const safeBaseUrl = await getSafeBaseUrl();
+  console.log("🧭 Using backend at:", safeBaseUrl);
+
+  authClient = axios.create({
+    baseURL: safeBaseUrl,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+})();
+
+// ✅ Login user
+export const loginUser = async (username, password) => {
+  try {
+    const formData = new URLSearchParams();
+    formData.append("username", username);
+    formData.append("password", password);
+
+    const response = await authClient.post("/users/token", formData, {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
+
+    const user = response.data;
+    localStorage.setItem("user", JSON.stringify(user));
+
+    return user;
+  } catch (error) {
+    console.error("❌ Login failed:", error);
+    throw error.response?.data || { message: "Login failed" };
+  }
+};
+
+// ✅ Register user
+export const registerUser = async ({ username, password, roles, admin_password }) => {
+  try {
+    const response = await authClient.post("/users/register/", {
+      username,
+      password,
+      roles,
+      admin_password,
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error("❌ Registration failed:", error);
+    throw error.response?.data || { message: "Registration failed" };
+  }
+};
+
+// ✅ Get current user
+export const getCurrentUser = () => {
+  const userStr = localStorage.getItem("user");
+  return userStr ? JSON.parse(userStr) : null;
+};
+
+// ✅ Logout
+export const logoutUser = () => {
+  localStorage.removeItem("user");
+};

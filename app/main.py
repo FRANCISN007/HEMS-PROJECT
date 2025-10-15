@@ -119,6 +119,11 @@ app.include_router(vendor_router, prefix="/vendor", tags=["Vendor"])
 app.include_router(restaurant_router, prefix="/restaurant", tags=["Restaurant"])
 app.include_router(restpayment_router, prefix="/restpayment", tags=["Restaurant Payment"])
 
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
 #app.include_router(system_router,  prefix="/system", tags=["System"])
 
 
