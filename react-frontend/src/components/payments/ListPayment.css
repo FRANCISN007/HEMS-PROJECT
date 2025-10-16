@@ -444,3 +444,78 @@
 .status-summary-wrapper p {
   margin: 4px 0;
 }
+
+
+.daily-summary-wrapper {
+  margin-top: 20px;
+  background: #f8f9fa;
+  padding: 16px 20px;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  font-size: 1.1rem;
+  line-height: 1.4;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.daily-summary-wrapper h3,
+.daily-summary-wrapper h4 {
+  margin: 0;
+  font-weight: 600;
+  color: #222;
+  text-align: left;
+}
+
+.daily-summary-wrapper h3 {
+  font-size: 1.3rem;
+  margin-bottom: 5px;
+}
+
+.daily-summary-wrapper h4 {
+  font-size: 1.15rem;
+  margin-bottom: 8px;
+}
+
+.daily-summary-wrapper .summary-row {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0;
+  font-weight: 500;
+}
+
+.daily-summary-wrapper .summary-row strong {
+  color: #222;
+  min-width: 150px; /* aligns labels */
+  display: inline-block;
+}
+
+.daily-summary-wrapper .summary-row span {
+  font-weight: 600;
+  color: #000;
+}
+
+.daily-summary-wrapper ul {
+  list-style: none;
+  padding: 0;
+  margin-top: 4px;
+}
+
+.daily-summary-wrapper li {
+  margin: 3px 0;
+  font-size: 1.05rem;
+  display: flex;
+  justify-content: space-between;
+  font-weight: 500;
+}
+
+.daily-summary-wrapper li strong {
+  color: #222;
+  min-width: 150px;
+  display: inline-block;
+}
+
+.daily-summary-wrapper li span {
+  font-weight: 600;
+  color: #000;
+}

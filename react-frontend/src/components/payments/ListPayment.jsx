@@ -400,17 +400,29 @@ const ListPayment = () => {
 
 
           {viewMode === "daily" && (
-            <div className="payment-method-summary">
+            <div className="daily-summary-wrapper">
+              <h3>📅 Today's Payment Summary</h3>
               <h4>Breakdown by Payment Method</h4>
+
+              <div className="summary-row">
+                <strong>Total Payments:</strong>
+                <span>{totalPayments}</span>
+              </div>
+              <div className="summary-row">
+                <strong>Total Amount:</strong>
+                <span>₦{(totalAmount || 0).toLocaleString()}</span>
+              </div>
               <ul>
-                <li><strong>Cash:</strong> ₦{(methodTotals?.cash || 0).toLocaleString()}</li>
-                <li><strong>POS:</strong> ₦{(methodTotals?.pos_card || 0).toLocaleString()}</li>
-                <li><strong>Bank Transfer:</strong> ₦{(methodTotals?.bank_transfer || 0).toLocaleString()}</li>
+                <li><strong>Cash:</strong><span>₦{(methodTotals?.cash || 0).toLocaleString()}</span></li>
+                <li><strong>POS Card:</strong><span>₦{(methodTotals?.pos_card || 0).toLocaleString()}</span></li>
+                <li><strong>Bank Transfer:</strong><span>₦{(methodTotals?.bank_transfer || 0).toLocaleString()}</span></li>
               </ul>
             </div>
           )}
-        </div>
-      )}
+
+
+          </div>
+        )}
     </div>
   );
 };
