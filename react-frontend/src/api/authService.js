@@ -1,39 +1,33 @@
 // src/api/authService.js
 import axios from "axios";
+import getBaseUrl from "./config";
 
-// 🧭 Smart backend URL selector with fallback to localhost
-let BASE_URL =
-  process.env.REACT_APP_API_BASE_URL ||
-  `${window.location.protocol}//${window.location.hostname}:8000`;
+let BASE_URL = getBaseUrl();
 
-// Function to verify if the backend is reachable
 const testBackend = async (url) => {
   try {
-    await fetch(url + "/health", { method: "GET", cache: "no-store" });
-    return true;
+    const response = await fetch(`${url}/health`, { method: "GET", cache: "no-store" });
+    return response.ok;
   } catch {
     return false;
   }
 };
 
 (async () => {
-  const isReachable = await testBackend(BASE_URL);
-  if (!isReachable && window.location.hostname !== "localhost") {
-    console.warn(`⚠️ ${BASE_URL} not reachable, switching to localhost.`);
+  const reachable = await testBackend(BASE_URL);
+  if (!reachable && !BASE_URL.includes("localhost")) {
+    console.warn(`⚠️ Backend not reachable at ${BASE_URL}, switching to localhost.`);
     BASE_URL = `${window.location.protocol}//localhost:8000`;
   }
-  console.log("🧪 Final API Base URL:", BASE_URL);
+  console.log("✅ Using API Base URL:", BASE_URL);
 })();
 
-// Create axios client
 const authClient = axios.create({
   baseURL: BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  headers: { "Content-Type": "application/json" },
 });
 
-// ✅ Login user (with dynamic IP fallback)
+// ✅ Login user
 export const loginUser = async (username, password) => {
   try {
     const formData = new URLSearchParams();
@@ -44,12 +38,9 @@ export const loginUser = async (username, password) => {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
     });
 
-    const user = response.data; // { id, username, roles, access_token, token_type }
-
-    // Save user info
+    const user = response.data;
     localStorage.setItem("user", JSON.stringify(user));
     localStorage.setItem("token", user.access_token);
-
     return user;
   } catch (error) {
     console.error("❌ Login failed:", error);
@@ -58,12 +49,7 @@ export const loginUser = async (username, password) => {
 };
 
 // ✅ Register user
-export const registerUser = async ({
-  username,
-  password,
-  roles,
-  admin_password,
-}) => {
+export const registerUser = async ({ username, password, roles, admin_password }) => {
   try {
     const response = await authClient.post("/users/register/", {
       username,
@@ -71,7 +57,6 @@ export const registerUser = async ({
       roles,
       admin_password,
     });
-
     return response.data;
   } catch (error) {
     console.error("❌ Registration failed:", error);
@@ -79,13 +64,11 @@ export const registerUser = async ({
   }
 };
 
-// ✅ Utility: get current user
 export const getCurrentUser = () => {
   const userStr = localStorage.getItem("user");
   return userStr ? JSON.parse(userStr) : null;
 };
 
-// ✅ Utility: logout
 export const logoutUser = () => {
   localStorage.removeItem("user");
   localStorage.removeItem("token");
