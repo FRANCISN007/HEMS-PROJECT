@@ -6,6 +6,7 @@ const ListPurchase = () => {
   const [purchases, setPurchases] = useState([]);
   const [items, setItems] = useState([]);
   const [vendors, setVendors] = useState([]);
+  const [vendorId, setVendorId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
@@ -16,7 +17,6 @@ const ListPurchase = () => {
   const [editingPurchase, setEditingPurchase] = useState(null);
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [message, setMessage] = useState("");
-
 
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
@@ -29,43 +29,35 @@ const ListPurchase = () => {
 
   roles = roles.map((r) => r.toLowerCase());
 
-
   if (!(roles.includes("admin") || roles.includes("store"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to list purchase.</p>
-    </div>
-  );
-}
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to list purchase.</p>
+      </div>
+    );
+  }
 
+  // Load default range (current month)
+  useEffect(() => {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    setStartDate(firstDay.toISOString().split("T")[0]);
+    setEndDate(today.toISOString().split("T")[0]);
+    fetchPurchases(firstDay.toISOString().split("T")[0], today.toISOString().split("T")[0]);
+  }, []);
 
-  // At the top of your component
-useEffect(() => {
-  // Get first day of current month
-  const today = new Date();
-  const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-
-  const start = firstDayOfMonth.toISOString().split("T")[0]; // YYYY-MM-DD
-  const end = today.toISOString().split("T")[0];
-
-  setStartDate(start);
-  setEndDate(end);
-
-  // Fetch purchases for current month immediately
-  fetchPurchases(start, end);
-}, []);
-
-
-  // Fetch items & vendors once
+  // Load items & vendors
   useEffect(() => {
     (async () => {
       try {
-        const resItems = await axiosWithAuth().get("/store/items/simple");
+        const axios = axiosWithAuth();
+        const resItems = await axios.get("/store/items/simple");
         setItems(Array.isArray(resItems.data) ? resItems.data : []);
 
-        const resVendors = await axiosWithAuth().get("/vendor/");
-        setVendors(Array.isArray(resVendors.data) ? resVendors.data : []);
+        const resVendors = await axios.get("/vendor/");
+        const vendorData = Array.isArray(resVendors.data) ? resVendors.data : resVendors.data?.vendors || [];
+        setVendors(vendorData);
       } catch (err) {
         console.error("❌ Error fetching items/vendors", err);
       }
@@ -73,7 +65,6 @@ useEffect(() => {
   }, []);
 
   const fetchPurchases = async (start, end) => {
-    // Default to state if params not given
     const sDate = typeof start === "string" ? start : startDate;
     const eDate = typeof end === "string" ? end : endDate;
 
@@ -85,9 +76,10 @@ useEffect(() => {
       if (sDate) params.start_date = sDate;
       if (eDate) params.end_date = eDate;
       if (invoiceNumber) params.invoice_number = invoiceNumber;
+      if (vendorId) params.vendor_id = vendorId;
 
-      const response = await axios.get("/store/purchases", { params });
-      const { purchases, total_entries, total_purchase } = response.data;
+      const res = await axios.get("/store/purchases", { params });
+      const { purchases, total_entries, total_purchase } = res.data;
       setPurchases(purchases || []);
       setTotalEntries(total_entries || 0);
       setTotalPurchase(total_purchase || 0);
@@ -105,15 +97,15 @@ useEffect(() => {
       setMessage("✅ Purchase deleted successfully.");
       setTimeout(() => setMessage(""), 3000);
       fetchPurchases();
-    } catch (err) {
+    } catch {
       setMessage("❌ Failed to delete purchase.");
       setTimeout(() => setMessage(""), 3000);
     }
   };
 
   const handleEditClick = (purchase) => {
-    const foundItem = items.find((item) => item.name === purchase.item_name);
-    const foundVendor = vendors.find((vendor) => vendor.business_name === purchase.vendor_name);
+    const foundItem = items.find((i) => i.name === purchase.item_name);
+    const foundVendor = vendors.find((v) => v.business_name === purchase.vendor_name);
 
     setEditingPurchase({
       ...purchase,
@@ -138,18 +130,14 @@ useEffect(() => {
     try {
       const axios = axiosWithAuth();
       const formData = new FormData();
-
       formData.append("item_id", parseInt(editingPurchase.item_id));
       formData.append("item_name", editingPurchase.item_name || "");
       formData.append("invoice_number", editingPurchase.invoice_number);
       formData.append("quantity", parseFloat(editingPurchase.quantity));
       formData.append("unit_price", parseFloat(editingPurchase.unit_price));
-      formData.append("vendor_id", editingPurchase.vendor_id ? parseInt(editingPurchase.vendor_id) : "");
+      formData.append("vendor_id", parseInt(editingPurchase.vendor_id));
       formData.append("purchase_date", new Date(editingPurchase.purchase_date).toISOString());
-
-      if (attachmentFile) {
-        formData.append("attachment", attachmentFile);
-      }
+      if (attachmentFile) formData.append("attachment", attachmentFile);
 
       await axios.put(`/store/purchases/${editingPurchase.id}`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -175,13 +163,28 @@ useEffect(() => {
       <div className="filters">
         <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+
         <input
           type="text"
           value={invoiceNumber}
           onChange={(e) => setInvoiceNumber(e.target.value)}
           placeholder="Invoice number"
         />
-        <button onClick={fetchPurchases}>Search</button>
+
+        <select
+          value={vendorId}
+          onChange={(e) => setVendorId(e.target.value)}
+          className="vendor-filter"
+        >
+          <option value="">Select Vendor</option>
+          {vendors.map((vendor) => (
+            <option key={vendor.id} value={vendor.id}>
+              {vendor.business_name || vendor.name}
+            </option>
+          ))}
+        </select>
+
+        <button onClick={() => fetchPurchases(startDate, endDate)}>Search</button>
       </div>
 
       {/* Summary */}
@@ -190,95 +193,72 @@ useEffect(() => {
         <p><strong>Total Purchase:</strong> ₦{totalPurchase.toLocaleString()}</p>
       </div>
 
-      {/* Edit Form Modal */}
+      {/* Edit Modal */}
       {editingPurchase && (
         <div className="edit-modal-overlay" onClick={() => setEditingPurchase(null)}>
           <form className="edit-form" onClick={(e) => e.stopPropagation()} onSubmit={handleEditSubmit}>
             <h3>Edit Purchase</h3>
 
-            {/* Item Dropdown */}
-              <label>Item:</label>
-              <select
-                name="item_id"
-                value={editingPurchase.item_id || ""}
-                onChange={(e) => {
-                  const selectedItem = items.find(item => item.id === parseInt(e.target.value));
-                  setEditingPurchase(prev => ({
-                    ...prev,
-                    item_id: selectedItem ? selectedItem.id : "",
-                    item_name: selectedItem ? selectedItem.name : ""
-                  }));
-                }}
-              >
-                <option value="">-- Select an item --</option>
-                {items.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
+            <label>Item:</label>
+            <select
+              name="item_id"
+              value={editingPurchase.item_id || ""}
+              onChange={(e) => {
+                const item = items.find((i) => i.id === parseInt(e.target.value));
+                setEditingPurchase((prev) => ({
+                  ...prev,
+                  item_id: item?.id || "",
+                  item_name: item?.name || "",
+                }));
+              }}
+            >
+              <option value="">-- Select an item --</option>
+              {items.map((i) => (
+                <option key={i.id} value={i.id}>{i.name}</option>
+              ))}
+            </select>
 
-              {/* Invoice Number */}
-              <label>Invoice #:</label>
-              <input
-                name="invoice_number"
-                value={editingPurchase.invoice_number}
-                onChange={handleEditChange}
-              />
+            <label>Invoice #:</label>
+            <input name="invoice_number" value={editingPurchase.invoice_number} onChange={handleEditChange} />
 
-              {/* Quantity */}
-              <label>Quantity:</label>
-              <input
-                name="quantity"
-                type="number"
-                value={editingPurchase.quantity}
-                onChange={handleEditChange}
-              />
+            <label>Quantity:</label>
+            <input name="quantity" type="number" value={editingPurchase.quantity} onChange={handleEditChange} />
 
-              {/* Unit Price */}
-              <label>Unit Price:</label>
-              <input
-                name="unit_price"
-                type="number"
-                value={editingPurchase.unit_price}
-                onChange={handleEditChange}
-              />
+            <label>Unit Price:</label>
+            <input name="unit_price" type="number" value={editingPurchase.unit_price} onChange={handleEditChange} />
 
-              {/* Vendor Dropdown */}
-              <label>Vendor:</label>
-              <select
-                name="vendor_id"
-                value={editingPurchase.vendor_id || ""}
-                onChange={(e) => {
-                  const selectedVendor = vendors.find(v => v.id === parseInt(e.target.value));
-                  setEditingPurchase(prev => ({
-                    ...prev,
-                    vendor_id: selectedVendor ? selectedVendor.id : "",
-                    vendor_name: selectedVendor ? selectedVendor.business_name : ""
-                  }));
-                }}
-              >
-                <option value="">-- Select a vendor --</option>
-                {vendors.map((vendor) => (
-                  <option key={vendor.id} value={vendor.id}>{vendor.business_name}</option>
-                ))}
-              </select>
+            <label>Vendor:</label>
+            <select
+              name="vendor_id"
+              value={editingPurchase.vendor_id || ""}
+              onChange={(e) => {
+                const vendor = vendors.find((v) => v.id === parseInt(e.target.value));
+                setEditingPurchase((prev) => ({
+                  ...prev,
+                  vendor_id: vendor?.id || "",
+                  vendor_name: vendor?.business_name || "",
+                }));
+              }}
+            >
+              <option value="">-- Select a vendor --</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>{v.business_name || v.name}</option>
+              ))}
+            </select>
 
-              {/* Purchase Date */}
-              <label>Purchase Date:</label>
-              <input
-                name="purchase_date"
-                type="datetime-local"
-                value={editingPurchase.purchase_date}
-                onChange={handleEditChange}
-              />
+            <label>Purchase Date:</label>
+            <input
+              name="purchase_date"
+              type="datetime-local"
+              value={editingPurchase.purchase_date}
+              onChange={handleEditChange}
+            />
 
-              {/* Attachment */}
-              <label>Attachment:</label>
-              <input type="file" onChange={(e) => setAttachmentFile(e.target.files[0])} />
+            <label>Attachment:</label>
+            <input type="file" onChange={(e) => setAttachmentFile(e.target.files[0])} />
 
             <button type="submit">Update Purchase</button>
-            <button type="button" className="cancel-btn" onClick={() => setEditingPurchase(null)}>
-              Cancel
-            </button>
+            <button type="button" className="cancel-btn" onClick={() => setEditingPurchase(null)}>Cancel</button>
           </form>
         </div>
       )}
@@ -308,24 +288,24 @@ useEffect(() => {
             {purchases.length === 0 ? (
               <tr><td colSpan="10">No purchases found.</td></tr>
             ) : (
-              purchases.map((purchase) => (
-                <tr key={purchase.id}>
-                  <td>{purchase.invoice_number}</td>
-                  <td>{purchase.item_name}</td>
-                  <td>{purchase.quantity}</td>
-                  <td>{purchase.unit_price}</td>
-                  <td>{purchase.total_amount}</td>
-                  <td>{purchase.vendor_name}</td>
-                  <td>{new Date(purchase.purchase_date).toLocaleDateString()}</td>
-                  <td>{purchase.created_by}</td>
+              purchases.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.invoice_number}</td>
+                  <td>{p.item_name}</td>
+                  <td>{p.quantity}</td>
+                  <td>{p.unit_price}</td>
+                  <td>{p.total_amount}</td>
+                  <td>{p.vendor_name}</td>
+                  <td>{new Date(p.purchase_date).toLocaleDateString()}</td>
+                  <td>{p.created_by}</td>
                   <td>
-                    {purchase.attachment_url ? (
-                      <a href={purchase.attachment_url} target="_blank" rel="noopener noreferrer">View Invoice</a>
+                    {p.attachment_url ? (
+                      <a href={p.attachment_url} target="_blank" rel="noopener noreferrer">View Invoice</a>
                     ) : "-"}
                   </td>
                   <td>
-                    <button className="edit-btn" onClick={() => handleEditClick(purchase)}>Edit</button>
-                    <button className="delete-btn" onClick={() => handleDelete(purchase.id)}>Delete</button>
+                    <button className="edit-btn" onClick={() => handleEditClick(p)}>Edit</button>
+                    <button className="delete-btn" onClick={() => handleDelete(p.id)}>Delete</button>
                   </td>
                 </tr>
               ))

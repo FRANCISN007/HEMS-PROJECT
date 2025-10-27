@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
@@ -309,7 +309,6 @@ def delete_item(
 
 
 
-from fastapi import Depends
 
 @router.post("/purchases", response_model=store_schemas.PurchaseCreateList)
 async def receive_inventory(
@@ -375,14 +374,15 @@ async def receive_inventory(
 
 
 
-from fastapi import Request
 
 @router.get("/purchases")
 def list_purchases(
     start_date: date = Query(None),
     end_date: date = Query(None),
     invoice_number: str = Query(None),
-    request: Request = None,  # ✅ to build absolute URLs
+    vendor_name: str = Query(None),  # ✅ NEW: filter by vendor name
+    vendor_id: int = Query(None),    # ✅ Optional: also allow vendor_id
+    request: Request = None,  
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
@@ -405,15 +405,25 @@ def list_purchases(
     if invoice_number:
         query = query.filter(store_models.StoreStockEntry.invoice_number.ilike(f"%{invoice_number}%"))
 
+    # ✅ Filter by vendor ID
+    if vendor_id:
+        query = query.filter(store_models.StoreStockEntry.vendor_id == vendor_id)
+
+    # ✅ Filter by vendor name (case-insensitive)
+    if vendor_name:
+        query = query.join(store_models.StoreStockEntry.vendor).filter(
+            vendor_models.Vendor.business_name.ilike(f"%{vendor_name}%")
+        )
+
+    # ✅ Sort latest first
     purchases = query.order_by(store_models.StoreStockEntry.created_at.desc()).all()
 
+    # 🧮 Prepare results
     results, total_amount = [], 0
     for purchase in purchases:
         attachment_url = None
         if purchase.attachment:
-            # ✅ Normalize to forward slashes
             rel_path = os.path.relpath(purchase.attachment, "uploads").replace("\\", "/")
-            # ✅ Build full URL
             base_url = str(request.base_url).rstrip("/")
             attachment_url = f"{base_url}/files/{rel_path}"
 
@@ -424,7 +434,7 @@ def list_purchases(
             "item_id": purchase.item_id,
             "item_name": purchase.item.name if purchase.item else "",
             "invoice_number": purchase.invoice_number,
-            "quantity": purchase.original_quantity,  # original purchased qty
+            "quantity": purchase.original_quantity,
             "unit_price": purchase.unit_price,
             "total_amount": purchase.total_amount,
             "vendor_id": purchase.vendor_id,

@@ -12,6 +12,9 @@ import json
 
 router = APIRouter()
 
+
+
+
 logger.add("app.log", rotation="500 MB", level="DEBUG")
 
 # Load hashed admin password from environment

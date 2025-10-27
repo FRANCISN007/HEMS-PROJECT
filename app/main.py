@@ -32,12 +32,22 @@ from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
 
-# Force load .env from the install directory (same as start.py)
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))  # one level up
-env_path = os.path.join(ROOT_DIR, ".env")
+from pathlib import Path
 
-load_dotenv(env_path)
+# Find .env even in frozen or packaged mode
+POSSIBLE_ENV_PATHS = [
+    Path(__file__).resolve().parent.parent / ".env",        # normal
+    Path(sys.executable).resolve().parent / ".env",         # frozen exe
+    Path.cwd() / ".env",                                   # runtime cwd
+]
+
+for env_path in POSSIBLE_ENV_PATHS:
+    if env_path.exists():
+        print(f"[INFO] Loading environment from: {env_path}")
+        load_dotenv(env_path, override=True)
+        break
+else:
+    print("[WARNING] .env file not found!")
 
 # Load environment variables
 #load_dotenv()

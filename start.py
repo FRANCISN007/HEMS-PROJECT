@@ -61,6 +61,14 @@ def update_env(ip_address):
     print(f"[INFO] SERVER_IP={ip_address}")
 
 def start_backend():
+    env = os.environ.copy()
+    env.update({
+        "PYTHONUNBUFFERED": "1",
+        "TZ": "Africa/Lagos"
+    })
+    # Make sure all env vars (including ADMIN_LICENSE_PASSWORD_HASH) are available
+    load_dotenv(ENV_PATH, override=True)
+
     command = [
         PYTHON_EXECUTABLE, "-m", "uvicorn", "app.main:app",
         "--host", "0.0.0.0",
@@ -68,7 +76,7 @@ def start_backend():
         "--log-level", "info",
         "--no-access-log"
     ]
-    return subprocess.Popen(command, cwd=BASE_DIR)
+    return subprocess.Popen(command, cwd=BASE_DIR, env=env)
 
 def open_browser(ip):
     time.sleep(5)
