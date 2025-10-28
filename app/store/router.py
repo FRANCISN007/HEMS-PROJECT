@@ -949,7 +949,7 @@ def get_store_balances(
         )
         
         # Debug: Check the latest entry to verify it's correct
-        print(f"Item ID: {item.item_id} Latest Entry: {latest_entry}")  # Debug print
+        #print(f"Item ID: {item.item_id} Latest Entry: {latest_entry}")  # Debug print
 
         # Use the latest/current unit price
         current_unit_price = float(latest_entry.unit_price) if latest_entry else 0.0
