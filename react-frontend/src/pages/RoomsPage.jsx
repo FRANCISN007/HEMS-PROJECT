@@ -85,7 +85,7 @@ const RoomsPage = () => {
   };
 
   return (
-    <div className="rooms-container">
+    <div className="rooms-container1">
       <div className="rooms-header">
         <h2>🏨 Room Management</h2>
         <div className="room-header-buttons">
@@ -139,19 +139,19 @@ const RoomsPage = () => {
                   <td>{room.status === "maintenance" ? "🛠 Yes" : "✅ No"}</td>
                   <td>
                     <button
-                      className="action-btn"
+                      className="action-btn6"
                       onClick={() => handleEdit(room)}
                     >
                       Update
                     </button>
                     <button
-                      className="action-btn"
+                      className="action-btn6"
                       onClick={() => handleDelete(room)}
                     >
                       Delete
                     </button>
                     <button
-                      className="action-btn"
+                      className="action-btn6"
                       onClick={() => handleViewFaults(room)}
                     >
                       View Faults

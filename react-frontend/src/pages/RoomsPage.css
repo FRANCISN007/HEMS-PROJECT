@@ -1,6 +1,6 @@
 /* src/pages/RoomsPage.css */
 
-.rooms-container {
+.rooms-container1 {
   padding: 30px;
   background-color: #f3eeee;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -97,7 +97,7 @@
   background-color: #f2f6fa; /* light grid color for even rows */
 }
 
-.action-btn {
+.action-btn6 {
   margin-right: 5px;
   padding: 4px 8px;
   font-size: 12px;
@@ -109,7 +109,7 @@
   transition: background-color 0.2s ease;
 }
 
-.action-btn:hover {
+.action-btn6:hover {
   background-color: #dce3eb;
 }
 
@@ -142,7 +142,7 @@
     border-bottom: 1px solid #eee;
   }
 
-  .action-btn {
+  .action-btn6 {
     margin-top: 4px;
   }
 }

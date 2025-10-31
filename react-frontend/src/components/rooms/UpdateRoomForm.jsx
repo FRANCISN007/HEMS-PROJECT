@@ -77,12 +77,12 @@ const UpdateRoomForm = ({ room, onClose, onRoomUpdated }) => {
   };
 
   return (
-    <div className="update-room-modal">
-      <div className="modal-overlay" onClick={onClose}>
-        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-          <button className="close-btn" onClick={onClose}>×</button>
+    <div className="update-room-modal2">
+      <div className="modal-overlay2" onClick={onClose}>
+        <div className="modal-content2" onClick={(e) => e.stopPropagation()}>
+          <button className="close-btn2" onClick={onClose}>×</button>
 
-          <form className="update-room-form" onSubmit={handleSubmit}>
+          <form className="update-room-form2" onSubmit={handleSubmit}>
             <h3>Update Room - {room.room_number}</h3>
 
             <label>Room Number:</label>

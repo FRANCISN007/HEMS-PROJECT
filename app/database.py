@@ -19,7 +19,7 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 # ✅ Validate environment values
 if not SQLALCHEMY_DATABASE_URL:
-    raise ValueError("❌ DB_URL environment variable is not set!")
+    raise ValueError("❌ DB_URL2 environment variable is not set!")
 
 # ✅ Show current DB connection string (partial for security)
 print(f"🔍 Using database: {SQLALCHEMY_DATABASE_URL.split('@')[-1]}")
