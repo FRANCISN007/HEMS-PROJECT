@@ -44,6 +44,13 @@ const CreatePurchase = () => {
     fetchItems();
   }, []);
 
+// 👇 Add this below
+useEffect(() => {
+  const today = new Date().toISOString().split("T")[0];
+  setPurchaseDate(today);
+}, []);
+
+
   useEffect(() => {
     if (message) {
       const timer = setTimeout(() => setMessage(""), 3000);
