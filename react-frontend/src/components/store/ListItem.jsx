@@ -18,6 +18,8 @@ const ListItem = () => {
   const [newUnit, setNewUnit] = useState("");
   const [newUnitPrice, setNewUnitPrice] = useState("");
   const [newCategoryId, setNewCategoryId] = useState("");
+  const unitOptions = ["Cartons", "Packs", "Crates", "Pieces"];
+
 
   const [selectedSimpleItemId, setSelectedSimpleItemId] = useState(""); // <-- new
 
@@ -220,14 +222,18 @@ const ListItem = () => {
         </label>
         <label>
           Unit:
-          <input
-            type="text"
+          <select
             value={newUnit}
             onChange={(e) => setNewUnit(e.target.value)}
-            placeholder="Packs, Cartons, Pieces"
             required
-          />
+          >
+            <option value="">Select Unit</option>
+            {unitOptions.map((unit) => (
+              <option key={unit} value={unit}>{unit}</option>
+            ))}
+          </select>
         </label>
+
         <label>
           Unit Price:
           <input
@@ -331,13 +337,18 @@ const ListItem = () => {
               </label>
               <label>
                 Unit:
-                <input
-                  type="text"
+                <select
                   value={updateUnit}
                   onChange={(e) => setUpdateUnit(e.target.value)}
                   required
-                />
+                >
+                  <option value="">Select Unit</option>
+                  {unitOptions.map((unit) => (
+                    <option key={unit} value={unit}>{unit}</option>
+                  ))}
+                </select>
               </label>
+
               <label>
                 Unit Price:
                 <input
