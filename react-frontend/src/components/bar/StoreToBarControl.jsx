@@ -17,7 +17,7 @@ const StoreToBarControl = () => {
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const roles = user.roles || [];
 
-  // ✅ Restrict access: only admin and bar can create payments
+  // ✅ Restrict access
   if (!(roles.includes("admin") || roles.includes("bar"))) {
     return (
       <div className="unauthorized">
@@ -27,8 +27,7 @@ const StoreToBarControl = () => {
     );
   }
 
-
-  // ⏬ fetch list of bars for dropdown
+  // ⏬ fetch list of bars
   useEffect(() => {
     const fetchBars = async () => {
       try {
@@ -42,21 +41,20 @@ const StoreToBarControl = () => {
     fetchBars();
   }, []);
 
-  // ⏬ Set default date range to last 1 month on mount
+  // ⏬ Set default date range to today's date
   useEffect(() => {
     const today = new Date();
-    const priorMonth = new Date();
-    priorMonth.setMonth(today.getMonth() - 1);
-
     const formatDate = (date) => date.toISOString().split("T")[0];
-
-    setStartDate(formatDate(priorMonth));
-    setEndDate(formatDate(today));
+    const currentDate = formatDate(today);
+    setStartDate(currentDate);
+    setEndDate(currentDate);
   }, []);
 
-  // ⏬ fetch issues whenever filters change
+  // ⏬ Fetch issues automatically when filters change
   useEffect(() => {
-    fetchIssues();
+    if (startDate && endDate) {
+      fetchIssues();
+    }
   }, [barId, startDate, endDate]);
 
   const fetchIssues = async () => {
@@ -78,9 +76,14 @@ const StoreToBarControl = () => {
     }
   };
 
-  const handleFilter = (e) => {
-    e.preventDefault();
-    fetchIssues();
+  // 🧭 Reset filters to today's date
+  const handleResetToToday = () => {
+    const today = new Date();
+    const formatDate = (date) => date.toISOString().split("T")[0];
+    const currentDate = formatDate(today);
+    setStartDate(currentDate);
+    setEndDate(currentDate);
+    setBarId(""); // optional: reset bar
   };
 
   if (loading) {
@@ -94,7 +97,7 @@ const StoreToBarControl = () => {
       </div>
 
       {/* 🔍 Filters */}
-      <form className="filter-controls" onSubmit={handleFilter}>
+      <div className="filter-controls">
         <select value={barId} onChange={(e) => setBarId(e.target.value)}>
           <option value="">-- Select Bar --</option>
           {bars.map((bar) => (
@@ -103,6 +106,7 @@ const StoreToBarControl = () => {
             </option>
           ))}
         </select>
+
         <input
           type="date"
           value={startDate}
@@ -113,8 +117,11 @@ const StoreToBarControl = () => {
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
         />
-        <button type="submit">🔍 Filter</button>
-      </form>
+
+        <button type="button" className="reset-btn" onClick={handleResetToToday}>
+          🔄 Reset to Today
+        </button>
+      </div>
 
       {/* 📊 Table */}
       <div className="table-wrapper">
@@ -126,37 +133,33 @@ const StoreToBarControl = () => {
               <th>Bar</th>
               <th>Issue Date</th>
               <th>Quantity</th>
-              
             </tr>
           </thead>
           <tbody>
             {issues.length > 0 ? (
-                issues.map((item, index) => {
+              issues.map((item, index) => {
                 const bar = bars.find((b) => b.id === item.bar_id);
                 return (
-                    <tr
+                  <tr
                     key={index}
                     className={index % 2 === 0 ? "even-row" : "odd-row"}
-                    >
+                  >
                     <td>{item.item_name}</td>
                     <td>{item.unit}</td>
                     <td>{bar ? bar.name : item.bar_id}</td>
                     <td>{item.issue_date}</td>
                     <td>{item.quantity}</td>
-                    
-                    
-                    </tr>
+                  </tr>
                 );
-                })
+              })
             ) : (
-                <tr>
+              <tr>
                 <td colSpan="7" className="no-data">
-                    No data found.
+                  No data found.
                 </td>
-                </tr>
+              </tr>
             )}
-            </tbody>
-
+          </tbody>
         </table>
       </div>
 
