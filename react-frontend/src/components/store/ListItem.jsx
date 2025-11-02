@@ -18,7 +18,7 @@ const ListItem = () => {
   const [newUnit, setNewUnit] = useState("");
   const [newUnitPrice, setNewUnitPrice] = useState("");
   const [newCategoryId, setNewCategoryId] = useState("");
-  const unitOptions = ["Cartons", "Packs", "Crates", "Pieces"];
+  const unitOptions = ["Carton", "Pack", "Crate", "Piece"];
 
 
   const [selectedSimpleItemId, setSelectedSimpleItemId] = useState(""); // <-- new

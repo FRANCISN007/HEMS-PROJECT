@@ -42,10 +42,11 @@ const ListPurchase = () => {
   useEffect(() => {
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-    setStartDate(firstDay.toISOString().split("T")[0]);
-    setEndDate(today.toISOString().split("T")[0]);
-    fetchPurchases(firstDay.toISOString().split("T")[0], today.toISOString().split("T")[0]);
-    fetchPurchases(start, end); // ✅ ensures IP sync
+    const start = firstDay.toISOString().split("T")[0];
+    const end = today.toISOString().split("T")[0];
+
+    // 🚀 Always fetch fresh data when component mounts (ensures current IP)
+    fetchPurchases(start, end);
   }, []);
 
   // Load items & vendors
