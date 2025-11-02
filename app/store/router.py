@@ -977,7 +977,7 @@ def get_store_balances(
 def adjust_store_inventory(
     adjustment_data: StoreInventoryAdjustmentCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     #if current_user.role != "admin":
         #raise HTTPException(status_code=403, detail="Only admins can adjust inventory.")

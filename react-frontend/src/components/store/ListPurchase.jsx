@@ -45,6 +45,7 @@ const ListPurchase = () => {
     setStartDate(firstDay.toISOString().split("T")[0]);
     setEndDate(today.toISOString().split("T")[0]);
     fetchPurchases(firstDay.toISOString().split("T")[0], today.toISOString().split("T")[0]);
+    fetchPurchases(start, end); // ✅ ensures IP sync
   }, []);
 
   // Load items & vendors
@@ -300,9 +301,18 @@ const ListPurchase = () => {
                   <td>{p.created_by}</td>
                   <td>
                     {p.attachment_url ? (
-                      <a href={p.attachment_url} target="_blank" rel="noopener noreferrer">View Invoice</a>
-                    ) : "-"}
+                      <a
+                        href={p.attachment_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        View Invoice
+                      </a>
+                    ) : (
+                      "-"
+                    )}
                   </td>
+
                   <td>
                     <button className="edit-btn" onClick={() => handleEditClick(p)}>Edit</button>
                     <button className="delete-btn" onClick={() => handleDelete(p.id)}>Delete</button>

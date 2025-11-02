@@ -884,7 +884,7 @@ def get_bar_stock_balance(
 def adjust_bar_inventory(
     adjustment_data: BarInventoryAdjustmentCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     # ✅ Only admins can adjust
     #if current_user.role != "admin":
