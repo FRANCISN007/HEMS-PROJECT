@@ -55,8 +55,21 @@ const ListGuestOrder = () => {
 
     // ✅ fetch after state is set
     fetchLocations();
+    fetchMeals(); // ✅ new
     fetchOrdersWithDates(today, today);
   }, []);
+
+  const [meals, setMeals] = useState([]);
+
+  const fetchMeals = async () => {
+    try {
+      const res = await axiosWithAuth().get("/restaurant/meals");
+      setMeals(res.data || []);
+    } catch (err) {
+      console.error("Failed to load meals:", err);
+    }
+  };
+
 
   // For editing
   const [editingOrder, setEditingOrder] = useState(null);
@@ -511,6 +524,58 @@ const fetchOrders = () => fetchOrdersWithDates(startDate, endDate);
             </div>
 
             <h4>🛒 Items</h4>
+
+            <div className="add-item-row">
+              <select
+                value={formData.newMealId || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, newMealId: e.target.value })
+                }
+              >
+                <option value="">-- Select Meal --</option>
+                {meals.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} ({currencyNGN(m.price)})
+                  </option>
+                ))}
+              </select>
+
+              <input
+                type="number"
+                min="1"
+                placeholder="Qty"
+                value={formData.newQty || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, newQty: e.target.value })
+                }
+              />
+
+              <button
+                className="add-item-btn"
+                onClick={() => {
+                  const meal = meals.find((m) => m.id == formData.newMealId);
+                  if (!meal) return alert("Please select a meal");
+
+                  setFormData({
+                    ...formData,
+                    items: [
+                      ...formData.items,
+                      {
+                        meal_id: meal.id,
+                        meal_name: meal.name,
+                        quantity: Number(formData.newQty) || 1,
+                        price_per_unit: meal.price,
+                      },
+                    ],
+                    newMealId: "",
+                    newQty: "",
+                  });
+                }}
+              >
+                ➕ Add
+              </button>
+            </div>
+
 
             <table className="edit-items-table">
               <thead>

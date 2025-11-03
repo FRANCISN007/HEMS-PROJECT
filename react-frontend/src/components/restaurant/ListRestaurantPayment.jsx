@@ -132,17 +132,17 @@ const ListRestaurantPayment = () => {
     }
   };
 
-  const handleVoid = async (paymentId) => {
-    if (!window.confirm("Are you sure you want to void this payment?")) return;
+  const handleDelete = async (paymentId) => {
+    if (!window.confirm("Are you sure you want to delete this payment?")) return;
     try {
-      await axiosWithAuth().put(
-        `/restpayment/sales/payments/${paymentId}/void`
-      );
-      fetchPayments();
+      await axiosWithAuth().delete(`/restpayment/sales/payments/${paymentId}`);
+      fetchPayments(); // ✅ Refresh list after delete
     } catch (err) {
-      alert("Failed to void payment");
+      alert("Failed to delete payment");
+      console.error(err);
     }
   };
+
 
   // ✅ Updated handlePrint
 const handlePrint = (sale, payment) => {
@@ -307,12 +307,12 @@ const handlePrint = (sale, payment) => {
                     Edit
                   </button>
                   <button
-                    className="btn void"
-                    onClick={() => handleVoid(payment.id)}
-                    disabled={payment.is_void}
+                    className="btn delete"
+                    onClick={() => handleDelete(payment.id)}
                   >
-                    Void
+                    Delete
                   </button>
+
                   <button
                     className="btn print"
                     onClick={() => handlePrint(sale, payment)}

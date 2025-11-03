@@ -402,3 +402,19 @@ button:hover {
 .btn-cancel:hover {
   background: #d32f2f;
 }
+
+.btn-add-item {
+  margin-top: 10px;
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: 0.2s;
+}
+.btn-add-item:hover {
+  background: #0056b3;
+}

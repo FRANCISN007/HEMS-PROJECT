@@ -13,9 +13,9 @@ const BarPayment = () => {
   const [selectedSale, setSelectedSale] = useState(null);
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
-  const [note, setNote] = useState(""); 
+  const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState(""); 
+  const [messageType, setMessageType] = useState("");
 
   // ✅ Get user roles from localStorage
   const user = JSON.parse(localStorage.getItem("user")) || {};
@@ -31,7 +31,7 @@ const BarPayment = () => {
     );
   }
 
-  // Fetch bars
+  // ✅ Fetch bars
   useEffect(() => {
     const fetchBars = async () => {
       try {
@@ -44,13 +44,13 @@ const BarPayment = () => {
     fetchBars();
   }, []);
 
-  // Utility function for formatting amounts
+  // ✅ Utility function for formatting amounts
   const formatAmount = (amount) => {
     if (!amount && amount !== 0) return "₦0.00";
     return `₦${Number(amount).toLocaleString()}`;
   };
 
-  // Fetch outstanding sales for selected bar
+  // ✅ Fetch outstanding sales for selected bar
   useEffect(() => {
     const fetchSales = async () => {
       if (!selectedBar) return;
@@ -73,7 +73,7 @@ const BarPayment = () => {
     fetchSales();
   }, [selectedBar]);
 
-  // Handle Payment Submit
+  // ✅ Handle Payment Submit
   const handlePayment = async (e) => {
     e.preventDefault();
     if (!selectedSale || !amountPaid || !paymentMethod) {
@@ -126,10 +126,16 @@ const BarPayment = () => {
   return (
     <div className="bar-payment-container2">
       <div className="header-row">
-        <h2>💳 Bar Payments</h2>
+        {/* ✅ Larger Header Text */}
+        <h1 style={{ fontSize: "2rem", fontWeight: "700", margin: "10px 0" }}>
+          🍽️ Restaurant Payments
+        </h1>
+
         {selectedBar && (
           <div className="summary-box">
-            <p><strong>Total Entries:</strong> {summary.total_entries}</p>
+            <p>
+              <strong>Total Entries:</strong> {summary.total_entries}
+            </p>
             <p>
               <strong>Total Due:</strong>{" "}
               <span style={{ color: "red" }}>{formatAmount(summary.total_due)}</span>
@@ -140,7 +146,7 @@ const BarPayment = () => {
 
       {message && <div className={`message ${messageType}`}>{message}</div>}
 
-      {/* Bar Selector */}
+      {/* ✅ Bar Selector */}
       <div className="bar-filter">
         <label htmlFor="barSelect">Select Bar:</label>
         <select
@@ -157,7 +163,7 @@ const BarPayment = () => {
         </select>
       </div>
 
-      {/* Sales table */}
+      {/* ✅ Sales Table */}
       {loading ? (
         <p>⏳ Loading sales...</p>
       ) : (
@@ -219,7 +225,7 @@ const BarPayment = () => {
         )
       )}
 
-      {/* Payment Modal */}
+      {/* ✅ Payment Modal */}
       {selectedSale && (
         <div className="modal-overlay1">
           <div className="modal1">
@@ -243,7 +249,6 @@ const BarPayment = () => {
                 <option value="transfer">Transfer</option>
               </select>
 
-              {/* ✅ Note field */}
               <label>Note:</label>
               <textarea
                 value={note}

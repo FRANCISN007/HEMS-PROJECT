@@ -250,9 +250,7 @@ const ListBarSales = () => {
                     <label>Item</label>
                     <select
                       value={item.item_id}
-                      onChange={(e) =>
-                        updateItemField(idx, "item_id", e.target.value)
-                      }
+                      onChange={(e) => updateItemField(idx, "item_id", e.target.value)}
                     >
                       <option value="">-- Select Item --</option>
                       {items.map((it) => (
@@ -268,9 +266,7 @@ const ListBarSales = () => {
                     <input
                       type="number"
                       value={item.quantity}
-                      onChange={(e) =>
-                        updateItemField(idx, "quantity", e.target.value)
-                      }
+                      onChange={(e) => updateItemField(idx, "quantity", e.target.value)}
                     />
                   </div>
 
@@ -287,6 +283,23 @@ const ListBarSales = () => {
                   </div>
                 </div>
               ))}
+
+              {/* ✅ NEW Add Item Button */}
+              <button
+                type="button"
+                className="btn-add-item"
+                onClick={() =>
+                  setEditingSale({
+                    ...editingSale,
+                    items: [
+                      ...editingSale.items,
+                      { item_id: "", quantity: 0, selling_price: 0 },
+                    ],
+                  })
+                }
+              >
+                ➕ Add Another Item
+              </button>
 
               <div className="total-box">
                 <strong>Total: ₦

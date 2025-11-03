@@ -253,11 +253,9 @@ def void_payment(
 def delete_payment(
     payment_id: int = Path(..., description="The ID of the payment to delete"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can delete payments.")
-
+    
     payment = db.query(RestaurantSalePayment).filter(RestaurantSalePayment.id == payment_id).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")

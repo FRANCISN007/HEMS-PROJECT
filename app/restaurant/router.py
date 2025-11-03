@@ -849,7 +849,7 @@ def get_meal_order(order_id: int,
 @router.put("/{order_id}", response_model=MealOrderDisplay)
 def update_meal_order(
     order_id: int,
-    order_data: MealOrderCreate, 
+    order_data: MealOrderCreate,
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
@@ -857,33 +857,35 @@ def update_meal_order(
     if not order:
         raise HTTPException(status_code=404, detail="Meal order not found")
 
-    # 🚫 Prevent editing closed orders
     if order.status.lower() == "closed":
         raise HTTPException(status_code=400, detail="Closed orders cannot be edited")
 
-    # Update basic fields
+    # ✅ Update core fields
     order.guest_name = order_data.guest_name
     order.order_type = order_data.order_type
     order.room_number = order_data.room_number
     order.location_id = order_data.location_id
 
-    # Remove old items
-    db.query(MealOrderItem).filter(MealOrderItem.order_id == order_id).delete()
+    existing_items = {item.meal_id: item for item in order.items}
 
-    # Add updated items
-    for item in order_data.items:
-        db_item = MealOrderItem(
-            meal_id=item.meal_id,
-            quantity=item.quantity,
-            order_id=order.id,
-            created_at=datetime.utcnow()
-        )
-        db.add(db_item)
+    for new_item in order_data.items:
+        if new_item.meal_id in existing_items:
+            # Update quantity if exists
+            existing_items[new_item.meal_id].quantity = new_item.quantity
+        else:
+            # Add new item if not in existing ones
+            db_item = MealOrderItem(
+                meal_id=new_item.meal_id,
+                quantity=new_item.quantity,
+                order_id=order.id,
+                created_at=datetime.utcnow()
+            )
+            db.add(db_item)
 
     db.commit()
     db.refresh(order)
 
-    # Build enriched order items list
+    # Build enriched item list
     order_items = []
     for item in order.items:
         meal = db.query(Meal).filter(Meal.id == item.meal_id).first()

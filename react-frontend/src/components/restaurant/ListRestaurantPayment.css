@@ -194,3 +194,17 @@
 .void-row {
   background-color: #ffe6e6; /* light red background for voided rows */
 }
+
+.btn.delete {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.btn.delete:hover {
+  background-color: #b02a37;
+}

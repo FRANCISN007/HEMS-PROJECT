@@ -666,7 +666,7 @@ def list_unpaid_sales(
 @router.put("/sales/{sale_id}", response_model=bar_schemas.BarSaleDisplay)
 def update_bar_sale(
     sale_id: int,
-    sale_data: bar_schemas.BarSaleCreate,  # Same structure as create
+    sale_data: bar_schemas.BarSaleCreate,
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
@@ -677,60 +677,60 @@ def update_bar_sale(
     if sale.bar_id != sale_data.bar_id:
         raise HTTPException(status_code=400, detail="Bar ID mismatch")
 
-    # 🔄 Step 1: Restore stock from old items
-    for old_item in sale.sale_items:
-        inventory = old_item.bar_inventory
-        if inventory:
-            inventory.quantity += old_item.quantity   # return stock
+    existing_items = {item.bar_inventory.item_id: item for item in sale.sale_items}
 
-    # 🔄 Step 2: Delete old sale items
-    db.query(bar_models.BarSaleItem).filter_by(sale_id=sale.id).delete()
-
-    total_amount = 0.0
-
-    # 🔄 Step 3: Add new items (like create)
-    for item_data in sale_data.items:
+    for new_item in sale_data.items:
         inventory = db.query(bar_models.BarInventory).filter_by(
             bar_id=sale_data.bar_id,
-            item_id=item_data.item_id
+            item_id=new_item.item_id
         ).first()
 
         if not inventory:
             raise HTTPException(
                 status_code=404,
-                detail=f"Inventory not found for item {item_data.item_id}"
+                detail=f"Inventory not found for item {new_item.item_id}"
             )
 
-        # Check stock availability
-        if inventory.quantity < item_data.quantity:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Not enough stock for item '{inventory.item.name}' "
-                       f"(requested: {item_data.quantity}, available: {inventory.quantity})."
+        if new_item.item_id in existing_items:
+            # ✅ Existing item: adjust difference
+            old_item = existing_items[new_item.item_id]
+            diff_qty = new_item.quantity - old_item.quantity
+            inventory.quantity -= diff_qty
+            old_item.quantity = new_item.quantity
+            old_item.selling_price = new_item.selling_price
+            old_item.total_amount = new_item.quantity * new_item.selling_price
+        else:
+            # ✅ New item: check stock and add
+            if inventory.quantity < new_item.quantity:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Not enough stock for '{inventory.item.name}' "
+                           f"(requested {new_item.quantity}, available {inventory.quantity})"
+                )
+            inventory.quantity -= new_item.quantity
+            sale_item = bar_models.BarSaleItem(
+                sale_id=sale.id,
+                bar_inventory_id=inventory.id,
+                quantity=new_item.quantity,
+                selling_price=new_item.selling_price,
+                total_amount=new_item.quantity * new_item.selling_price,
             )
+            db.add(sale_item)
 
-        # Deduct new stock
-        inventory.quantity -= item_data.quantity
+    # ✅ Force flush before recalculating total
+    db.flush()
 
-        # Use frontend price
-        item_total = item_data.quantity * item_data.selling_price
-        total_amount += item_total
+    total_amount = (
+        db.query(func.sum(bar_models.BarSaleItem.total_amount))
+        .filter(bar_models.BarSaleItem.sale_id == sale.id)
+        .scalar()
+    ) or 0.0
 
-        sale_item = bar_models.BarSaleItem(
-            sale_id=sale.id,
-            bar_inventory_id=inventory.id,
-            quantity=item_data.quantity,
-            selling_price=item_data.selling_price,
-            total_amount=item_total
-        )
-        db.add(sale_item)
-
-    # 🔄 Step 4: Update total
     sale.total_amount = total_amount
     db.commit()
     db.refresh(sale)
 
-    # 🔄 Step 5: Reload with relationships (like create)
+    # ✅ Reload relationships for response
     sale = db.query(bar_models.BarSale).options(
         joinedload(bar_models.BarSale.bar),
         joinedload(bar_models.BarSale.created_by_user),
@@ -739,18 +739,16 @@ def update_bar_sale(
         .joinedload(bar_models.BarInventory.item)
     ).get(sale.id)
 
-    # 🔄 Step 6: Build response
     sale_items = []
     for item in sale.sale_items:
         inventory = item.bar_inventory
         store_item = inventory.item if inventory else None
         item_name = store_item.name if store_item else "Unknown"
-
         sale_items.append(bar_schemas.BarSaleItemSummary(
             item_id=inventory.item_id if inventory else 0,
             item_name=item_name,
             quantity=item.quantity,
-            selling_price=item.selling_price,  # ✅ consistent with create
+            selling_price=item.selling_price,
             total_amount=item.total_amount
         ))
 
@@ -762,8 +760,9 @@ def update_bar_sale(
         created_by=sale.created_by_user.username if sale.created_by_user else "",
         status=getattr(sale, "status", "completed"),
         total_amount=total_amount,
-        sale_items=sale_items
+        sale_items=sale_items,
     )
+
 
 
 
