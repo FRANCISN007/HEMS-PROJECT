@@ -104,47 +104,48 @@
   margin: 0;
 }
 
-/* 🔹 Sales Table (Compact Version) */
+/* 🔹 Sales Table (Enhanced with Grid Lines) */
 .sales-table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 10px;
-  font-size: 12px; /* smaller text */
-  border: 1px solid #ccc;
+  font-size: 12px;
+  border: 2px solid #d1d5db; /* outer border */
   background: white;
   border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 .sales-table th,
 .sales-table td {
-  border-bottom: 1px solid #eee;
-  padding: 4px 6px; /* tighter padding */
-  line-height: 1.2; /* reduces vertical space */
+  border: 1px solid #cbd5e1; /* 🔹 visible grid lines */
+  padding: 6px 8px;
+  line-height: 1.4;
   text-align: center;
-  white-space: nowrap; /* prevents text wrapping */
+  white-space: nowrap;
 }
 
 .sales-table th {
-  background-color: #f3f4f6;
+  background-color: #f1f5f9;
   color: #111827;
   text-transform: uppercase;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.3px;
+  border-bottom: 2px solid #d1d5db;
 }
 
 .sales-table tr:nth-child(even) {
-  background-color: #fafafa;
+  background-color: #f9fafb;
 }
 
 .sales-table tr:hover {
-  background-color: #eaf3ff;
+  background-color: #e3f2fd;
 }
 
 .sales-table button {
-  padding: 3px 8px; /* smaller buttons */
+  padding: 4px 10px;
   background-color: #007bff;
   color: white;
   border: none;
