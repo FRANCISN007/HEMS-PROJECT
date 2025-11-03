@@ -1,90 +1,156 @@
 .restaurant-payment {
-  padding: 10px;
+  padding: 15px 20px;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   color: #333;
+  background: #f3f1f1;
+  border-radius: 12px;
+  min-height: 100vh;
+}
+
+/* 🔹 Header */
+.restaurant-header {
+  background: #ffffff;
+  padding: 18px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  margin-bottom: 15px;
+  text-align: center;
+  animation: fadeIn 0.3s ease;
 }
 
 .restaurant-payment h2 {
-  text-align: center;
-  margin-bottom: 20px;
-  color: #222;
-  font-size: 20px;
-  font-weight: bold;
-  letter-spacing: 0.5px;
+  font-size: 25px;          /* 🔹 Make it big */
+  font-weight: 700;         /* 🔹 Bold */
+  color: #445368;           /* 🔹 Dark professional text */
+  text-align: left;       /* 🔹 left align */
+  margin-bottom: 15px;      /* 🔹 Space below */
+  letter-spacing: 0.8px;    /* 🔹 Slight spacing for readability */
+ 
 }
 
-/* Location Select */
+
+
+.restaurant-header p {
+  color: #6b7280;
+  font-size: 16px;
+  margin-bottom: 0;
+}
+
+/* 🔹 Location Select */
 .location-select {
-  margin: 14px 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .location-select label {
   font-weight: 600;
+  color: #374151;
+  font-size: 14px;
 }
 
 .location-select select {
-  padding: 7px 12px;
+  padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid #ccc;
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
-  transition: 0.2s;
+  background: white;
+  transition: all 0.2s ease;
 }
 
 .location-select select:focus {
   border-color: #007bff;
-  box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+  box-shadow: 0 0 0 1.5px rgba(0, 123, 255, 0.2);
 }
 
-/* Sales Table */
+/* 🔹 Summary Cards */
+.summary {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.summary-card {
+  background: #ffffff;
+  padding: 4px 6px;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  min-width: 140px;
+  text-align: center;
+  transition: 0.2s ease;
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+}
+
+.summary-card h4 {
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.summary-card p {
+  color: #007bff;
+  font-weight: 800;
+  font-size: 16px;
+  margin: 0;
+}
+
+/* 🔹 Sales Table (Compact Version) */
 .sales-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 18px;
-  font-size: 14px;
-  box-shadow: 0px 2px 6px rgba(0,0,0,0.1);
-  border: 1px solid #ddd;
+  margin-top: 10px;
+  font-size: 12px; /* smaller text */
+  border: 1px solid #ccc;
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .sales-table th,
 .sales-table td {
-  border: 1px solid #ddd;
-  padding: 10px;
+  border-bottom: 1px solid #eee;
+  padding: 4px 6px; /* tighter padding */
+  line-height: 1.2; /* reduces vertical space */
   text-align: center;
+  white-space: nowrap; /* prevents text wrapping */
 }
 
 .sales-table th {
-  background-color: #f0f4f8;
-  font-weight: bold;
-  color: #333;
+  background-color: #f3f4f6;
+  color: #111827;
   text-transform: uppercase;
-  font-size: 13px;
-  letter-spacing: 0.5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
 }
 
 .sales-table tr:nth-child(even) {
   background-color: #fafafa;
 }
 
-.sales-table tr:nth-child(odd) {
-  background-color: #ffffff;
-}
-
 .sales-table tr:hover {
-  background-color: #f1f7ff;
+  background-color: #eaf3ff;
 }
 
 .sales-table button {
-  padding: 6px 12px;
+  padding: 3px 8px; /* smaller buttons */
   background-color: #007bff;
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 11px;
   transition: 0.2s;
 }
 
@@ -92,13 +158,10 @@
   background-color: #0056b3;
 }
 
-/* Payment Modal Overlay */
+/* 🔹 Payment Modal */
 .payment-modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
@@ -107,106 +170,112 @@
 }
 
 .payment-modal {
-  background: #fff;
-  padding: 20px;
-  width: 600px;
-  max-height: 80vh; /* keep modal height manageable */
+  background: #ffffff;
+  padding: 18px;
+  width: 520px;
+  max-width: 90%;
+  max-height: 80vh;
   border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
+  animation: fadeIn 0.3s ease;
 }
 
-
 .payment-modal h3 {
-  margin-bottom: 18px;
   text-align: center;
-  color: #222;
-  font-size: 18px;
-  font-weight: 600;
+  margin-bottom: 10px;
+  color: #1f2937;
+  font-weight: 800;
 }
 
 .payment-modal-content {
   flex: 1;
-  overflow-y: auto; /* ✅ vertical scroll */
-  margin-bottom: 15px;
-  padding-right: 10px; /* space for scrollbar */
+  overflow-y: auto;
+  margin-bottom: 10px;
+  padding-right: 6px;
 }
-
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: auto;
-}
-
 
 .payment-modal label {
   display: block;
-  margin: 8px 0 4px;
+  margin: 6px 0 3px;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
+  color: #374151;
 }
 
 .payment-modal input,
 .payment-modal select {
   width: 100%;
-  padding: 7px 10px;
+  padding: 6px 10px;
   border: 1px solid #ccc;
   border-radius: 6px;
-  margin-bottom: 12px;
-  font-size: 14px;
-  outline: none;
-  transition: 0.2s;
+  margin-bottom: 10px;
+  font-size: 13px;
 }
 
-.payment-modal input:focus,
-.payment-modal select:focus {
-  border-color: #007bff;
-  box-shadow: 0 0 5px rgba(0,123,255,0.3);
+.payment-history {
+  margin-top: 8px;
 }
 
-/* Modal Actions */
+.payment-history h4 {
+  margin-bottom: 5px;
+  color: #111827;
+  font-weight: 700;
+}
+
+.payment-history table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.payment-history th,
+.payment-history td {
+  border: 1px solid #e5e7eb;
+  padding: 4px;
+  text-align: center;
+}
+
 .modal-actions {
   display: flex;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .modal-actions button {
-  flex: 1;
-  padding: 9px;
+  padding: 8px 12px;
   border: none;
   border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: 0.2s;
+  transition: all 0.2s ease;
 }
 
-.modal-actions button:first-child {
+.modal-actions .btn-primary {
   background-color: #28a745;
   color: white;
 }
 
-.modal-actions button:first-child:hover {
+.modal-actions .btn-primary:hover {
   background-color: #1e7e34;
 }
 
-.modal-actions button:last-child {
+.modal-actions .btn-secondary {
   background-color: #dc3545;
   color: white;
 }
 
-.modal-actions button:last-child:hover {
+.modal-actions .btn-secondary:hover {
   background-color: #a71d2a;
 }
 
-/* Fade In Animation */
+/* Animation */
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(-20px);
+    transform: translateY(-8px);
   }
   to {
     opacity: 1;
