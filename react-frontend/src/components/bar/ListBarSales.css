@@ -1,5 +1,5 @@
 .list-bar-sales-container1 {
-  padding: 8px 12px; /* tighter padding */
+  padding: 4px 6px; /* tighter padding */
 }
 
 .page-heading {
@@ -15,16 +15,15 @@
   border-radius: 8px;
   padding: 4px 6px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  margin-top: 10px;
+  margin-top: 2px;
 }
 
 /* 🔹 Filters (bar + date) */
-.filters {
+.top-bar {
   display: flex;
-  gap: 8px;
+  justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-  font-size: 13px;
+  margin-bottom: 2px; /* tighter space between totals and table */
 }
 
 .filters select,
@@ -34,56 +33,78 @@
   border: 1px solid #ccc;
   border-radius: 8px;
   height: 25px;         /* ✅ same size */
-  min-width: 160px;     /* consistent width */
+  min-width: 140px;     /* consistent width */
 }
 
-/* 🔹 Totals at top right */
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
 
+
+/* 🔹 Compact Totals Section */
 .totals {
   display: flex;
-  gap: 20px;
+  gap: 2px;
   font-weight: 700;
-  font-size: 16px;
-  color: #333;
+  font-size: 12px;
+  color: #4f4a7e;
+  margin-bottom: 1px; /* tighter below totals */
 }
 
-/* 🔹 Table */
+/* 🔹 Bar Sales Table with Grid Lines */
 .sales-table1 {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
   line-height: 1.3;
+  border: 1px solid #b0b0b0; /* visible outer border */
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+
+/* 🔹 Modern Dark Header */
+.sales-table1 th {
+  background-color: #293552; /* deep dark navy */
+  color: #ffffff;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  border: 1px solid #bdbdbd; /* consistent border with data cells */
+  padding: 7px;
+  text-align: center;
+}
+
+/* 🔹 Grid Lines */
 .sales-table1 th,
 .sales-table1 td {
-  border: 1px solid #e0e0e0;
-  padding: 3px 4px;
-  text-align: left;
+  border: 1px solid #bdbdbd; /* visible grid lines */
+  padding: 6px 8px;
+  text-align: center;
+  white-space: nowrap;
 }
 
-.sales-table1 th {
-  background: #f7f7f7;
-  font-weight: 600;
-  font-size: 13px;
+/* Optional subtle shadow below header */
+.sales-table1 thead {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
 }
 
-.sales-table1 tr.even {
-  background-color: #fafafa;
+/* 🔹 Alternate Row Backgrounds */
+.sales-table1 tr:nth-child(even) {
+  background-color: #f9fafb;
 }
 
-.sales-table1 tr.odd {
+.sales-table1 tr:nth-child(odd) {
   background-color: #ffffff;
 }
 
 .sales-table1 tr:hover {
-  background: #f0f6ff;
+  background-color: #e3f2fd;
+}
+
+/* 🔹 Optional subtle header shadow */
+.sales-table1 thead {
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.15);
 }
 
 /* 🔹 Messages */
@@ -418,3 +439,5 @@ button:hover {
 .btn-add-item:hover {
   background: #0056b3;
 }
+
+
