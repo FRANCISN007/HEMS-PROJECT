@@ -19,7 +19,7 @@
 }
 
 .summary-table-container {
-  margin-top: 10px;
+  margin-top: 4px;
   overflow-x: auto;
 }
 
@@ -32,13 +32,17 @@
 .summary-table th,
 .summary-table td {
   border: 1px solid #999; /* darker grid lines */
-  padding: 8px 10px;
+  padding: 4px 8px;
   text-align: center;
+
+
 }
 
 .summary-table th {
   background-color: #f2f2f2;
   font-weight: bold;
+
+
 }
 
 .summary-table tbody tr:nth-child(even) {
