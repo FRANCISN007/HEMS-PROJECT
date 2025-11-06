@@ -16,20 +16,20 @@
 .issue-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 10px;
+  margin-top: 4px;
 }
 
 .issue-table th,
 .issue-table td {
   border: 1px solid #ccc;
-  padding: 8px;
+  padding: 4px;
   text-align: left;
 }
 
 .add-row-btn,
 .submit-btn {
   margin-top: 10px;
-  padding: 8px 16px;
+  padding: 8px 12px;
   font-weight: bold;
   border: none;
   border-radius: 5px;
