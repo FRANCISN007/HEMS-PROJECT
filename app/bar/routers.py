@@ -663,6 +663,9 @@ def list_unpaid_sales(
         "sales": results,
     }
 
+from sqlalchemy import func
+from sqlalchemy.orm import joinedload
+
 @router.put("/sales/{sale_id}", response_model=bar_schemas.BarSaleDisplay)
 def update_bar_sale(
     sale_id: int,
@@ -677,92 +680,183 @@ def update_bar_sale(
     if sale.bar_id != sale_data.bar_id:
         raise HTTPException(status_code=400, detail="Bar ID mismatch")
 
-    existing_items = {item.bar_inventory.item_id: item for item in sale.sale_items}
+    try:
+        # Map existing sale items by item_id (original reserved qty)
+        existing_items_by_item = {}
+        for si in sale.sale_items:
+            iid = si.bar_inventory.item_id
+            # if same item appears multiple times (shouldn't normally), sum them
+            existing_items_by_item.setdefault(iid, 0)
+            existing_items_by_item[iid] += si.quantity
 
-    for new_item in sale_data.items:
-        inventory = db.query(bar_models.BarInventory).filter_by(
-            bar_id=sale_data.bar_id,
-            item_id=new_item.item_id
-        ).first()
+        # Aggregate requested quantities from incoming payload (handle duplicates)
+        requested_by_item = {}
+        for it in sale_data.items:
+            if not it.item_id:
+                raise HTTPException(status_code=400, detail="Every item must have an item_id")
+            requested_by_item.setdefault(it.item_id, 0)
+            requested_by_item[it.item_id] += int(it.quantity or 0)
 
-        if not inventory:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Inventory not found for item {new_item.item_id}"
-            )
+        # Collect all item_ids we need to touch (existing + requested)
+        all_item_ids = set(existing_items_by_item.keys()) | set(requested_by_item.keys())
 
-        if new_item.item_id in existing_items:
-            # ✅ Existing item: adjust difference
-            old_item = existing_items[new_item.item_id]
-            diff_qty = new_item.quantity - old_item.quantity
-            inventory.quantity -= diff_qty
-            old_item.quantity = new_item.quantity
-            old_item.selling_price = new_item.selling_price
-            old_item.total_amount = new_item.quantity * new_item.selling_price
-        else:
-            # ✅ New item: check stock and add
-            if inventory.quantity < new_item.quantity:
+        # Load & lock inventory rows for all_item_ids (if DB supports FOR UPDATE)
+        inventories = {}
+        for iid in all_item_ids:
+            inv = db.query(bar_models.BarInventory).filter_by(
+                bar_id=sale_data.bar_id,
+                item_id=iid
+            ).with_for_update().first()  # locks row where supported (Postgres, etc.)
+            if not inv:
+                raise HTTPException(status_code=404, detail=f"Inventory not found for item {iid}")
+            inventories[iid] = inv
+
+        # Validate availability for each item
+        for iid in all_item_ids:
+            inv = inventories[iid]
+            orig_qty = existing_items_by_item.get(iid, 0)
+            requested_qty = requested_by_item.get(iid, 0)
+            # True available for new request = current inventory + what was reserved originally by this sale
+            available_total = inv.quantity + orig_qty
+            if requested_qty > available_total:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Not enough stock for '{inventory.item.name}' "
-                           f"(requested {new_item.quantity}, available {inventory.quantity})"
+                    detail=(f"Not enough stock for '{inv.item.name}' "
+                            f"(requested {requested_qty}, available {available_total})")
                 )
-            inventory.quantity -= new_item.quantity
-            sale_item = bar_models.BarSaleItem(
-                sale_id=sale.id,
-                bar_inventory_id=inventory.id,
-                quantity=new_item.quantity,
-                selling_price=new_item.selling_price,
-                total_amount=new_item.quantity * new_item.selling_price,
-            )
-            db.add(sale_item)
 
-    # ✅ Force flush before recalculating total
-    db.flush()
+        # At this point validation passed. Apply changes:
+        # 1) For items that were removed (orig > 0 and requested 0) -> return stock and delete sale item(s)
+        # 2) For items present in both -> update sale_item quantities/prices and set inventory accordingly
+        # 3) For new items (orig 0, requested > 0) -> create sale_item and decrease inventory
 
-    total_amount = (
-        db.query(func.sum(bar_models.BarSaleItem.total_amount))
-        .filter(bar_models.BarSaleItem.sale_id == sale.id)
-        .scalar()
-    ) or 0.0
+        # Build mapping sale items by item_id -> list of BarSaleItem objects
+        sale_items_by_item = {}
+        for si in sale.sale_items:
+            iid = si.bar_inventory.item_id
+            sale_items_by_item.setdefault(iid, []).append(si)
 
-    sale.total_amount = total_amount
-    db.commit()
-    db.refresh(sale)
+        # Remove or update existing sale items as needed
+        processed_item_ids = set()
+        for iid in all_item_ids:
+            inv = inventories[iid]
+            orig_qty = existing_items_by_item.get(iid, 0)
+            requested_qty = requested_by_item.get(iid, 0)
+            processed_item_ids.add(iid)
 
-    # ✅ Reload relationships for response
-    sale = db.query(bar_models.BarSale).options(
-        joinedload(bar_models.BarSale.bar),
-        joinedload(bar_models.BarSale.created_by_user),
-        joinedload(bar_models.BarSale.sale_items)
-        .joinedload(bar_models.BarSaleItem.bar_inventory)
-        .joinedload(bar_models.BarInventory.item)
-    ).get(sale.id)
+            # Compute how inventory should end up:
+            # new_inventory_qty = available_total - requested_qty
+            available_total = inv.quantity + orig_qty
+            new_inventory_qty = available_total - requested_qty
 
-    sale_items = []
-    for item in sale.sale_items:
-        inventory = item.bar_inventory
-        store_item = inventory.item if inventory else None
-        item_name = store_item.name if store_item else "Unknown"
-        sale_items.append(bar_schemas.BarSaleItemSummary(
-            item_id=inventory.item_id if inventory else 0,
-            item_name=item_name,
-            quantity=item.quantity,
-            selling_price=item.selling_price,
-            total_amount=item.total_amount
-        ))
+            # Apply to inventory row
+            inv.quantity = new_inventory_qty
 
-    return bar_schemas.BarSaleDisplay(
-        id=sale.id,
-        sale_date=sale.sale_date,
-        bar_id=sale.bar_id,
-        bar_name=sale.bar.name if sale.bar else "",
-        created_by=sale.created_by_user.username if sale.created_by_user else "",
-        status=getattr(sale, "status", "completed"),
-        total_amount=total_amount,
-        sale_items=sale_items,
-    )
+            # Update or create sale item record(s)
+            existing_sale_items = sale_items_by_item.get(iid, [])
 
+            if requested_qty == 0 and existing_sale_items:
+                # remove all sale items for this iid
+                for si in existing_sale_items:
+                    db.delete(si)
+            elif existing_sale_items:
+                # we need to adjust quantities across existing sale_item rows.
+                # Simplest approach: collapse into a single sale_item for this iid.
+                # Remove all current rows and create a consolidated one with requested_qty.
+                for si in existing_sale_items:
+                    db.delete(si)
+                # create new consolidated sale item
+                # find selling_price: prefer incoming payload price for this item if provided
+                # find a corresponding incoming item entry to get selling_price
+                price = None
+                for it in sale_data.items:
+                    if it.item_id == iid:
+                        price = it.selling_price
+                        break
+                if price is None:
+                    # fallback: use first existing sale_item price
+                    price = existing_sale_items[0].selling_price if existing_sale_items else 0.0
+                new_si = bar_models.BarSaleItem(
+                    sale_id=sale.id,
+                    bar_inventory_id=inventories[iid].id,
+                    quantity=requested_qty,
+                    selling_price=price,
+                    total_amount=requested_qty * price
+                )
+                db.add(new_si)
+            else:
+                # orig_qty == 0 and requested_qty > 0 -> new item
+                if requested_qty > 0:
+                    # get price from payload
+                    price = None
+                    for it in sale_data.items:
+                        if it.item_id == iid:
+                            price = it.selling_price
+                            break
+                    if price is None:
+                        price = 0.0
+                    new_si = bar_models.BarSaleItem(
+                        sale_id=sale.id,
+                        bar_inventory_id=inventories[iid].id,
+                        quantity=requested_qty,
+                        selling_price=price,
+                        total_amount=requested_qty * price
+                    )
+                    db.add(new_si)
+
+        # Flush to ensure sale items exist for total calculation
+        db.flush()
+
+        # Recalculate total_amount
+        total_amount = (
+            db.query(func.sum(bar_models.BarSaleItem.total_amount))
+            .filter(bar_models.BarSaleItem.sale_id == sale.id)
+            .scalar()
+        ) or 0.0
+
+        sale.total_amount = total_amount
+        db.commit()
+        db.refresh(sale)
+
+        # Reload sale with relationships for response
+        sale = db.query(bar_models.BarSale).options(
+            joinedload(bar_models.BarSale.bar),
+            joinedload(bar_models.BarSale.created_by_user),
+            joinedload(bar_models.BarSale.sale_items)
+            .joinedload(bar_models.BarSaleItem.bar_inventory)
+            .joinedload(bar_models.BarInventory.item)
+        ).get(sale.id)
+
+        sale_items = []
+        for item in sale.sale_items:
+            inventory = item.bar_inventory
+            store_item = inventory.item if inventory else None
+            item_name = store_item.name if store_item else "Unknown"
+            sale_items.append(bar_schemas.BarSaleItemSummary(
+                item_id=inventory.item_id if inventory else 0,
+                item_name=item_name,
+                quantity=item.quantity,
+                selling_price=item.selling_price,
+                total_amount=item.total_amount
+            ))
+
+        return bar_schemas.BarSaleDisplay(
+            id=sale.id,
+            sale_date=sale.sale_date,
+            bar_id=sale.bar_id,
+            bar_name=sale.bar.name if sale.bar else "",
+            created_by=sale.created_by_user.username if sale.created_by_user else "",
+            status=getattr(sale, "status", "completed"),
+            total_amount=total_amount,
+            sale_items=sale_items,
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 

@@ -128,7 +128,7 @@ const BarPayment = () => {
       <div className="header-row">
         {/* ✅ Larger Header Text */}
         <h1 style={{ fontSize: "2rem", fontWeight: "700", margin: "10px 0" }}>
-          🍽️ Restaurant Payments
+          🍷 Bar Payments
         </h1>
 
         {selectedBar && (

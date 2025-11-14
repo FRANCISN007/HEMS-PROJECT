@@ -10,11 +10,10 @@ const ListBarSales = () => {
   const [message, setMessage] = useState("");
   const [barId, setBarId] = useState("");
 
-  // ✅ Get user roles from localStorage
+  // User roles
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const roles = user.roles || [];
 
-  // ✅ Restrict access: only admin and bar can create payments
   if (!(roles.includes("admin") || roles.includes("bar"))) {
     return (
       <div className="unauthorized">
@@ -24,14 +23,11 @@ const ListBarSales = () => {
     );
   }
 
-
-  // ✅ Default both start and end date to today
+  // Default date = today
   const today = new Date().toISOString().split("T")[0];
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
 
-
-  // 🔽 Fetch sales with filters
   const fetchSales = async () => {
     try {
       const params = {};
@@ -42,27 +38,25 @@ const ListBarSales = () => {
       const res = await axiosWithAuth().get("/bar/sales", { params });
       setSales(res.data.sales || []);
     } catch (err) {
-      console.error("❌ Failed to fetch sales:", err);
+      console.error("Failed to fetch sales:", err);
     }
   };
 
-  // 🔽 Fetch bars
   const fetchBars = async () => {
     try {
       const res = await axiosWithAuth().get("/bar/bars/simple");
       setBars(res.data || []);
     } catch (err) {
-      console.error("❌ Failed to fetch bars:", err);
+      console.error("Failed to fetch bars:", err);
     }
   };
 
-  // 🔽 Fetch items
   const fetchItems = async () => {
     try {
       const res = await axiosWithAuth().get("/store/items/simple");
       setItems(res.data || []);
     } catch (err) {
-      console.error("❌ Failed to fetch items:", err);
+      console.error("Failed to fetch items:", err);
     }
   };
 
@@ -72,7 +66,6 @@ const ListBarSales = () => {
     fetchItems();
   }, []);
 
-  // 🕒 Auto clear messages after 3s
   useEffect(() => {
     if (message) {
       const timer = setTimeout(() => setMessage(""), 3000);
@@ -80,7 +73,6 @@ const ListBarSales = () => {
     }
   }, [message]);
 
-  // 🔄 Handle delete
   const handleDelete = async (saleId) => {
     if (!window.confirm("Are you sure you want to delete this sale?")) return;
     try {
@@ -88,12 +80,10 @@ const ListBarSales = () => {
       setMessage("✅ Sale deleted successfully!");
       fetchSales();
     } catch (err) {
-      console.error("❌ Delete failed:", err);
       setMessage(err.response?.data?.detail || "❌ Failed to delete sale.");
     }
   };
 
-  // ✏️ Handle edit
   const handleEdit = (sale) => {
     setEditingSale({
       ...sale,
@@ -105,37 +95,27 @@ const ListBarSales = () => {
     });
   };
 
-  // 💾 Submit edit
   const handleUpdate = async (e) => {
     e.preventDefault();
     try {
       await axiosWithAuth().put(`/bar/sales/${editingSale.id}`, {
         bar_id: editingSale.bar_id,
-        items: editingSale.items.map((i) => ({
-          item_id: parseInt(i.item_id),
-          quantity: parseInt(i.quantity),
-          selling_price: parseFloat(i.selling_price),
-        })),
+        items: editingSale.items,
       });
       setMessage("✅ Sale updated successfully!");
       setEditingSale(null);
       fetchSales();
     } catch (err) {
-      console.error("❌ Update failed:", err);
       setMessage(err.response?.data?.detail || "❌ Failed to update sale.");
     }
   };
 
   const updateItemField = (index, field, value) => {
     const updated = [...editingSale.items];
-    updated[index][field] =
-      field === "quantity"
-        ? parseInt(value || 0)
-        : parseFloat(value || 0);
+    updated[index][field] = value;
     setEditingSale({ ...editingSale, items: updated });
   };
 
-  // 🔢 Totals
   const totalEntries = sales.length;
   const totalAmount = sales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
 
@@ -145,75 +125,69 @@ const ListBarSales = () => {
 
       {message && <div className="message">{message}</div>}
 
-      {/* 🔎 Filters + Totals in one top-bar */}
+      {/* TOP BAR */}
       <div className="top-bar">
-      {/* 🔎 Filters in one compact line */}
-      <div className="filters">
-        <label>Bar:</label>
-        <select value={barId} onChange={(e) => setBarId(e.target.value)}>
-          <option value="">-- All Bars --</option>
-          {bars.map((bar) => (
-            <option key={bar.id} value={bar.id}>
-              {bar.name}
-            </option>
-          ))}
-        </select>
+        {/* Filters */}
+        <div className="filters">
+          <label>Bar:</label>
+          <select value={barId} onChange={(e) => setBarId(e.target.value)}>
+            <option value="">All Bars</option>
+            {bars.map((bar) => (
+              <option key={bar.id} value={bar.id}>
+                {bar.name}
+              </option>
+            ))}
+          </select>
 
-        <label>Start Date:</label>
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-        />
+          <label>Start Date:</label>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
 
-        <label>End Date:</label>
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-        />
+          <label>End Date:</label>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
 
-        <button onClick={fetchSales}>🔍 Apply</button>
+          <button onClick={fetchSales}>🔍 Apply</button>
+        </div>
+
+        {/* Summary */}
+        <div className="compact-summary">
+          <span>Entries: <strong>{totalEntries}</strong></span>
+          <span>Amount: <strong>₦{totalAmount.toLocaleString()}</strong></span>
+        </div>
       </div>
 
-      {/* ✅ Compact summary */}
-      <div className="totals compact-summary">
-        <span>Entries: <strong>{totalEntries}</strong></span>
-        <span>Amount: <strong>₦{totalAmount.toLocaleString()}</strong></span>
-      </div>
-    </div>
-
-      {/* Wrapped content in a professional container */}
+      {/* TABLE */}
       <div className="data-container1">
         <table className="sales-table1">
           <thead>
             <tr>
-              <th>Sale ID</th>   {/* 👈 Added */}
+              <th>Sale ID</th>
               <th>Date</th>
               <th>Bar</th>
               <th>Items</th>
-              <th>Total Amount</th>
+              <th>Total</th>
               <th>Created By</th>
               <th>Actions</th>
             </tr>
           </thead>
+
           <tbody>
             {sales.map((sale, idx) => (
-              <tr key={sale.id} className={idx % 2 === 0 ? "even" : "odd"}>
-                <td>{sale.id}</td>   {/* 👈 Added */}
+              <tr key={sale.id}>
+                <td>{sale.id}</td>
                 <td>{new Date(sale.sale_date).toLocaleDateString()}</td>
                 <td>{sale.bar_name}</td>
-                
+
                 <td>
-                  {sale.sale_items.map((i, iidx) => (
-                    <div key={iidx}>
-                      {i.item_name} - {i.quantity} @ ₦{i.selling_price}
+                  {sale.sale_items.map((it, i) => (
+                    <div key={i}>
+                      {it.item_name} – {it.quantity} × ₦{it.selling_price}
                     </div>
-                
                   ))}
                 </td>
+
                 <td>₦{sale.total_amount.toLocaleString()}</td>
                 <td>{sale.created_by}</td>
+
                 <td>
                   <button onClick={() => handleEdit(sale)}>✏ Edit</button>
                   <button onClick={() => handleDelete(sale.id)}>🗑 Delete</button>
@@ -224,20 +198,19 @@ const ListBarSales = () => {
         </table>
       </div>
 
-      {/* Edit Modal */}
+
+      {/* EDIT MODAL */}
       {editingSale && (
         <div className="modal-overlay2">
           <div className="modal2">
-            <h3 className="modal-title">✏️ Edit Sale</h3>
+            <h3 className="modal-title">✏ Edit Sale</h3>
 
-            <form onSubmit={handleUpdate} className="edit-sale-form">
+            <form onSubmit={handleUpdate}>
               <div className="form-group">
                 <label>Bar</label>
                 <select value={editingSale.bar_id} disabled>
-                  {bars.map((bar) => (
-                    <option key={bar.id} value={bar.id}>
-                      {bar.name}
-                    </option>
+                  {bars.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>
               </div>
@@ -252,7 +225,7 @@ const ListBarSales = () => {
                       value={item.item_id}
                       onChange={(e) => updateItemField(idx, "item_id", e.target.value)}
                     >
-                      <option value="">-- Select Item --</option>
+                      <option value="">Select Item</option>
                       {items.map((it) => (
                         <option key={it.id} value={it.id}>
                           {it.name} ({it.unit})
@@ -274,55 +247,40 @@ const ListBarSales = () => {
                     <label>Selling Price (₦)</label>
                     <input
                       type="number"
-                      step="0.01"
                       value={item.selling_price}
-                      onChange={(e) =>
-                        updateItemField(idx, "selling_price", e.target.value)
-                      }
+                      onChange={(e) => updateItemField(idx, "selling_price", e.target.value)}
                     />
                   </div>
                 </div>
               ))}
 
-              {/* ✅ NEW Add Item Button */}
               <button
                 type="button"
                 className="btn-add-item"
                 onClick={() =>
                   setEditingSale({
                     ...editingSale,
-                    items: [
-                      ...editingSale.items,
-                      { item_id: "", quantity: 0, selling_price: 0 },
-                    ],
+                    items: [...editingSale.items, { item_id: "", quantity: 0, selling_price: 0 }],
                   })
                 }
               >
-                ➕ Add Another Item
+                ➕ Add Item
               </button>
 
               <div className="total-box">
-                <strong>Total: ₦
-                  {editingSale.items
-                    .reduce(
-                      (sum, i) =>
-                        sum + (i.quantity || 0) * (i.selling_price || 0),
-                      0
-                    )
-                    .toLocaleString()}
-                </strong>
+                Total: ₦
+                {editingSale.items
+                  .reduce((sum, i) => sum + i.quantity * i.selling_price, 0)
+                  .toLocaleString()}
               </div>
 
               <div className="modal-actions2">
-                <button type="submit" className="btn-save">💾 Save</button>
-                <button
-                  type="button"
-                  className="btn-cancel"
-                  onClick={() => setEditingSale(null)}
-                >
-                  ❌ Cancel
+                <button className="btn-save" type="submit">Save</button>
+                <button className="btn-cancel" type="button" onClick={() => setEditingSale(null)}>
+                  Cancel
                 </button>
               </div>
+
             </form>
           </div>
         </div>
