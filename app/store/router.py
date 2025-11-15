@@ -722,6 +722,17 @@ def list_issues(
     return issues if issues else []
 
 
+
+@router.get("/stock/{item_id}")
+def get_item_stock(item_id: int, db: Session = Depends(get_db)):
+    total = (
+        db.query(func.sum(StoreStockEntry.quantity))
+        .filter(StoreStockEntry.item_id == item_id)
+        .scalar()
+    ) or 0
+    return {"item_id": item_id, "available": total}
+
+
 @router.put("/issues/{issue_id}", response_model=store_schemas.IssueDisplay)
 def update_issue(
     issue_id: int,
@@ -733,99 +744,132 @@ def update_issue(
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 
-    # Step 1️⃣ Restore stock from old items before deleting them
+    # 1️⃣ RESTORE OLD ITEMS USING PROPER FIFO
     old_items = db.query(StoreIssueItem).filter_by(issue_id=issue_id).all()
-    for old_item in old_items:
-        # Restore stock quantities
+
+    for old in old_items:
+        qty_to_restore = old.quantity
+        
+        # Fetch FIFO entries
         stock_entries = (
             db.query(StoreStockEntry)
-            .filter(StoreStockEntry.item_id == old_item.item_id)
+            .filter(StoreStockEntry.item_id == old.item_id)
             .order_by(StoreStockEntry.purchase_date.asc())
             .all()
         )
-        remaining_restore = old_item.quantity
-        for entry in stock_entries:
-            if remaining_restore <= 0:
-                break
-            entry.quantity += remaining_restore
-            remaining_restore = 0
 
-        # Restore bar inventory if applicable
+        for entry in stock_entries:
+            if qty_to_restore <= 0:
+                break
+            entry.quantity += qty_to_restore
+            qty_to_restore = 0  # fully restored
+
+        # Restore bar inventory
         if issue.issue_to.lower() == "bar":
-            bar_inventory = (
+            bar_inv = (
                 db.query(BarInventory)
-                .filter_by(bar_id=issue.issued_to_id, item_id=old_item.item_id)
+                .filter_by(bar_id=issue.issued_to_id, item_id=old.item_id)
                 .first()
             )
-            if bar_inventory:
-                bar_inventory.quantity -= old_item.quantity
-                if bar_inventory.quantity < 0:
-                    bar_inventory.quantity = 0
+            if bar_inv:
+                bar_inv.quantity -= old.quantity
+                if bar_inv.quantity < 0:
+                    bar_inv.quantity = 0
 
-    # Step 2️⃣ Delete old issue items
+    # Delete old issue items
     db.query(StoreIssueItem).filter_by(issue_id=issue_id).delete()
 
-    # Step 3️⃣ Update issue metadata
+    # 2️⃣ VALIDATE NEW ITEMS BEFORE DEDUCTING
+    for item in update_data.issue_items:
+        requested_qty = item.quantity
+
+        # 2️⃣ VALIDATE NEW ITEMS BEFORE DEDUCTING
+    # Build dictionary of old quantities
+    old_issue_map = {}
+    for old in old_items:
+        old_issue_map[old.item_id] = old_issue_map.get(old.item_id, 0) + old.quantity
+
+    for item in update_data.issue_items:
+        requested_qty = item.quantity
+
+        # stock after restoring old issue qty
+        available = (
+            db.query(func.sum(StoreStockEntry.quantity))
+            .filter(StoreStockEntry.item_id == item.item_id)
+            .scalar()
+        ) or 0
+
+        old_qty = old_issue_map.get(item.item_id, 0)
+
+        allowed = available + old_qty  # same logic as frontend
+
+        if requested_qty > allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Not enough stock for item {item.item_id}. Requested {requested_qty}, available {allowed}"
+            )
+
+
+    # 3️⃣ UPDATE ISSUE HEADER
     issue.issue_to = update_data.issue_to
     issue.issued_to_id = update_data.issued_to_id
     issue.issue_date = update_data.issue_date or datetime.utcnow()
     issue.issued_by_id = current_user.id
 
-    # Step 4️⃣ Add new issue items & deduct stock
-    for item_data in update_data.issue_items:
-        # Deduct from stock (FIFO)
-        remaining_quantity = item_data.quantity
+    # 4️⃣ DEDUCT STOCK & SAVE NEW ITEMS
+    for item in update_data.issue_items:
+        qty_to_deduct = item.quantity
+
+        # FIFO deduction
         stock_entries = (
             db.query(StoreStockEntry)
-            .filter(StoreStockEntry.item_id == item_data.item_id, StoreStockEntry.quantity > 0)
+            .filter(StoreStockEntry.item_id == item.item_id, StoreStockEntry.quantity > 0)
             .order_by(StoreStockEntry.purchase_date.asc())
             .all()
         )
+
         for entry in stock_entries:
-            if remaining_quantity <= 0:
+            if qty_to_deduct <= 0:
                 break
-            if entry.quantity >= remaining_quantity:
-                entry.quantity -= remaining_quantity
-                remaining_quantity = 0
+
+            if entry.quantity >= qty_to_deduct:
+                entry.quantity -= qty_to_deduct
+                qty_to_deduct = 0
             else:
-                remaining_quantity -= entry.quantity
+                qty_to_deduct -= entry.quantity
                 entry.quantity = 0
 
-        # Update bar inventory if applicable
+        # Update bar inventory
         if update_data.issue_to.lower() == "bar":
-            bar_inventory = (
+            bar_inv = (
                 db.query(BarInventory)
-                .filter_by(bar_id=update_data.issued_to_id, item_id=item_data.item_id)
+                .filter_by(bar_id=update_data.issued_to_id, item_id=item.item_id)
                 .first()
             )
-            if bar_inventory:
-                bar_inventory.quantity += item_data.quantity
+            if bar_inv:
+                bar_inv.quantity += item.quantity
             else:
-                latest_stock = (
-                    db.query(StoreStockEntry)
-                    .filter(StoreStockEntry.item_id == item_data.item_id)
-                    .order_by(StoreStockEntry.id.desc())
-                    .first()
-                )
-                bar_inventory = BarInventory(
+                bar_inv = BarInventory(
                     bar_id=update_data.issued_to_id,
-                    item_id=item_data.item_id,
-                    quantity=item_data.quantity,
-                    selling_price=latest_stock.unit_price if latest_stock else 0
+                    item_id=item.item_id,
+                    quantity=item.quantity,
+                    selling_price=0,
                 )
-                db.add(bar_inventory)
+                db.add(bar_inv)
 
-        # Save the new issue item
-        new_issue_item = StoreIssueItem(
+        # Save issue item
+        new_item = StoreIssueItem(
             issue_id=issue_id,
-            item_id=item_data.item_id,
-            quantity=item_data.quantity,
+            item_id=item.item_id,
+            quantity=item.quantity,
         )
-        db.add(new_issue_item)
+        db.add(new_item)
 
     db.commit()
     db.refresh(issue)
     return issue
+
+
 
 @router.delete("/issues/{issue_id}")
 def delete_issue(

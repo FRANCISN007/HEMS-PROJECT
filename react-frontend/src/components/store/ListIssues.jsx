@@ -11,149 +11,193 @@ const ListIssues = () => {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [editingIssue, setEditingIssue] = useState(null);
-
-  const getToday = () => {
-  const today = new Date();
-  return today.toISOString().split("T")[0];
-};
-
   const [formData, setFormData] = useState({
-  issue_to: "bar",
-  issued_to_id: "",
-  issue_date: getToday(),  // 👈 default to today
-  issue_items: [],
-});
+    issue_to: "bar",
+    issued_to_id: "",
+    issue_date: "",
+    issue_items: [],
+  });
+  const [originalIssueCounts, setOriginalIssueCounts] = useState({}); // item_id -> qty originally
+
+  const getToday = () => new Date().toISOString().split("T")[0];
+
+  useEffect(() => {
+    const { firstDay, lastDay } = (() => {
+      const now = new Date();
+      const first = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+      const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
+      return { firstDay: first, lastDay: last };
+    })();
+    setStartDate(firstDay);
+    setEndDate(lastDay);
+  }, []);
 
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
-
-  if (Array.isArray(storedUser.roles)) {
-    roles = storedUser.roles;
-  } else if (typeof storedUser.role === "string") {
-    roles = [storedUser.role];
-  }
-
+  if (Array.isArray(storedUser.roles)) roles = storedUser.roles;
+  else if (typeof storedUser.role === "string") roles = [storedUser.role];
   roles = roles.map((r) => r.toLowerCase());
 
-
   if (!(roles.includes("admin") || roles.includes("store"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to list items issued.</p>
-    </div>
-  );
-}
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to list items issued.</p>
+      </div>
+    );
+  }
 
-  
-  // Show a message for 3 seconds
   const showMessage = (msg) => {
     setMessage(msg);
-    setTimeout(() => setMessage(""), 3000);
+    setTimeout(() => setMessage(""), 3500);
   };
 
-  // Get current month date range
-  const getCurrentMonthDates = () => {
-    const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-      .toISOString()
-      .split("T")[0];
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-      .toISOString()
-      .split("T")[0];
-    return { firstDay, lastDay };
-  };
-
-  // Fetch bars
+  // fetch bars and items once
   useEffect(() => {
     (async () => {
       try {
-        const res = await axiosWithAuth().get("/bar/bars/simple");
-        setBars(Array.isArray(res.data) ? res.data : []);
+        const [barsRes, itemsRes] = await Promise.all([
+          axiosWithAuth().get("/bar/bars/simple"),
+          axiosWithAuth().get("/store/items/simple"),
+        ]);
+        setBars(Array.isArray(barsRes.data) ? barsRes.data : []);
+        setItems(Array.isArray(itemsRes.data) ? itemsRes.data : []);
       } catch (err) {
-        console.error("❌ Error fetching bars", err);
+        console.error("Error fetching bars/items", err);
       }
     })();
   }, []);
 
-  // Fetch items
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await axiosWithAuth().get("/store/items/simple");
-        setItems(Array.isArray(res.data) ? res.data : []);
-      } catch (err) {
-        console.error("❌ Error fetching items", err);
-      }
-    })();
-  }, []);
-
-  // Fetch issues
-  const fetchIssues = async (start, end) => {
-    const sDate = typeof start === "string" ? start : startDate;
-    const eDate = typeof end === "string" ? end : endDate;
-
+  const fetchIssues = async (sDate, eDate) => {
     try {
       const params = {};
       if (barName) params.bar_name = barName;
       if (sDate) params.start_date = sDate;
       if (eDate) params.end_date = eDate;
-
       const res = await axiosWithAuth().get("/store/issues", { params });
       setIssues(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error("❌ Error fetching issues", err);
+      console.error("Error fetching issues", err);
     }
   };
 
-  // On first load → show current month
   useEffect(() => {
-    const { firstDay, lastDay } = getCurrentMonthDates();
-    setStartDate(firstDay);
-    setEndDate(lastDay);
-    fetchIssues(firstDay, lastDay);
-  }, []);
+    fetchIssues(startDate, endDate);
+    // eslint-disable-next-line
+  }, [startDate, endDate]);
 
   const handleEditClick = (issue) => {
-    setEditingIssue(issue.id);
+    const issue_items = (issue.issue_items || []).map((it) => ({
+      item_id: it.item?.id || "",
+      quantity: it.quantity || 0,
+    }));
+
+    const orig = {};
+    issue_items.forEach((it) => {
+      const id = Number(it.item_id);
+      if (!id) return;
+      orig[id] = (orig[id] || 0) + Number(it.quantity || 0);
+    });
+
+    setOriginalIssueCounts(orig);
+
     setFormData({
       issue_to: "bar",
       issued_to_id: issue.issued_to_id || "",
-      issue_date: issue.issue_date ? issue.issue_date.split("T")[0] : "",
-      issue_items: issue.issue_items.map((item) => ({
-        item_id: item.item?.id || "",
-        quantity: item.quantity || 0,
-      })),
+      issue_date: issue.issue_date ? issue.issue_date.split("T")[0] : getToday(),
+      issue_items,
     });
+
+    setEditingIssue(issue.id);
   };
 
   const handleFormChange = (index, field, value) => {
     const newItems = [...formData.issue_items];
-    newItems[index][field] = value;
+    if (field === "quantity") value = Number(value || 0);
+    newItems[index] = { ...newItems[index], [field]: value };
+    setFormData({ ...formData, issue_items: newItems });
+  };
+
+  // Add / Remove lines
+  const addIssueLine = () => {
+    setFormData({ ...formData, issue_items: [...(formData.issue_items || []), { item_id: "", quantity: 1 }] });
+  };
+  const removeIssueLine = (index) => {
+    const newItems = [...formData.issue_items];
+    newItems.splice(index, 1);
     setFormData({ ...formData, issue_items: newItems });
   };
 
   const handleSubmitEdit = async (id) => {
     try {
+      if (!formData.issued_to_id) {
+        showMessage("❌ Select a bar to issue to.");
+        return;
+      }
+      if (!formData.issue_items || formData.issue_items.length === 0) {
+        showMessage("❌ Add at least one item.");
+        return;
+      }
+
+      // Aggregate requested quantities by item_id
+      const requested = {};
+        for (const row of formData.issue_items) {
+          const iid = Number(row.item_id || 0);
+          const qty = Number(row.quantity || 0);
+          if (!iid) {
+            showMessage("❌ Every line must have an item selected.");
+            return;
+          }
+          if (!qty || qty <= 0) {
+            showMessage("❌ Quantity must be greater than 0 for all items.");
+            return;
+          }
+          requested[iid] = (requested[iid] || 0) + qty;
+        }
+
+        for (const iidStr of Object.keys(requested)) {
+      const iid = Number(iidStr);
+      const reqQty = requested[iid];
+
+      const resp = await axiosWithAuth().get(`/store/stock/${iid}`);
+      const available = Number(resp.data?.available || 0);
+
+      const oldQty = Number(originalIssueCounts[iid] || 0);
+      const allowed = available + oldQty;
+
+      if (reqQty > allowed) {
+          const itemObj = items.find((it) => it.id === iid) || {};
+          showMessage(
+            `❌ Not enough stock for "${itemObj.name}". Requested: ${reqQty}, Available: ${allowed}`
+          );
+          return;
+      }
+  }
+
+
+      // All validations passed -> send update
       const payload = {
-        ...formData,
-        issued_to_id: parseInt(formData.issued_to_id, 10),
-        issue_items: formData.issue_items.map((item) => ({
-          item_id: parseInt(item.item_id, 10),
-          quantity: parseInt(item.quantity, 10),
+        issue_to: formData.issue_to,
+        issued_to_id: Number(formData.issued_to_id),
+        issue_date: formData.issue_date,
+        issue_items: formData.issue_items.map((it) => ({
+          item_id: Number(it.item_id),
+          quantity: Number(it.quantity),
         })),
       };
 
       await axiosWithAuth().put(`/store/issues/${id}`, payload);
       showMessage("✅ Issue updated successfully.");
       setEditingIssue(null);
+      setFormData({ issue_to: "bar", issued_to_id: "", issue_date: getToday(), issue_items: [] });
+      setOriginalIssueCounts({});
       fetchIssues(startDate, endDate);
     } catch (err) {
-      console.error("❌ Update failed", err.response?.data || err.message);
-      showMessage("❌ Failed to update issue.");
+      console.error("Update failed", err.response?.data || err.message);
+      const detail = err.response?.data?.detail || err.response?.data || err.message || "Update failed";
+      showMessage(`❌ ${detail}`);
     }
   };
-      setTimeout(() => setMessage(""), 3000);
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this issue?")) return;
@@ -162,19 +206,14 @@ const ListIssues = () => {
       showMessage("✅ Issue deleted successfully.");
       fetchIssues(startDate, endDate);
     } catch (err) {
-      console.error("❌ Delete failed", err);
+      console.error("Delete failed", err);
       showMessage("❌ Failed to delete issue.");
     }
   };
 
-  // Summary stats
+  // summary values
   const totalIssued = issues.length;
-  const totalQuantity = issues.reduce(
-    (acc, issue) =>
-      acc +
-      (issue.issue_items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0),
-    0
-  );
+  const totalQuantity = issues.reduce((acc, issue) => acc + (issue.issue_items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0), 0);
 
   return (
     <div className="list-issues-container">
@@ -183,36 +222,13 @@ const ListIssues = () => {
       <div className="filters">
         <select value={barName} onChange={(e) => setBarName(e.target.value)}>
           <option value="">-- Filter by Bar --</option>
-          {bars.map((bar) => (
-            <option key={bar.id} value={bar.name}>
-              {bar.name}
-            </option>
-          ))}
+          {bars.map((bar) => <option key={bar.id} value={bar.name}>{bar.name}</option>)}
         </select>
 
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-        />
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-        />
-
+        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         <button onClick={() => fetchIssues(startDate, endDate)}>🔍 Filter</button>
-        <button
-          onClick={() => {
-            const { firstDay, lastDay } = getCurrentMonthDates();
-            setBarName("");
-            setStartDate(firstDay);
-            setEndDate(lastDay);
-            fetchIssues(firstDay, lastDay);
-          }}
-        >
-          ♻️ Reset
-        </button>
+        <button onClick={() => { const now = new Date(); const first = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]; const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]; setBarName(""); setStartDate(first); setEndDate(last); fetchIssues(first, last); }}>♻️ Reset</button>
       </div>
 
       {message && <p className="issue-message">{message}</p>}
@@ -224,42 +240,23 @@ const ListIssues = () => {
 
       <table className="list-issues-table">
         <thead>
-          <tr>
-            <th>ID</th>
-            <th>Issue To</th>
-            <th>Issue Date</th>
-            <th>Items Issued</th>
-            <th>Actions</th>
-          </tr>
+          <tr><th>ID</th><th>Issue To</th><th>Issue Date</th><th>Items Issued</th><th>Actions</th></tr>
         </thead>
         <tbody>
           {issues.length === 0 ? (
-            <tr>
-              <td colSpan="5">No issues found.</td>
+            <tr><td colSpan="5">No issues found.</td></tr>
+          ) : issues.map((issue) => (
+            <tr key={issue.id}>
+              <td>{issue.id}</td>
+              <td>{issue.issued_to?.name || "Unnamed Bar"}</td>
+              <td>{new Date(issue.issue_date).toLocaleDateString()}</td>
+              <td><ul style={{ paddingLeft: "1rem", margin: 0 }}>{issue.issue_items.map(it => <li key={it.id}>{it.item?.name || 'Item'} — Qty: {it.quantity}</li>)}</ul></td>
+              <td>
+                <button className="edit-btn" onClick={() => handleEditClick(issue)}>✏️ Edit</button>
+                <button className="delete-btn" onClick={() => handleDelete(issue.id)}>🗑️ Delete</button>
+              </td>
             </tr>
-          ) : (
-            issues.map((issue) => (
-              <tr key={issue.id}>
-                <td>{issue.id}</td>
-                <td>{issue.issued_to?.name || "Unnamed Bar"}</td>
-                <td>{new Date(issue.issue_date).toLocaleDateString()}</td>
-                <td>
-                  <ul style={{ paddingLeft: "1rem", margin: 0 }}>
-                    {issue.issue_items.map((item) => (
-                      <li key={item.id}>
-                        {item.item?.name || "Unnamed Item"} — Qty: {item.quantity}
-                      </li>
-                    ))}
-                  </ul>
-                </td>
-                <td>
-                  <button className="edit-btn" onClick={() => handleEditClick(issue)}>✏️ Edit</button>
-                  <button className="delete-btn" onClick={() => handleDelete(issue.id)}>🗑️ Delete</button>
-
-                </td>
-              </tr>
-            ))
-          )}
+          ))}
         </tbody>
       </table>
 
@@ -269,58 +266,34 @@ const ListIssues = () => {
             <h3>Edit Issue</h3>
 
             <label>Bar:</label>
-            <select
-              value={formData.issued_to_id}
-              onChange={(e) =>
-                setFormData({ ...formData, issued_to_id: e.target.value })
-              }
-            >
+            <select value={formData.issued_to_id} onChange={(e) => setFormData({ ...formData, issued_to_id: e.target.value })}>
               <option value="">-- Select a bar --</option>
-              {bars.map((bar) => (
-                <option key={bar.id} value={bar.id}>
-                  {bar.name}
-                </option>
-              ))}
+              {bars.map(bar => <option key={bar.id} value={bar.id}>{bar.name}</option>)}
             </select>
 
             <label>Issue Date:</label>
-            <input
-              type="date"
-              value={formData.issue_date}
-              onChange={(e) =>
-                setFormData({ ...formData, issue_date: e.target.value })
-              }
-            />
+            <input type="date" value={formData.issue_date} onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })} />
 
             <h4>Items</h4>
-            {formData.issue_items.map((item, index) => (
+            {(formData.issue_items || []).map((item, index) => (
               <div key={index} className="item-row">
-                <select
-                  value={item.item_id}
-                  onChange={(e) =>
-                    handleFormChange(index, "item_id", e.target.value)
-                  }
-                >
+                <select value={item.item_id} onChange={(e) => handleFormChange(index, "item_id", e.target.value)}>
                   <option value="">-- Select an item --</option>
-                  {items.map((it) => (
-                    <option key={it.id} value={it.id}>
-                      {it.name}
-                    </option>
-                  ))}
+                  {items.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
                 </select>
-                <input
-                  type="number"
-                  value={item.quantity}
-                  onChange={(e) =>
-                    handleFormChange(index, "quantity", e.target.value)
-                  }
-                  placeholder="Qty"
-                />
+
+                <input type="number" min={1} value={item.quantity} onChange={(e) => handleFormChange(index, "quantity", e.target.value)} placeholder="Qty" />
+
+                <button type="button" className="remove-line" onClick={() => removeIssueLine(index)}>❌</button>
               </div>
             ))}
 
-            <button onClick={() => handleSubmitEdit(editingIssue)}>✅ Save</button>
-            <button onClick={() => setEditingIssue(null)}>❌ Cancel</button>
+            <button type="button" className="add-btn" onClick={addIssueLine}>➕ Add Item</button>
+
+            <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+              <button className="save-btn" onClick={() => handleSubmitEdit(editingIssue)}>✅ Save</button>
+              <button className="cancel-btn" onClick={() => setEditingIssue(null)}>❌ Cancel</button>
+            </div>
           </div>
         </div>
       )}
