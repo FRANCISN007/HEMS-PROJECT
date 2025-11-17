@@ -55,8 +55,15 @@ const StockBalance = () => {
       const url = categoryId
         ? `/store/balance-stock?category_id=${categoryId}`
         : `/store/balance-stock`;
+
       const res = await axios.get(url);
-      setBalances(res.data || []);
+
+      // 🔥 Sort alphabetically by item_name
+      const sorted = (res.data || []).sort((a, b) =>
+        a.item_name.localeCompare(b.item_name)
+      );
+
+      setBalances(sorted);
     } catch (error) {
       console.error("Error fetching stock balances:", error);
       setMessage("❌ Failed to load stock balances");

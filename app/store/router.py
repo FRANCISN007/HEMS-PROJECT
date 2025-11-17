@@ -973,7 +973,9 @@ def get_store_balances(
         )
         .join(store_models.StoreStockEntry, store_models.StoreItem.id == store_models.StoreStockEntry.item_id)
         .join(store_models.StoreCategory, store_models.StoreItem.category_id == store_models.StoreCategory.id)
+        .order_by(store_models.StoreItem.name.asc())   # 🟢 Alphabetical sorting added here
     )
+
 
     if category_id:
         query = query.filter(store_models.StoreItem.category_id == category_id)
