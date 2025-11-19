@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { loginUser } from "../../api/authService"; // ✅ updated path
+import { loginUser } from "../../api/authService";
 import "./../../styles/AuthForm.css";
 import { Link } from "react-router-dom";
-import { getLicenseExpiryWarning } from "../../utils/licenseUtils"; // ✅ NEW
+import { getLicenseExpiryWarning } from "../../utils/licenseUtils";
 
 const LoginPage = () => {
   const [username, setUsername] = useState("");
@@ -11,7 +11,7 @@ const LoginPage = () => {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const warning = getLicenseExpiryWarning(); // ✅ Check for license expiry
+  const warning = getLicenseExpiryWarning();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -19,46 +19,51 @@ const LoginPage = () => {
 
     try {
       const user = await loginUser(username.trim().toLowerCase(), password);
-
-      console.log("✅ Logged in user:", user);
-
-      // Store token separately if needed
       localStorage.setItem("token", user.access_token);
 
-      // ✅ Redirect based on role priority
       if (user.roles.includes("admin")) {
         navigate("/dashboard/users");
       } else if (user.roles.includes("dashboard")) {
         navigate("/dashboard/rooms/status");
       } else if (user.roles.includes("event")) {
         navigate("/dashboard/events");
-        
       } else {
-        navigate("/dashboard"); // fallback
+        navigate("/dashboard");
       }
     } catch (err) {
-      console.error("❌ Login error:", err);
       setError(err?.message || "Invalid username or password.");
     }
   };
 
-
   return (
     <div className="auth-page-wrapper">
+
+      {/* ⭐ LEFT SIDE DESCRIPTION */}
+      <div className="auth-left-panel">
+        <h1 className="app-title">HEMS – Hotel & Event Management System</h1>
+        <p className="app-description">
+          HEMS 5-in-1 App is a comprehensive hospitality
+          management solution designed to simplify and automate operations across:
+        </p>
+
+        <ul className="app-features">
+          <li>Booking Management</li>
+          <li>Bar Operations</li>
+          <li>Restaurant Services</li>
+          <li>Event Management</li>
+          <li>Store & Inventory Control</li>
+        </ul>
+
+        <p className="app-tagline">
+          Fast. Reliable. All-in-one hospitality control system.
+        </p>
+      </div>
+
+      {/* ⭐ RIGHT SIDE LOGIN FORM */}
       <div className="auth-container">
+
         {warning && (
-          <div
-            style={{
-              backgroundColor: "#fff3cd",
-              padding: "12px",
-              marginBottom: "15px",
-              border: "1px solid #ffeeba",
-              borderRadius: "6px",
-              color: "#856404",
-              textAlign: "center",
-              fontWeight: "bold",
-            }}
-          >
+          <div className="license-warning">
             {warning}
           </div>
         )}
@@ -83,8 +88,11 @@ const LoginPage = () => {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+
           {error && <div className="error">{error}</div>}
+
           <button type="submit">Login</button>
+
           <p>
             Don't have an account? <Link to="/register">Register</Link>
           </p>

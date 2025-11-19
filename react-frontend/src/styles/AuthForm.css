@@ -129,7 +129,7 @@
   position: fixed;
   bottom: 10px;
   right: 20px;
-  color: white;
+  color: rgb(19, 17, 17);
   font-size: 0.85rem;
   text-align: right;
   font-style: italic;
@@ -174,4 +174,102 @@
   height: 16px;
   accent-color: #1e3a8a; /* matches your button color */
   cursor: pointer;
+}
+
+
+.auth-page-wrapper {
+  display: flex;
+  height: 100vh;
+  background: #f1f5f9;
+}
+
+
+
+/* LEFT PANEL - Modern Card */
+.auth-left-panel {
+  width: 40%;
+  background: linear-gradient(135deg, #24406e, #3b6bb1);
+  color: white;
+
+  /* Card look */
+  margin: 25px;                 /* space from screen edges */
+  border-radius: 22px;          /* curved corners */
+  padding: 45px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Smooth glass overlay effect (optional — looks great!) */
+.auth-left-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.05);
+  pointer-events: none;
+}
+
+/* Title */
+.app-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+/* Description text */
+.app-description {
+  font-size: 15.5px;
+  line-height: 1.6;
+  margin-bottom: 22px;
+}
+
+/* Feature list */
+.app-features {
+  list-style: none;
+  padding-left: 0;
+  margin-bottom: 22px;
+}
+
+.app-features li {
+  margin: 6px 0;
+  font-size: 15.5px;
+}
+
+/* Tagline */
+.app-tagline {
+  margin-top: 12px;
+  font-style: italic;
+  opacity: 0.95;
+}
+
+
+.auth-left-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+
+
+/* RIGHT PANEL (your original login) */
+.auth-container {
+  width: 60%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px;
+  background: white;
+}
+
+.license-warning {
+  background-color: #fff3cd;
+  padding: 12px;
+  border: 1px solid #ffeeba;
+  border-radius: 6px;
+  color: #856404;
+  text-align: center;
+  font-weight: bold;
+  margin-bottom: 15px;
 }
