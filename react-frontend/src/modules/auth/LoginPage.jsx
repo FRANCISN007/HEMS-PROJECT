@@ -40,10 +40,13 @@ const LoginPage = () => {
 
       {/* ⭐ LEFT SIDE DESCRIPTION */}
       <div className="auth-left-panel">
-        <h1 className="app-title">HEMS – Hotel & Event Management System</h1>
+        <h1 className="app-title">
+          HEMS – Hotel & Event Management System
+        </h1>
+
         <p className="app-description">
-          HEMS 5-in-1 App is a comprehensive hospitality
-          management solution designed to simplify and automate operations across:
+          HEMS 5-in-1 App is a complete hospitality management solution designed to
+          simplify, automate, and centralize operations across:
         </p>
 
         <ul className="app-features">
@@ -55,7 +58,7 @@ const LoginPage = () => {
         </ul>
 
         <p className="app-tagline">
-          Fast. Reliable. All-in-one hospitality control system.
+          Fast • Reliable • All-in-One Hospitality Control
         </p>
       </div>
 
