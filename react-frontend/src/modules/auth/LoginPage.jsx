@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginUser } from "../../api/authService";
-import "./../../styles/AuthForm.css";
+import "./LogReg.css";
 import { Link } from "react-router-dom";
 import { getLicenseExpiryWarning } from "../../utils/licenseUtils";
 

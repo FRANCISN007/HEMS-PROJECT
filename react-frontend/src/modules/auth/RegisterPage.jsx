@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { registerUser } from "../../api/authService";
-import "./../../styles/AuthForm.css";
+import "./LogReg.css";
 
 const roleOptions = ["user", "admin", "dashboard", "bar", "restaurant", "store", "event"];
 
