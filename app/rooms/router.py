@@ -13,6 +13,8 @@ from app.users import schemas
 from sqlalchemy import func
 from datetime import datetime, time, date
 from sqlalchemy import desc
+from sqlalchemy import select
+
 
 
 from typing import List
@@ -224,19 +226,23 @@ import re
 @router.get("/available")
 def list_available_rooms(
     db: Session = Depends(get_db),
-    #current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
-    ):
+):
     today = date.today()
 
     # Step 1: Get rooms not booked as reserved or checked-in for today
-    unavailable_room_numbers = db.query(booking_models.Booking.room_number).filter(
-        booking_models.Booking.status.in_(["reserved", "checked-in"]),
-        booking_models.Booking.arrival_date <= today,
-        booking_models.Booking.departure_date >= today,
-    ).subquery()
+    unavailable_room_numbers = (
+        db.query(booking_models.Booking.room_number)
+        .filter(
+            booking_models.Booking.status.in_(["reserved", "checked-in"]),
+            booking_models.Booking.arrival_date <= today,
+            booking_models.Booking.departure_date >= today,
+        )
+        .subquery()
+    )
 
+    # FIX: Wrap subquery using select()
     available_rooms_query = db.query(room_models.Room).filter(
-        not_(room_models.Room.room_number.in_(unavailable_room_numbers))
+        not_(room_models.Room.room_number.in_(select(unavailable_room_numbers.c.room_number)))
     )
 
     all_available_rooms = available_rooms_query.all()
@@ -270,7 +276,6 @@ def list_available_rooms(
         return [int(part) if part.isdigit() else part.lower()
                 for part in re.split(r'(\d+)', room["room_number"])]
 
-    # Sort both groups separately in ascending natural order
     available_sorted = sorted(
         [r for r in serialized_rooms if r["status"] != "maintenance"],
         key=natural_sort_key
