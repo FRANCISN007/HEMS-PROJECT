@@ -13,4 +13,3 @@ class Vendor(Base):
     phone_number = Column(String, nullable=False)
 
     purchases = relationship("StoreStockEntry", back_populates="vendor")
-

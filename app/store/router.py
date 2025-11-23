@@ -586,13 +586,27 @@ def delete_purchase(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
+    # Fetch purchase entry
     entry = db.query(store_models.StoreStockEntry).filter_by(id=entry_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="Purchase entry not found")
 
+    # ❗ SAFETY CHECK:
+    # If quantity < original_quantity, some of this stock has been issued
+    if entry.quantity < entry.original_quantity:
+        issued_amount = entry.original_quantity - entry.quantity
+        raise HTTPException(
+            status_code=400,
+            detail=f"❌ Cannot delete this purchase. {issued_amount} unit(s) "
+                   "from this purchase have already been issued to a bar. "
+                   "Delete the issue transactions first."
+        )
+
+    # Safe to delete
     db.delete(entry)
     db.commit()
-    return {"detail": "Purchase entry deleted successfully"}
+
+    return {"detail": "✅ Purchase entry deleted successfully"}
 
 
 
