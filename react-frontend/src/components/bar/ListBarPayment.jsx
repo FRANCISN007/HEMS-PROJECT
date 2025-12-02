@@ -64,34 +64,59 @@ const ListBarPayment = () => {
       const params = {};
       if (start) params.start_date = start;
       if (end) params.end_date = end;
-      if (status) params.status = status;
       if (barId) params.bar_id = Number(barId);
+      if (status) params.status = status;  // 🔥 only used for payment-status endpoint
 
-      const res = await axiosWithAuth().get("/barpayment/payment-status", {
-        params,
-      });
+      let res;
 
-      const mappedPayments = res.data.map((p) => ({
-        id: p.payment_id,
-        bar_sale_id: p.bar_sale_id,
-        sale_amount: p.amount_due,
-        amount_paid: p.amount_paid,
-        cumulative_paid: p.amount_paid,
-        balance_due: p.amount_due - p.amount_paid,
-        payment_method: p.payment_method,
+      if (status) {
+        // 🔥 If status filter is selected → USE PAYMENT-STATUS ENDPOINT
+        res = await axiosWithAuth().get("/barpayment/payment-status", {
+          params,
+        });
 
-        // 🔥 IMPORTANT: use bank_id
-        bank: p.bank,   // now we store the real bank name
+        // 🔥 This endpoint returns an array, not an object with .payments
+        const mappedPayments = res.data.map((p) => ({
+          id: p.payment_id,
+          bar_sale_id: p.bar_sale_id,
+          sale_amount: p.amount_due,
+          amount_paid: p.amount_paid,
+          cumulative_paid: p.amount_paid, // because endpoint doesn't send cumulative
+          balance_due: p.amount_due - p.amount_paid,
+          payment_method: p.payment_method,
+          bank: "-", // not returned here
+          note: "-",
+          date_paid: p.date_paid,
+          created_by: p.created_by,
+          status: p.payment_status,
+        }));
 
+        setPayments(mappedPayments);
+        setSummary(null);
+      } 
+      else {
+        // 🔥 No status filter → USE NORMAL ENDPOINT
+        res = await axiosWithAuth().get("/barpayment/", { params });
 
-        created_by: p.created_by,
-        status: p.payment_status,
-        date_paid: p.date_paid,
-        note: p.note || "",
-      }));
+        const mappedPayments = res.data.payments.map((p) => ({
+          id: p.id,
+          bar_sale_id: p.bar_sale_id,
+          sale_amount: p.sale_amount,
+          amount_paid: p.amount_paid,
+          cumulative_paid: p.cumulative_paid,
+          balance_due: p.balance_due,
+          payment_method: p.payment_method,
+          bank: p.bank || "-",
+          note: p.note,
+          date_paid: p.date_paid,
+          created_by: p.created_by,
+          status: p.status,
+        }));
 
-      setPayments(mappedPayments);
-      setSummary(null);
+        setPayments(mappedPayments);
+        setSummary(res.data.summary);
+      }
+
     } catch (err) {
       console.error("❌ Failed to fetch bar payments:", err);
       setError("Failed to load bar payments.");
@@ -99,6 +124,7 @@ const ListBarPayment = () => {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchBars();
