@@ -10,18 +10,22 @@ const BarPayment = () => {
   const [sales, setSales] = useState([]);
   const [summary, setSummary] = useState({ total_entries: 0, total_due: 0 });
   const [loading, setLoading] = useState(false);
+
   const [selectedSale, setSelectedSale] = useState(null);
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
+  const [bankId, setBankId] = useState("");     // ✅ BANK FIELD
   const [note, setNote] = useState("");
+
+  const [banks, setBanks] = useState([]);       // ✅ BANK LIST
+
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
 
-  // ✅ Get user roles from localStorage
+  // Get user roles from localStorage
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const roles = user.roles || [];
 
-  // ✅ Restrict access: only admin and bar can create payments
   if (!(roles.includes("admin") || roles.includes("bar"))) {
     return (
       <div className="unauthorized">
@@ -31,7 +35,7 @@ const BarPayment = () => {
     );
   }
 
-  // ✅ Fetch bars
+  // Fetch bars
   useEffect(() => {
     const fetchBars = async () => {
       try {
@@ -44,17 +48,30 @@ const BarPayment = () => {
     fetchBars();
   }, []);
 
-  // ✅ Utility function for formatting amounts
+  // ✅ Fetch Banks
+  useEffect(() => {
+    const fetchBanks = async () => {
+      try {
+        const res = await axiosWithAuth().get("/bank/simple");
+        setBanks(res.data || []);
+      } catch (err) {
+        console.error("❌ Failed to fetch banks:", err);
+      }
+    };
+    fetchBanks();
+  }, []);
+
   const formatAmount = (amount) => {
     if (!amount && amount !== 0) return "₦0.00";
     return `₦${Number(amount).toLocaleString()}`;
   };
 
-  // ✅ Fetch outstanding sales for selected bar
+  // Fetch outstanding sales when bar changes
   useEffect(() => {
     const fetchSales = async () => {
       if (!selectedBar) return;
       setLoading(true);
+
       try {
         const res = await axiosWithAuth().get(
           `/barpayment/outstanding?bar_id=${selectedBar}`
@@ -73,7 +90,7 @@ const BarPayment = () => {
     fetchSales();
   }, [selectedBar]);
 
-  // ✅ Handle Payment Submit
+  // Handle Payment Submit
   const handlePayment = async (e) => {
     e.preventDefault();
     if (!selectedSale || !amountPaid || !paymentMethod) {
@@ -87,6 +104,8 @@ const BarPayment = () => {
         bar_sale_id: selectedSale.bar_sale_id,
         amount_paid: parseFloat(amountPaid),
         payment_method: paymentMethod,
+        bank: bankId || null,
+
         note: note,
       };
 
@@ -99,6 +118,7 @@ const BarPayment = () => {
       setSelectedSale(null);
       setAmountPaid("");
       setPaymentMethod("");
+      setBankId("");        // ✅ RESET BANK
       setNote("");
 
       // Refresh sales
@@ -114,11 +134,7 @@ const BarPayment = () => {
       setTimeout(() => setMessage(""), 3000);
     } catch (err) {
       console.error("❌ Payment failed:", err.response?.data || err.message);
-      setMessage(
-        `❌ Failed: ${
-          err.response?.data?.detail || "Unable to record payment."
-        }`
-      );
+      setMessage(`❌ Failed: ${err.response?.data?.detail || "Unable to record payment."}`);
       setMessageType("error");
     }
   };
@@ -126,7 +142,6 @@ const BarPayment = () => {
   return (
     <div className="bar-payment-container2">
       <div className="header-row">
-        {/* ✅ Larger Header Text */}
         <h1 style={{ fontSize: "2rem", fontWeight: "700", margin: "10px 0" }}>
           🍷 Bar Payments
         </h1>
@@ -146,7 +161,7 @@ const BarPayment = () => {
 
       {message && <div className={`message ${messageType}`}>{message}</div>}
 
-      {/* ✅ Bar Selector */}
+      {/* Bar Selector */}
       <div className="bar-filter">
         <label htmlFor="barSelect">Select Bar:</label>
         <select
@@ -163,7 +178,7 @@ const BarPayment = () => {
         </select>
       </div>
 
-      {/* ✅ Sales Table */}
+      {/* Table */}
       {loading ? (
         <p>⏳ Loading sales...</p>
       ) : (
@@ -179,6 +194,7 @@ const BarPayment = () => {
                 <th>Action</th>
               </tr>
             </thead>
+
             <tbody>
               {sales.length === 0 ? (
                 <tr>
@@ -195,9 +211,7 @@ const BarPayment = () => {
                     const balance = sale.balance_due || 0;
 
                     let status = "Unpaid";
-                    if (paid > 0 && balance > 0) {
-                      status = "Part Payment";
-                    }
+                    if (paid > 0 && balance > 0) status = "Part Payment";
 
                     return (
                       <tr key={sale.bar_sale_id}>
@@ -225,11 +239,12 @@ const BarPayment = () => {
         )
       )}
 
-      {/* ✅ Payment Modal */}
+      {/* Payment Modal */}
       {selectedSale && (
         <div className="modal-overlay1">
           <div className="modal1">
             <h3>Make Payment for Sale #{selectedSale.bar_sale_id}</h3>
+
             <form onSubmit={handlePayment}>
               <label>Amount Paid:</label>
               <input
@@ -249,6 +264,20 @@ const BarPayment = () => {
                 <option value="transfer">Transfer</option>
               </select>
 
+              {/* ✅ BANK DROPDOWN */}
+              <label>Bank (if POS/Transfer):</label>
+              <select
+                value={bankId}
+                onChange={(e) => setBankId(e.target.value)}
+              >
+                <option value="">-- Select Bank --</option>
+                {banks.map((bank) => (
+                  <option key={bank.id} value={bank.name}>
+                    {bank.name}
+                  </option>
+                ))}
+              </select>
+
               <label>Note:</label>
               <textarea
                 value={note}
@@ -263,6 +292,7 @@ const BarPayment = () => {
                 </button>
               </div>
             </form>
+
           </div>
         </div>
       )}

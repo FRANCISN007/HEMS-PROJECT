@@ -1,18 +1,20 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./ListPayment.css";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
-
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL ||
+  `http://${window.location.hostname}:8000`;
 
 const ListPayment = () => {
   const [payments, setPayments] = useState([]);
+  const [banks, setBanks] = useState([]);
   const [status, setStatus] = useState("none");
   const [debtorName, setDebtorName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [noDataMessage, setNoDataMessage] = useState(""); // ✅ new
+  const [noDataMessage, setNoDataMessage] = useState("");
   const [totalPayments, setTotalPayments] = useState(0);
   const [totalAmount, setTotalAmount] = useState(0);
   const [methodTotals, setMethodTotals] = useState({});
@@ -20,123 +22,220 @@ const ListPayment = () => {
   const [summary, setSummary] = useState({});
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [showPopup, setShowPopup] = useState(false);
+  const [bankFilter, setBankFilter] = useState("");
 
+  // ---------------- ROLE VALIDATION ---------------- //
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
-  let roles = [];
-
-  if (Array.isArray(storedUser.roles)) {
-    roles = storedUser.roles;
-  } else if (typeof storedUser.role === "string") {
-    roles = [storedUser.role];
+  let roles = Array.isArray(storedUser.roles)
+    ? storedUser.roles
+    : typeof storedUser.role === "string"
+    ? [storedUser.role]
+    : [];
+  roles = roles.map((r) => r.toLowerCase());
+  if (!(roles.includes("admin") || roles.includes("dashboard"))) {
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to list booking payment.</p>
+      </div>
+    );
   }
 
-  roles = roles.map((r) => r.toLowerCase());
-
-
-  if (!(roles.includes("admin") || roles.includes("dashboard"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to list booking payment.</p>
-    </div>
-  );
-}
-
-
-
-
+  // ---------------- UTIL ---------------- //
   const fetchWithToken = async (url) => {
     return fetch(url, {
       headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
     }).then((res) => res.json());
   };
 
-  const fetchByStatus = async () => {
-    if (status === "none") return;
-    setLoading(true);
-    setError(null);
-    setNoDataMessage("");
-
-    try {
-      const params = new URLSearchParams();
-      if (startDate) params.append("start_date", startDate);
-      if (endDate) params.append("end_date", endDate);
-
-      let url = "";
-      if (status === "All") {
-        url = `${API_BASE_URL}/payments/list?${params.toString()}`;
-      } else {
-        params.append("status", status);
-        url = `${API_BASE_URL}/payments/by-status?${params.toString()}`;
+  // ---------------- FETCH BANK LIST ---------------- //
+  useEffect(() => {
+    const loadBanks = async () => {
+      try {
+        const data = await fetchWithToken(`${API_BASE_URL}/bank/simple`);
+        setBanks(Array.isArray(data) ? data : data.banks || []);
+      } catch {
+        console.log("Failed to load bank list.");
       }
+    };
+    loadBanks();
+  }, []);
 
-      const data = await fetchWithToken(url);
-      setPayments(data.payments || []);
-
-      if (status === "All") {
-        setViewMode("all");
-        setSummary(data.summary || {});
-        setMethodTotals(data.payment_method_totals || {});
-      } else {
-        setViewMode("status");
-        setSummary({ total_payments: data.total_payments || 0, total_amount: data.total_amount || 0 });
-        setMethodTotals({});
-      }
-
-      if (!data.payments || data.payments.length === 0) {
-        setNoDataMessage("No payment records found.");
-      }
-    } catch {
-      setError("Failed to fetch payments.");
-    } finally {
-      setLoading(false);
+  // AUTO TRIGGER WHEN BANK FILTER CHANGES
+  useEffect(() => {
+    if (bankFilter) {
+      fetchByStatus();
     }
-  };
+  }, [bankFilter]);
+
+  
+  // Helper to normalize bank field
+const normalizePayment = (p) => ({
+  ...p,
+  bank_name:
+    p.bank_name ||
+    p.bank?.name ||
+    p.bank ||
+    "-"
+});
+
+// ---------------- FETCH PAYMENTS ---------------- //
+const fetchByStatus = async () => {
+  if (status === "none" && !bankFilter) return;
+
+  setLoading(true);
+  setError(null);
+  setNoDataMessage("");
+
+  try {
+    const params = new URLSearchParams();
+    if (startDate) params.append("start_date", startDate);
+    if (endDate) params.append("end_date", endDate);
+
+    let url = "";
+
+    // BANK FILTER ONLY
+    if (bankFilter && status === "none") {
+      params.append("bank_name", bankFilter);
+      url = `${API_BASE_URL}/payments/by-bank?${params}`;
+    }
+    // ALL STATUS
+    else if (status === "All") {
+      if (bankFilter) params.append("bank_name", bankFilter);
+      url = `${API_BASE_URL}/payments/list?${params}`;
+    }
+    // SPECIFIC STATUS
+    else {
+      if (bankFilter) params.append("bank_name", bankFilter);
+      params.append("status", status);
+      url = `${API_BASE_URL}/payments/by-status?${params}`;
+    }
+
+    const data = await fetchWithToken(url);
+
+    // FILTER → Normalize → Set
+    let filtered = (data.payments || []).map(normalizePayment);
+
+    // Do NOT exclude voided payments when status === "voided"
+    if (status !== "voided") {
+      filtered = filtered.filter((p) => p.status !== "voided");
+    }
+
+    setPayments(filtered);
+
+
+    // BANK FILTER SUMMARY
+    if (bankFilter && url.includes("/payments/by-bank")) {
+      setViewMode("bank");
+      setSummary(data.summary || {});
+      return;
+    }
+
+    // ALL STATUS SUMMARY (LIST PAYMENT)
+    if (status === "All") {
+      setViewMode("all");
+      setSummary(data.summary || {});
+      setMethodTotals(data.payment_method_totals || {});
+      return;
+    }
+
+    // SPECIFIC STATUS
+    setViewMode("status");
+    setSummary({
+      total_payments: data.total_payments || 0,
+      total_amount: data.total_amount || 0,
+    });
+
+    if (!filtered.length) {
+      setNoDataMessage("No payment records found.");
+    }
+  } catch (error) {
+    console.log(error);
+    setError("Failed to fetch payments.");
+  } finally {
+    setLoading(false);
+  }
+};
 
 
 
+  // ---------------- DAILY PAYMENT SUMMARY ---------------- //
   const fetchDaily = async () => {
     setLoading(true);
     setViewMode("daily");
     setError(null);
     setNoDataMessage("");
+
     try {
-      const data = await fetchWithToken(`${API_BASE_URL}/payments/total_daily_payment`);
-      setPayments(data.payments || []);
+      const data = await fetchWithToken(
+        `${API_BASE_URL}/payments/total_daily_payment`
+      );
+
+      // Normalize payments
+      setPayments(
+        (data.payments || []).map((p) => ({
+          ...p,
+          bank_name: p.bank_name || p.bank || p.bank_name?.name || "-",
+        }))
+      );
+
       setTotalPayments(data.total_payments || 0);
       setTotalAmount(data.total_amount || 0);
-      setMethodTotals(data.total_by_method || {});
-      if (!data.payments || data.payments.length === 0) {
+
+      // Combine global totals with bank-level totals
+      const totals = data.total_by_method || {};
+      const bankTotals = {};
+
+      Object.entries(totals).forEach(([key, value]) => {
+        if (value && typeof value === "object") {
+          // Only objects are treated as bank-level totals
+          bankTotals[key] = value;
+        }
+      });
+
+      setMethodTotals({ ...totals, ...bankTotals });
+
+      if (!data.payments?.length) {
         setNoDataMessage("No daily payments found for today.");
       }
-    } catch {
+    } catch (err) {
+      console.log(err);
       setError("Failed to fetch daily payments.");
     } finally {
       setLoading(false);
     }
   };
 
+
+  // ---------------- DEBTOR LIST ---------------- //
   const fetchDebtors = async () => {
     setLoading(true);
     setViewMode("debtor");
     setError(null);
     setNoDataMessage("");
+
     try {
       const params = new URLSearchParams();
       if (debtorName) params.append("debtor_name", debtorName);
       if (startDate) params.append("start_date", startDate);
       if (endDate) params.append("end_date", endDate);
-      const url = `${API_BASE_URL}/payments/debtor_list?${params}`;
-      const data = await fetchWithToken(url);
+
+      const data = await fetchWithToken(
+        `${API_BASE_URL}/payments/debtor_list?${params}`
+      );
 
       setPayments(data.debtors || []);
       setTotalPayments(data.total_debtors || 0);
       setTotalAmount(data.total_current_debt || 0);
-      setSummary({ total_gross_debt: data.total_gross_debt || 0 });
-      setMethodTotals({});
 
-      if (!data.debtors || data.debtors.length === 0) {
-        setNoDataMessage("No debtors found for the selected filters.");
+      setSummary({
+        total_gross_debt: data.total_gross_debt || 0,
+        total_current_debt: data.total_current_debt || 0,
+        total_debtors: data.total_debtors || 0,
+      });
+
+      if (!data.debtors?.length) {
+        setNoDataMessage("No debtors found.");
       }
     } catch {
       setError("Failed to fetch debtor list.");
@@ -145,12 +244,11 @@ const ListPayment = () => {
     }
   };
 
+  // ---------------- POPUP ---------------- //
   const handleView = (paymentId) => {
     const payment = payments.find((p) => p.payment_id === paymentId);
-    if (payment) {
-      setSelectedPayment(payment);
-      setShowPopup(true);
-    }
+    setSelectedPayment(payment || null);
+    setShowPopup(true);
   };
 
   const closePopup = () => {
@@ -158,24 +256,42 @@ const ListPayment = () => {
     setSelectedPayment(null);
   };
 
-
+  // ---------------- RENDER ---------------- //
   return (
     <div className="list-payment-container">
       <div className="list-payment-header-row">
         <h2 className="compact-title">💳 Payment Management</h2>
       </div>
 
+      {/* FILTER ROWS */}
       <div className="filters-grid">
         <div className="filter-item">
           <label>Payment Status:</label>
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
             <option value="none">Select</option>
             <option value="All">All</option>
             <option value="fully paid">Fully Paid</option>
             <option value="part payment">Part Payment</option>
             <option value="voided">Voided</option>
           </select>
-          <button className="fetch-button" onClick={fetchByStatus}>Fetch</button>
+        </div>
+
+        <div className="filter-item">
+          <label>Bank:</label>
+          <select
+            value={bankFilter}
+            onChange={(e) => setBankFilter(e.target.value)}
+          >
+            <option value="">All</option>
+            {banks.map((b) => (
+              <option key={b.id} value={b.name}>
+                {b.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="filter-item">
@@ -186,10 +302,21 @@ const ListPayment = () => {
             value={debtorName}
             onChange={(e) => setDebtorName(e.target.value)}
           />
-          <button className="fetch-button" onClick={fetchDebtors}>Fetch</button>
         </div>
 
-        <div className="filter-item date-range-wrapper">
+        <div className="filter-item">
+          <button className="fetch-button" onClick={fetchByStatus}>
+            Fetch Payments
+          </button>
+          <button className="fetch-button" onClick={fetchDebtors}>
+            Fetch Debtors
+          </button>
+        </div>
+      </div>
+
+      {/* DATE RANGE */}
+      <div className="filters-grid">
+        <div className="filter-item">
           <label>Date Range:</label>
           <div className="date-range-row">
             <input
@@ -206,48 +333,197 @@ const ListPayment = () => {
         </div>
 
         <div className="daily-button-wrapper">
-          <button className="daily-button" onClick={fetchDaily}>📊 Daily Summary</button>
+          <button className="daily-button" onClick={fetchDaily}>
+            📊 Daily Summary
+          </button>
         </div>
-
-        {showPopup && selectedPayment && (
-            <div className="popup-overlay">
-              <div className="popup-content large-popup">
-                <h2 className="popup-title">Guest Payment Details</h2>
-                <div className="popup-grid large-font">
-                  <div><strong>Payment ID:</strong> {selectedPayment.payment_id}</div>
-                  <div><strong>Booking ID:</strong> {selectedPayment.booking_id}</div>
-                  <div><strong>Guest Name:</strong> {selectedPayment.guest_name}</div>
-                  <div><strong>Room Number:</strong> {selectedPayment.room_number}</div>
-                  <div><strong>Booking Cost:</strong> ₦{selectedPayment.booking_cost?.toLocaleString()}</div>
-                  <div><strong>Amount Paid:</strong> ₦{selectedPayment.amount_paid?.toLocaleString()}</div>
-                  <div><strong>Discount:</strong> ₦{selectedPayment.discount_allowed?.toLocaleString()}</div>
-                  <div><strong>Balance Due:</strong> ₦{selectedPayment.balance_due?.toLocaleString()}</div>
-                  <div><strong>Payment Method:</strong> {selectedPayment.payment_method}</div>
-                  <div><strong>Status:</strong> {selectedPayment.status}</div>
-                  <div><strong>Payment Date:</strong> {new Date(selectedPayment.payment_date).toLocaleString()}</div>
-                  <div><strong>Void Date:</strong> {selectedPayment.void_date || "-"}</div>
-                  <div><strong>Created By:</strong> {selectedPayment.created_by}</div>
-                </div>
-
-                <div className="popup-buttons">
-                  <button className="print-btn" onClick={() => window.print()}>🖨 Print to PDF</button>
-                  <button className="close-popup-btn" onClick={closePopup}>Close</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-
       </div>
 
+      {/* POPUP */}
+      {showPopup && selectedPayment && (
+        <div className="popup-overlay">
+          <div className="popup-content large-popup">
+            <h2 className="popup-title">Guest Payment Details</h2>
+
+            <div className="popup-grid large-font">
+              <div>
+                <strong>Payment ID:</strong> {selectedPayment.payment_id}
+              </div>
+              <div>
+                <strong>Booking ID:</strong> {selectedPayment.booking_id}
+              </div>
+              <div>
+                <strong>Guest Name:</strong> {selectedPayment.guest_name}
+              </div>
+              <div>
+                <strong>Room Number:</strong> {selectedPayment.room_number}
+              </div>
+              <div>
+                <strong>Booking Cost:</strong> ₦
+                {selectedPayment.booking_cost?.toLocaleString()}
+              </div>
+              <div>
+                <strong>Amount Paid:</strong> ₦
+                {selectedPayment.amount_paid?.toLocaleString()}
+              </div>
+              <div>
+                <strong>Discount:</strong> ₦
+                {selectedPayment.discount_allowed?.toLocaleString()}
+              </div>
+              <div>
+                <strong>Balance Due:</strong> ₦
+                {selectedPayment.balance_due?.toLocaleString()}
+              </div>
+              <div>
+                <strong>Method:</strong> {selectedPayment.payment_method}
+              </div>
+              <div>
+                <strong>Bank:</strong> {selectedPayment.bank_name || "N/A"}
+              </div>
+              <div>
+                <strong>Status:</strong> {selectedPayment.status}
+              </div>
+              <div>
+                <strong>Payment Date:</strong>{" "}
+                {new Date(selectedPayment.payment_date).toLocaleString()}
+              </div>
+              <div>
+                <strong>Void Date:</strong> {selectedPayment.void_date || "-"}
+              </div>
+              <div>
+                <strong>Created By:</strong> {selectedPayment.created_by}
+              </div>
+            </div>
+
+            <div className="popup-buttons">
+              <button className="print-btn" onClick={() => window.print()}>
+                🖨 Print to PDF
+              </button>
+              <button className="close-popup-btn" onClick={closePopup}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LOADING / ERRORS */}
       {loading && <p>Loading...</p>}
       {error && <p className="error">{error}</p>}
       {noDataMessage && <p className="no-data">{noDataMessage}</p>}
 
+      {/* DAILY SUMMARY */}
+      {viewMode === "daily" && (
+        <div className="summary-box daily-summary">
+          <h3>📊 Today’s Payment Summary</h3>
+
+          <div className="summary-grid">
+            <div className="summary-item">
+              <strong>Total Payments:</strong>{" "}
+              {totalPayments.toLocaleString()}
+            </div>
+
+            <div className="summary-item">
+              <strong>Total Amount:</strong>{" "}
+              ₦{totalAmount.toLocaleString()}
+            </div>
+
+            <div className="summary-item">
+              <strong>POS Card:</strong>{" "}
+              ₦{(methodTotals.pos_card || 0).toLocaleString()}
+            </div>
+
+            <div className="summary-item">
+              <strong>Bank Transfer:</strong>{" "}
+              ₦{(methodTotals.bank_transfer || 0).toLocaleString()}
+            </div>
+
+            <div className="summary-item">
+              <strong>Cash:</strong>{" "}
+              ₦{(methodTotals.cash || 0).toLocaleString()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ALL PAYMENTS SUMMARY — cleaned and simplified */}
+      {viewMode === "all" && Object.keys(methodTotals || {}).length > 0 && (
+        <div className="summary-box compact-summary">
+          <h4>💰 Payment Summary</h4>
+
+          <div className="summary-stack">
+            <div className="summary-item">
+              <strong>Cash:</strong> ₦{(methodTotals.total_cash ?? 0).toLocaleString()}
+            </div>
+            <div className="summary-item">
+              <strong>POS:</strong> ₦{(methodTotals.total_pos ?? 0).toLocaleString()}
+            </div>
+            <div className="summary-item">
+              <strong>Bank Transfer:</strong> ₦{(methodTotals.total_bank_transfer ?? 0).toLocaleString()}
+            </div>
+
+            {/* 🔥 ADD THIS TOTAL PAYMENT ROW */}
+            <div className="summary-item total-row">
+              <strong>Total Payment:</strong>{" "}
+              ₦{(
+                (methodTotals.total_cash ?? 0) +
+                (methodTotals.total_pos ?? 0) +
+                (methodTotals.total_bank_transfer ?? 0)
+              ).toLocaleString()}
+            </div>
+          </div>
+
+          {/* BANK-WISE BREAKDOWN */}
+          {Object.keys(methodTotals)
+            .filter(
+              (k) =>
+                ![
+                  "total_cash",
+                  "total_pos",
+                  "total_bank_transfer",
+                  "total_payment",
+                ].includes(k)
+            )
+            .map((bankName) => {
+              const bankData = methodTotals[bankName];
+              return (
+                <div key={bankName} className="summary-stack bank-summary">
+                  <div className="summary-item bank-name">
+                    <strong>{bankName}</strong>
+                  </div>
+                  <div className="summary-item">
+                    POS: ₦{(bankData.pos_card ?? 0).toLocaleString()}
+                  </div>
+                  <div className="summary-item">
+                    Bank Transfer: ₦{(bankData.bank_transfer ?? 0).toLocaleString()}
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      )}
+
+      {/* DEBTOR SUMMARY */}
+      {viewMode === "debtor" && (
+        <div className="summary-box debtor-summary">
+          <h4>💳 Debtor Summary</h4>
+          <div className="summary-grid">
+            <div className="summary-item">
+              <strong>Total Debtors:</strong> {summary.total_debtors ?? payments.length}
+            </div>
+            <div className="summary-item">
+              <strong>Total Current Debt:</strong> ₦{(summary.total_current_debt ?? 0).toLocaleString()}
+            </div>
+            <div className="summary-item">
+              <strong>Total Gross Debt:</strong> ₦{(summary.total_gross_debt ?? 0).toLocaleString()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PAYMENT TABLE */}
       {payments.length > 0 && (
         <div className="payment-table-wrapper">
-          
-
           <table className="payment-table">
             <thead>
               <tr>
@@ -276,6 +552,7 @@ const ListPayment = () => {
                     <th>Disc</th>
                     <th>Due</th>
                     <th>Method</th>
+                    <th>Bank</th>
                     <th>Status</th>
                     <th>Payment Date</th>
                     <th>Void Date</th>
@@ -285,9 +562,10 @@ const ListPayment = () => {
                 )}
               </tr>
             </thead>
+
             <tbody>
               {payments.map((p, i) => (
-                <tr key={i} className={p.status === "voided" ? "voided-row" : ""}>
+                <tr key={i}>
                   {viewMode === "debtor" ? (
                     <>
                       <td>{p.guest_name}</td>
@@ -300,7 +578,11 @@ const ListPayment = () => {
                       <td>₦{p.discount_allowed?.toLocaleString()}</td>
                       <td>₦{p.amount_due?.toLocaleString()}</td>
                       <td>{new Date(p.booking_date).toLocaleString()}</td>
-                      <td>{p.last_payment_date ? new Date(p.last_payment_date).toLocaleString() : "-"}</td>
+                      <td>
+                        {p.last_payment_date
+                          ? new Date(p.last_payment_date).toLocaleString()
+                          : "-"}
+                      </td>
                     </>
                   ) : (
                     <>
@@ -313,116 +595,27 @@ const ListPayment = () => {
                       <td>₦{p.discount_allowed?.toLocaleString()}</td>
                       <td>₦{p.balance_due?.toLocaleString()}</td>
                       <td>{p.payment_method}</td>
+                      <td>{p.bank_name || "-"}</td>
                       <td>{p.status}</td>
                       <td>{new Date(p.payment_date).toLocaleString()}</td>
                       <td>{p.void_date || "-"}</td>
                       <td>{p.created_by}</td>
-                      <td><button className="view-btn" onClick={() => handleView(p.payment_id)}>View</button></td>
+                      <td>
+                        <button
+                          className="view-btn"
+                          onClick={() => handleView(p.payment_id)}
+                        >
+                          View
+                        </button>
+                      </td>
                     </>
                   )}
                 </tr>
               ))}
             </tbody>
-            
-            
-
           </table>
-          
-          {viewMode === "status" && (
-            <div className="status-summary-wrapper">
-              <h4>Summary</h4>
-              <p><strong>Total Entries:</strong> {summary.total_payments || 0}</p>
-              <p><strong>Total Amount Paid:</strong> ₦{(summary.total_amount || 0).toLocaleString()}</p>
-            </div>
-          )}
-
-
-          {viewMode === "debtor" && (
-            <div className="debtor-summary-wrapper">
-              <div className="summary-row">
-                <div className="summary-left">
-                  <strong>Total Debtors:</strong><span>{totalPayments}</span>
-                </div>
-              </div>
-              <div className="summary-row">
-                <div className="summary-left">
-                  <strong>Total Current Debt:</strong><span>₦{(totalAmount || 0).toLocaleString()}</span>
-                </div>
-              </div>
-              <div className="summary-row">
-                <div className="summary-left">
-                  <strong>Total Gross Debt:</strong><span>₦{(summary.total_gross_debt || 0).toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          
-
-          {viewMode === "all" && (
-            <div className="all-summary-wrapper">
-              <div className="summary-row">
-                <div className="summary-left">
-                  <strong>Total Bookings:</strong><span>{summary.total_bookings || 0}</span>
-                </div>
-                <div className="summary-right">
-                  <strong>Cash:</strong><span>₦{(methodTotals.cash || 0).toLocaleString()}</span>
-                </div>
-              </div>
-              <div className="summary-row">
-                <div className="summary-left">
-                  <strong>Total Booking Cost:</strong><span>₦{(summary.total_booking_cost || 0).toLocaleString()}</span>
-                </div>
-                <div className="summary-right">
-                  <strong>POS:</strong><span>₦{(methodTotals.pos_card || 0).toLocaleString()}</span>
-                </div>
-              </div>
-              <div className="summary-row">
-                <div className="summary-left">
-                  <strong>Total Paid:</strong><span>₦{(summary.total_amount_paid || 0).toLocaleString()}</span>
-                </div>
-                <div className="summary-right">
-                  <strong>Bank Transfer:</strong><span>₦{(methodTotals.bank_transfer || 0).toLocaleString()}</span>
-                </div>
-              </div>
-              <div className="summary-row">
-                <div className="summary-left">
-                  <strong>Total Discount:</strong><span>₦{(summary.total_discount_allowed || 0).toLocaleString()}</span>
-                </div>
-              </div>
-              <div className="summary-row">
-                <div className="summary-left">
-                  <strong>Total Due:</strong><span>₦{(summary.total_due || 0).toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-
-          {viewMode === "daily" && (
-            <div className="daily-summary-wrapper">
-              <h3>📅 Today's Payment Summary</h3>
-              <h4>Breakdown by Payment Method</h4>
-
-              <div className="summary-row">
-                <strong>Total Payments:</strong>
-                <span>{totalPayments}</span>
-              </div>
-              <div className="summary-row">
-                <strong>Total Amount:</strong>
-                <span>₦{(totalAmount || 0).toLocaleString()}</span>
-              </div>
-              <ul>
-                <li><strong>Cash:</strong><span>₦{(methodTotals?.cash || 0).toLocaleString()}</span></li>
-                <li><strong>POS Card:</strong><span>₦{(methodTotals?.pos_card || 0).toLocaleString()}</span></li>
-                <li><strong>Bank Transfer:</strong><span>₦{(methodTotals?.bank_transfer || 0).toLocaleString()}</span></li>
-              </ul>
-            </div>
-          )}
-
-
-          </div>
-        )}
+        </div>
+      )}
     </div>
   );
 };

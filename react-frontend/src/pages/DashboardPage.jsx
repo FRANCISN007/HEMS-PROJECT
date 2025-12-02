@@ -294,6 +294,7 @@ const printContent = () => {
   ];
 
   const paymentSubmenu = [
+    { label: "➕ Create Bank", path: "/dashboard/payments/bankcreate" },
     { label: "➕ Create Payment", path: "/dashboard/payments/create" },
     { label: "📝 List Payment", path: "/dashboard/payments/list" },
     { label: "❌ Void payment", path: "/dashboard/payments/void" },

@@ -12,6 +12,7 @@ from app.license.router import router as license_router
 from app.events.router import router as events_router
 from app.eventpayment.router import router as eventpayment_router
 from backup.backup import router as backup_router
+from app.bank.router import router as bank_router
 #from app.system.router import router as system_router
 
 
@@ -115,6 +116,7 @@ else:
 app.include_router(user_router, prefix="/users", tags=["Users"])
 app.include_router(rooms_router, prefix="/rooms", tags=["Rooms"])
 app.include_router(bookings_router, prefix="/bookings", tags=["Bookings"])
+app.include_router(bank_router, prefix="/bank", tags=["Banks"])
 app.include_router(payments_router, prefix="/payments", tags=["Payments"])
 app.include_router(events_router, prefix="/events", tags=["Events"])
 app.include_router(eventpayment_router, prefix="/eventpayment", tags=["Event_Payments"])

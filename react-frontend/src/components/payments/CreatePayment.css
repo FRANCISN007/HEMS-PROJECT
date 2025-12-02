@@ -29,10 +29,18 @@
   font-size: 1.3rem;
 }
 
+.payment-form-container select {
+  width: 100%;
+  padding: 8px;
+  margin-top: 4px;
+  margin-bottom: 12px; /* increased spacing */
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
 .payment-form-container label {
-  display: block;
-  margin-top: 10px;
-  font-weight: 500;
+  margin-top: 12px;
+  font-weight: 600;
 }
 
 .payment-form-container input,

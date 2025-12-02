@@ -16,6 +16,7 @@ class PaymentCreateSchema(BaseModel):
     payment_date: datetime = datetime.now(pytz.timezone("Africa/Lagos"))
     created_by: Optional[str] = None  # Remove manual input, get from `current_user`
     #booking_cost: Optional[float]  # Update booking cost if provided
+    bank_id: Optional[int] = None  # ✅ new field
     
     class Config:
         from_attributes = True

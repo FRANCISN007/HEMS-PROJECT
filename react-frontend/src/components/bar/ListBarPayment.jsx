@@ -3,13 +3,12 @@ import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./ListBarPayment.css";
 import { HOTEL_NAME } from "../../config/constants";
 
-
-
 const ListBarPayment = () => {
   const [payments, setPayments] = useState([]);
   const [summary, setSummary] = useState(null);
   const [bars, setBars] = useState([]);
   const [selectedBar, setSelectedBar] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("");
 
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const roles = user.roles || [];
@@ -26,18 +25,30 @@ const ListBarPayment = () => {
   const today = new Date().toISOString().split("T")[0];
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [editingPayment, setEditingPayment] = useState(null);
-  const [formData, setFormData] = useState({ amount_paid: "", payment_method: "", note: "" });
+  const [formData, setFormData] = useState({
+    amount_paid: "",
+    payment_method: "",
+    note: "",
+  });
+
+  // ✅ BANKS
+  const [banks, setBanks] = useState([]);
+
+  useEffect(() => {
+    axiosWithAuth()
+      .get("/bank/simple")
+      .then((res) => setBanks(res.data || []))
+      .catch((err) => console.error("Failed to fetch banks:", err));
+  }, []);
 
   const formatAmount = (amount) => {
     if (!amount && amount !== 0) return "₦0.00";
     return `₦${Number(amount).toLocaleString()}`;
   };
 
-  // ✅ Fetch available bars
   const fetchBars = async () => {
     try {
       const res = await axiosWithAuth().get("/bar/bars/simple");
@@ -47,18 +58,40 @@ const ListBarPayment = () => {
     }
   };
 
-  // ✅ Fetch payments
-  const fetchPayments = async (barId = "", start = "", end = "") => {
+  const fetchPayments = async (barId = "", start = "", end = "", status = "") => {
     setLoading(true);
     try {
       const params = {};
-      if (barId) params.bar_id = barId;
       if (start) params.start_date = start;
       if (end) params.end_date = end;
+      if (status) params.status = status;
+      if (barId) params.bar_id = Number(barId);
 
-      const res = await axiosWithAuth().get("/barpayment/", { params });
-      setPayments(Array.isArray(res.data.payments) ? res.data.payments : []);
-      setSummary(res.data.summary || null);
+      const res = await axiosWithAuth().get("/barpayment/payment-status", {
+        params,
+      });
+
+      const mappedPayments = res.data.map((p) => ({
+        id: p.payment_id,
+        bar_sale_id: p.bar_sale_id,
+        sale_amount: p.amount_due,
+        amount_paid: p.amount_paid,
+        cumulative_paid: p.amount_paid,
+        balance_due: p.amount_due - p.amount_paid,
+        payment_method: p.payment_method,
+
+        // 🔥 IMPORTANT: use bank_id
+        bank: p.bank,   // now we store the real bank name
+
+
+        created_by: p.created_by,
+        status: p.payment_status,
+        date_paid: p.date_paid,
+        note: p.note || "",
+      }));
+
+      setPayments(mappedPayments);
+      setSummary(null);
     } catch (err) {
       console.error("❌ Failed to fetch bar payments:", err);
       setError("Failed to load bar payments.");
@@ -69,12 +102,12 @@ const ListBarPayment = () => {
 
   useEffect(() => {
     fetchBars();
-    fetchPayments("", today, today);
+    fetchPayments("", today, today, "");
   }, []);
 
   useEffect(() => {
-    fetchPayments(selectedBar, startDate, endDate);
-  }, [selectedBar, startDate, endDate]);
+    fetchPayments(selectedBar, startDate, endDate, selectedStatus);
+  }, [selectedBar, startDate, endDate, selectedStatus]);
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this payment?")) return;
@@ -99,8 +132,13 @@ const ListBarPayment = () => {
   const handleSave = async (e) => {
     e.preventDefault();
     try {
-      const res = await axiosWithAuth().put(`/barpayment/${editingPayment.id}`, formData);
-      setPayments(payments.map((p) => (p.id === editingPayment.id ? res.data : p)));
+      const res = await axiosWithAuth().put(
+        `/barpayment/${editingPayment.id}`,
+        formData
+      );
+      setPayments(
+        payments.map((p) => (p.id === editingPayment.id ? res.data : p))
+      );
       setEditingPayment(null);
     } catch (err) {
       console.error("❌ Failed to update payment:", err);
@@ -108,23 +146,23 @@ const ListBarPayment = () => {
     }
   };
 
-  // ✅ Handle Void Payment
   const handleVoid = async (id) => {
     if (!window.confirm("Are you sure you want to void this payment?")) return;
     try {
       const res = await axiosWithAuth().put(`/barpayment/${id}/void`);
-      setPayments(payments.map((p) => (p.id === id ? res.data : p))); // update row
+      setPayments(payments.map((p) => (p.id === id ? res.data : p)));
     } catch (err) {
       console.error("❌ Failed to void payment:", err);
       alert("Failed to void payment.");
     }
   };
 
-  // ✅ Print Receipt
   const handlePrint = (payment) => {
-    const salePayments = payments.filter((p) => p.bar_sale_id === payment.bar_sale_id);
+    const salePayments = payments.filter(
+      (p) => p.bar_sale_id === payment.bar_sale_id
+    );
     const totalPaid = salePayments
-      .filter((p) => p.status?.toLowerCase() !== "voided")
+      .filter((p) => p.status?.toLowerCase() !== "voided payment")
       .reduce((sum, p) => sum + (p.amount_paid || 0), 0);
 
     const saleAmount = payment.sale_amount;
@@ -144,24 +182,34 @@ const ListBarPayment = () => {
           </style>
         </head>
         <body>
-          <h2>${HOTEL_NAME.toUpperCase()}</h2>   <!-- 👈 use global hotel name -->
+          <h2>${HOTEL_NAME.toUpperCase()}</h2>
           <h2>Bar Payment Receipt</h2>
           <hr/>
           <p><strong>Pay ID:</strong> ${payment.id}</p>
           <p><strong>Sale ID:</strong> ${payment.bar_sale_id}</p>
-          <p><strong>Sale Amount:</strong> ₦${Number(saleAmount).toLocaleString()}</p>
-          <p><strong>Current Paid:</strong> ₦${Number(payment.amount_paid).toLocaleString()}</p>
-          <p><strong>Total Paid So Far:</strong> ₦${Number(totalPaid).toLocaleString()}</p>
-          <p><strong>Net Balance:</strong> ₦${Number(netBalance).toLocaleString()}</p>
+          <p><strong>Sale Amount:</strong> ₦${Number(
+            saleAmount
+          ).toLocaleString()}</p>
+          <p><strong>Current Paid:</strong> ₦${Number(
+            payment.amount_paid
+          ).toLocaleString()}</p>
+          <p><strong>Total Paid So Far:</strong> ₦${Number(
+            totalPaid
+          ).toLocaleString()}</p>
+          <p><strong>Net Balance:</strong> ₦${Number(
+            netBalance
+          ).toLocaleString()}</p>
           <p><strong>Method:</strong> ${payment.payment_method}</p>
           <p><strong>Note:</strong> ${payment.note || "-"}</p>
           <p><strong>Status:</strong> ${
-            payment.status?.toLowerCase() === "voided"
+            payment.status?.toLowerCase() === "voided payment"
               ? '<span class="void">VOIDED</span>'
               : payment.status
           }</p>
           <p><strong>Date:</strong> ${
-            payment.date_paid ? new Date(payment.date_paid).toLocaleString() : "-"
+            payment.date_paid
+              ? new Date(payment.date_paid).toLocaleString()
+              : "-"
           }</p>
           <hr/>
           <p style="text-align:center;">✅ Thank you!</p>
@@ -176,98 +224,155 @@ const ListBarPayment = () => {
     <div className="list-bar-payment-container">
       <h2>📃 Bar Payment Records</h2>
 
-      {/* ✅ Filters */}
+      {/* Filters */}
       <div className="filter-section">
-        <label>Filter by Bar: </label>
-        <select value={selectedBar} onChange={(e) => setSelectedBar(e.target.value)}>
+        <label>Filter by Bar:</label>
+        <select
+          value={selectedBar}
+          onChange={(e) => setSelectedBar(e.target.value)}
+        >
           <option value="">-- All Bars --</option>
           {bars.map((bar) => (
-            <option key={bar.id} value={bar.id}>{bar.name}</option>
+            <option key={bar.id} value={bar.id}>
+              {bar.name}
+            </option>
           ))}
         </select>
 
-        <label>Start Date: </label>
-        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-        <label>End Date: </label>
-        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        <label>Start Date:</label>
+        <input
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+        />
+
+        <label>End Date:</label>
+        <input
+          type="date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+        />
+
+        <label>Status:</label>
+        <select
+          value={selectedStatus}
+          onChange={(e) => setSelectedStatus(e.target.value)}
+        >
+          <option value="">-- All Status --</option>
+          <option value="fully paid">Fully Paid</option>
+          <option value="part payment">Part Payment</option>
+          <option value="voided payment">Voided</option>
+        </select>
       </div>
 
       {loading && <p>⏳ Loading payments...</p>}
       {error && <p className="error">{error}</p>}
+      {!loading && payments.length === 0 && <p>No payment records found.</p>}
 
-      {!loading && payments.length === 0 ? (
-        <p>No payment records found.</p>
-      ) : (
-        <>
-        <div className="table-scroll">
-          <table className="bar-payment-table">
-            <thead>
-              <tr>
-                <th>PayID</th>
-                <th>Sale ID</th>
-                <th>Sale Amt</th>
-                <th>Paid</th>
-                <th>Total Paid</th> {/* ✅ NEW COLUMN */}
-                <th>Bal Due</th>
-                <th>Method</th>
-                <th>Note</th>
-                <th>Date Paid</th>
-                <th>Created By</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.map((p) => (
-                <tr key={p.id}>
+      <div className="table-scroll">
+        <table className="bar-payment-table">
+          <thead>
+            <tr>
+              <th>PayID</th>
+              <th>Sale ID</th>
+              <th>Sale Amt</th>
+              <th>Paid</th>
+              <th>Total Paid</th>
+              <th>Bal Due</th>
+              <th>Method</th>
+
+              <th>Bank</th>
+
+              <th>Note</th>
+              <th>Date Paid</th>
+              <th>Created By</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {payments.map((p) => {
+              const bankName = p.bank || "-";
+
+
+              return (
+                <tr
+                  key={p.id}
+                  className={
+                    p.status?.toLowerCase() === "voided payment"
+                      ? "void-row"
+                      : ""
+                  }
+                >
                   <td>{p.id}</td>
                   <td>{p.bar_sale_id}</td>
                   <td>{formatAmount(p.sale_amount)}</td>
                   <td>{formatAmount(p.amount_paid)}</td>
-                  <td>{formatAmount(p.cumulative_paid)}</td> {/* ✅ DISPLAY cumulative */}
-                  <td style={{ color: p.balance_due > 0 ? "red" : "green" }}>
+                  <td>{formatAmount(p.cumulative_paid)}</td>
+
+                  <td
+                    style={{ color: p.balance_due > 0 ? "red" : "green" }}
+                  >
                     {formatAmount(p.balance_due)}
                   </td>
+
                   <td>{p.payment_method || "-"}</td>
+
+                  {/* 🔥 DISPLAY BANK NAME */}
+                  <td>{bankName}</td>
+
                   <td>{p.note || "-"}</td>
-                  <td>{p.date_paid ? new Date(p.date_paid).toLocaleDateString() : "-"}</td>
+                  <td>
+                    {p.date_paid
+                      ? new Date(p.date_paid).toLocaleDateString()
+                      : "-"}
+                  </td>
                   <td>{p.created_by || "-"}</td>
-                  <td className={`status ${p.status?.toLowerCase().replace(/\s+/g, "-")}`}>
+
+                  <td
+                    className={`status ${p.status
+                      ?.toLowerCase()
+                      .replace(/\s+/g, "-")}`}
+                  >
                     {p.status}
                   </td>
+
                   <td>
-                    <button className="btn-edit" onClick={() => handleEdit(p)}>✏️ Edit</button>
-                    <button className="btn-delete" onClick={() => handleDelete(p.id)}>🗑️ Delete</button>
-                    <button className="btn-void" onClick={() => handleVoid(p.id)} disabled={p.status === "voided"}>🚫 Void</button>
-                    <button className="btn-print" onClick={() => handlePrint(p)}>🖨 Print</button>
+                    <button
+                      className="btn-edit"
+                      onClick={() => handleEdit(p)}
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button
+                      className="btn-delete"
+                      onClick={() => handleDelete(p.id)}
+                    >
+                      🗑️ Delete
+                    </button>
+                    <button
+                      className="btn-void"
+                      onClick={() => handleVoid(p.id)}
+                      disabled={p.status === "voided payment"}
+                    >
+                      🚫 Void
+                    </button>
+                    <button
+                      className="btn-print"
+                      onClick={() => handlePrint(p)}
+                    >
+                      🖨 Print
+                    </button>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-          {summary && (
-            <div className="summary-box">
-              <h3>📊 Payment Summary</h3>
-              <div className="summary-grid">
-                <div className="summary-left">
-                  <p><strong>Total Sales:</strong> {formatAmount(summary.total_sales)}</p>
-                  <p><strong>Total Paid:</strong> {formatAmount(summary.total_paid)}</p>
-                  <p><strong>Total Due:</strong> {formatAmount(summary.total_due)}</p>
-                </div>
-                <div className="summary-right">
-                  <p><strong>Cash:</strong> {formatAmount(summary.total_cash)}</p>
-                  <p><strong>POS:</strong> {formatAmount(summary.total_pos)}</p>
-                  <p><strong>Transfer:</strong> {formatAmount(summary.total_transfer)}</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ✅ Edit Modal */}
+      {/* Edit Modal */}
       {editingPayment && (
         <div className="modal-overlay3">
           <div className="modal3">
@@ -277,13 +382,23 @@ const ListBarPayment = () => {
               <input
                 type="number"
                 value={formData.amount_paid}
-                onChange={(e) => setFormData({ ...formData, amount_paid: e.target.value })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    amount_paid: e.target.value,
+                  })
+                }
               />
 
               <label>Payment Method</label>
               <select
                 value={formData.payment_method || ""}
-                onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    payment_method: e.target.value,
+                  })
+                }
               >
                 <option value="">-- Select Method --</option>
                 <option value="cash">Cash</option>
@@ -295,12 +410,25 @@ const ListBarPayment = () => {
               <input
                 type="text"
                 value={formData.note}
-                onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    note: e.target.value,
+                  })
+                }
               />
 
               <div className="modal-actions3">
-                <button type="submit" className="btn-edit">💾 Save</button>
-                <button type="button" onClick={() => setEditingPayment(null)} className="btn-delete">❌ Cancel</button>
+                <button type="submit" className="btn-edit">
+                  💾 Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingPayment(null)}
+                  className="btn-delete"
+                >
+                  ❌ Cancel
+                </button>
               </div>
             </form>
           </div>

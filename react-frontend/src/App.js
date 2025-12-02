@@ -24,6 +24,8 @@ import CreateBooking from "./components/bookings/CreateBooking";
 import ListBooking from "./components/bookings/ListBooking";
 import CheckoutGuest from "./components/bookings/CheckoutGuest";
 import CancelBooking from "./components/bookings/CancelBooking";
+
+import CreateBank from "./components/payments/CreateBank";
 import CreatePayment from "./components/payments/CreatePayment";
 import PaymentOutstandingList from "./components/payments/PaymentOutstandingList";
 import ListPayment from "./components/payments/ListPayment";
@@ -198,7 +200,10 @@ const App = () => {
             <Route path="void" element={<VoidPayment />} />
           </Route>
 
-          
+          {/* ✅ Bank route */}
+          <Route path="payments">
+            <Route path="bankcreate" element={<CreateBank />} />
+          </Route>
 
           {/* Events */}
           <Route path="events">

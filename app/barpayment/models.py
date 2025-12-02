@@ -11,12 +11,13 @@ class BarPayment(Base):
     id = Column(Integer, primary_key=True, index=True)
     bar_sale_id = Column(Integer, ForeignKey("bar_sales.id", ondelete="CASCADE"))
     amount_paid = Column(Float, nullable=False)
-    payment_method = Column(String, nullable=False)  # e.g. "cash", "POS", "transfer"
+    payment_method = Column(String, nullable=False)
+    bank = Column(String, nullable=True)  # 👈 NEW
     date_paid = Column(DateTime, default=datetime.utcnow)
     received_by_id = Column(Integer, ForeignKey("users.id"))
-    status = Column(String, default="active")  # <-- NEW
-    created_by = Column(String)  # Track user
-    note = Column(String, nullable=True)  # <-- NEW
+    status = Column(String, default="active")
+    created_by = Column(String)
+    note = Column(String, nullable=True)
 
     bar_sale = relationship("BarSale", back_populates="payments")
     received_by_user = relationship("User", lazy="joined")

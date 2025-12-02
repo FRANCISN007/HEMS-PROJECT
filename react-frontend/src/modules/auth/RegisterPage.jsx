@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { registerUser } from "../../api/authService";
 import "./LogReg.css";
 
-const roleOptions = ["user", "admin", "dashboard", "bar", "restaurant", "store", "event"];
+const roleOptions = ["user", "admin", "manager", "bar", "restaurant", "store", "event"];
 
 const RegisterPage = () => {
   const [form, setForm] = useState({
