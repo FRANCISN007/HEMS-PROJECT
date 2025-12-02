@@ -263,3 +263,65 @@
 .filter-section select.status-dropdown {
   min-width: 140px;
 }
+
+
+.bank-summary-section {
+  margin-top: 15px;
+  padding: 10px;
+  background: #f8f9fc;
+  border-radius: 10px;
+  border: 1px solid #dce1f0;
+}
+
+.bank-summary-section h3 {
+  margin-bottom: 8px;
+  font-size: 18px;
+  color: #333;
+}
+
+.bank-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.bank-summary-card {
+  background: white;
+  border: 1px solid #ccd4e3;
+  padding: 8px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.bank-summary-card h4 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: #003366;
+  border-bottom: 1px dashed #ddd;
+  padding-bottom: 2px;
+}
+
+.bank-summary-card p {
+  margin: 2px 0;
+  font-size: 14px;
+}
+
+
+.main-summary-section {
+  margin: 15px 0;
+}
+
+.main-summary-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.summary-card {
+  background-color: #f5f5f5;
+  padding: 8px 12px;
+  border-radius: 8px;
+  flex: 1 1 150px;
+  text-align: center;
+  font-weight: bold;
+}

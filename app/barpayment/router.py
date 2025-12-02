@@ -86,24 +86,25 @@ def list_bar_payments(
 ):
     query = db.query(models.BarPayment).order_by(models.BarPayment.date_paid.desc())
 
-    # ✅ filter by bar
+    # Filter by bar
     if bar_id:
         query = query.join(BarSale).filter(BarSale.bar_id == bar_id)
 
-    # ✅ if only start_date is provided, default end_date = today
+    # If only start_date is provided → default end_date = today
     if start_date and not end_date:
         end_date = date.today()
 
-    # ✅ filter by date range (inclusive)
+    # Date filters
     if start_date:
         query = query.filter(models.BarPayment.date_paid >= start_date)
     if end_date:
         query = query.filter(models.BarPayment.date_paid < end_date + timedelta(days=1))
 
     payments = query.all()
+
     response = []
 
-    # Summary accumulators
+    # Main Summary
     total_sales = 0
     total_paid_all = 0
     total_due_all = 0
@@ -113,12 +114,15 @@ def list_bar_payments(
 
     processed_sales = set()
 
+    # NEW BANK SUMMARY
+    bank_summary = {}
+
     for p in payments:
         sale = db.query(BarSale).filter(BarSale.id == p.bar_sale_id).first()
         if not sale:
             continue
 
-        # Total paid for this sale (active only)
+        # Total paid for sale (active only)
         total_paid_for_sale = (
             db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
             .filter(
@@ -130,25 +134,41 @@ def list_bar_payments(
 
         balance_due = float(sale.total_amount) - float(total_paid_for_sale)
 
-        # add sale totals once
+        # Add sale totals once
         if sale.id not in processed_sales:
             total_sales += float(sale.total_amount)
             total_due_all += balance_due
             processed_sales.add(sale.id)
 
-        # count only active payments
+        # Only active payments count towards summary
         if p.status == "active":
-            total_paid_all += float(p.amount_paid)
+            amt = float(p.amount_paid)
+            total_paid_all += amt
 
             method = p.payment_method.lower()
-            if method == "cash":
-                total_cash += float(p.amount_paid)
-            elif method in ["pos", "card"]:
-                total_pos += float(p.amount_paid)
-            elif method == "transfer":
-                total_transfer += float(p.amount_paid)
 
-        # sale-level payment status
+            if method == "cash":
+                total_cash += amt
+            elif method in ["pos", "card"]:
+                total_pos += amt
+            elif method == "transfer":
+                total_transfer += amt
+
+            # BANK CATEGORY SUMMARY
+            bank = (p.bank or "").strip().upper()  # remove default NO BANK
+            if not bank:
+                continue  # skip if bank is empty
+
+            if bank not in bank_summary:
+                bank_summary[bank] = {"pos": 0, "transfer": 0}
+
+            if method in ["pos", "card"]:
+                bank_summary[bank]["pos"] += amt
+            elif method == "transfer":
+                bank_summary[bank]["transfer"] += amt
+
+
+        # Payment-level status
         if total_paid_for_sale == 0:
             sale_status = "unpaid"
         elif total_paid_for_sale < sale.total_amount:
@@ -156,7 +176,7 @@ def list_bar_payments(
         else:
             sale_status = "fully paid"
 
-        row_status = "voided" if p.status == "voided" else sale_status
+        row_status = "voided payment" if p.status == "voided" else sale_status
 
         response.append({
             "id": p.id,
@@ -166,7 +186,7 @@ def list_bar_payments(
             "cumulative_paid": float(total_paid_for_sale),
             "balance_due": float(balance_due),
             "payment_method": p.payment_method,
-            "bank": p.bank,              # 👈 NEW FIELD ADDED HERE
+            "bank": p.bank,
             "note": p.note,
             "date_paid": p.date_paid,
             "created_by": p.created_by,
@@ -175,6 +195,8 @@ def list_bar_payments(
 
     return {
         "payments": response,
+
+        # MAIN SUMMARY FIRST
         "summary": {
             "total_sales": total_sales,
             "total_paid": total_paid_all,
@@ -182,7 +204,11 @@ def list_bar_payments(
             "total_cash": total_cash,
             "total_pos": total_pos,
             "total_transfer": total_transfer,
+
+            # BANK SUMMARY INCLUDED HERE
+            "banks": bank_summary
         },
+
         "filters": {
             "bar_id": bar_id,
             "start_date": start_date,

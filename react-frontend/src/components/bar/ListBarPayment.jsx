@@ -398,6 +398,44 @@ const ListBarPayment = () => {
         </table>
       </div>
 
+      {summary && (
+  <>
+        {/* 🔹 MAIN SUMMARY */}
+        <div className="main-summary-section">
+          <h3>📊 Main Summary</h3>
+          <div className="main-summary-grid">
+            <div className="summary-card"><strong>Total Sales:</strong> {formatAmount(summary.total_sales)}</div>
+            <div className="summary-card"><strong>Total Paid:</strong> {formatAmount(summary.total_paid)}</div>
+            <div className="summary-card"><strong>Total Due:</strong> {formatAmount(summary.total_due)}</div>
+            <div className="summary-card"><strong>Total Cash:</strong> {formatAmount(summary.total_cash)}</div>
+            <div className="summary-card"><strong>Total POS:</strong> {formatAmount(summary.total_pos)}</div>
+            <div className="summary-card"><strong>Total Transfer:</strong> {formatAmount(summary.total_transfer)}</div>
+          </div>
+        </div>
+
+        {/* 🔹 BANK SUMMARY */}
+        {summary.banks && (
+          <div className="bank-summary-section">
+            <h3>🏦 Bank Summary</h3>
+            <div className="bank-summary-grid">
+              {Object.entries(summary.banks)
+                .filter(([bankName]) => bankName && bankName.toUpperCase() !== "NO BANK") // ✅ skip No Bank
+                .map(([bankName, data]) => (
+                  <div key={bankName} className="bank-summary-card">
+                    <h4>{bankName}</h4>
+                    <p><strong>POS:</strong> {formatAmount(data.pos || 0)}</p>
+                    <p><strong>Transfer:</strong> {formatAmount(data.transfer || 0)}</p>
+                  </div>
+              ))}
+
+            </div>
+          </div>
+        )}
+      </>
+    )}
+
+
+
       {/* Edit Modal */}
       {editingPayment && (
         <div className="modal-overlay3">
