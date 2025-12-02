@@ -34,41 +34,50 @@ router = APIRouter()
 @router.post("/sales/{sale_id}/payments", response_model=RestaurantSaleDisplay)
 def add_payment_to_sale(
     sale_id: int,
-    payment: PaymentCreate,  # 👈 accept JSON body
+    payment: PaymentCreate,
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
-    # 🔎 Find sale
-    sale = db.query(RestaurantSale).filter(RestaurantSale.id == sale_id).first()
+    # Fetch the sale
+    sale = db.query(RestaurantSale).filter_by(id=sale_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
 
-    # 🔎 Calculate how much is already paid (ignoring voided)
+    # Calculate current balance
     total_paid = sum(p.amount_paid for p in sale.payments if not p.is_void)
     balance = (sale.total_amount or 0) - total_paid
 
-    # 🚫 Prevent overpayment
     if payment.amount > balance:
         raise HTTPException(
             status_code=400,
             detail=f"Payment exceeds outstanding balance. Balance left: {balance}"
         )
 
-    # 💾 Record new payment
+    # Normalize bank value
+    bank_value = str(payment.bank).strip() if payment.bank else None
+    if bank_value and bank_value.upper() in ("0", "NONE", "NULL", "", "NO BANK"):
+        bank_value = None
+
+    # Create the payment
     new_payment = RestaurantSalePayment(
         sale_id=sale.id,
         amount_paid=payment.amount,
         payment_mode=payment.payment_mode,
+        bank=bank_value,
         paid_by=payment.paid_by,
-        is_void=False,  # ✅ important
-        created_at=datetime.utcnow()
+        is_void=False,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
     )
-    db.add(new_payment)
-    db.commit()   # ✅ persist changes
-    db.refresh(sale)  # ✅ reload sale with updated payments
 
-    # 🔄 Update status (e.g., mark as fully_paid/partial)
+    db.add(new_payment)
+    db.flush()  # ✅ ensure payment is visible before updating sale status
+
+    # Update linked sale status
     update_sale_status(sale, db)
+
+    db.commit()
+    db.refresh(sale)
 
     return sale
 
@@ -84,7 +93,6 @@ def list_payments_with_items(
 ):
     query = db.query(RestaurantSalePayment).join(RestaurantSale)
 
-    # ✅ Apply filters
     if sale_id:
         query = query.filter(RestaurantSale.id == sale_id)
     if start_date:
@@ -102,14 +110,15 @@ def list_payments_with_items(
 
     sales_map = {}
 
-    # Step 1: Organize payments under their sales
+    # -------------------------
+    # GROUP PAYMENTS BY SALES
+    # -------------------------
     for p in payments:
         sale = p.sale
         if not sale:
             continue
 
         if sale.id not in sales_map:
-            # ✅ Get true all-time paid (exclude voided)
             total_paid_for_sale = (
                 db.query(func.coalesce(func.sum(RestaurantSalePayment.amount_paid), 0))
                 .filter(
@@ -121,13 +130,11 @@ def list_payments_with_items(
 
             balance = float(sale.total_amount or 0) - float(total_paid_for_sale)
 
-            # Decide sale status (all-time)
-            if total_paid_for_sale == 0:
-                status = "unpaid"
-            elif total_paid_for_sale < sale.total_amount:
-                status = "partial"
-            else:
-                status = "paid"
+            status = (
+                "unpaid" if total_paid_for_sale == 0 else
+                "partial" if total_paid_for_sale < sale.total_amount else
+                "paid"
+            )
 
             sales_map[sale.id] = {
                 "id": sale.id,
@@ -139,37 +146,69 @@ def list_payments_with_items(
                 "status": status,
             }
 
-        # Add payment dict, but use all-time balance for consistency
+        # ADD BANK TO PAYMENT RESPONSE
         payment_dict = {
             "id": p.id,
             "sale_id": p.sale_id,
             "amount_paid": float(p.amount_paid or 0),
             "payment_mode": p.payment_mode,
+            "bank": p.bank,
             "paid_by": p.paid_by,
             "is_void": p.is_void,
             "created_at": p.created_at,
-            "balance": sales_map[sale.id]["balance"],  # ✅ always true outstanding
+            "balance": sales_map[sale.id]["balance"],
         }
+
         sales_map[sale.id]["payments"].append(payment_dict)
 
-    # Step 2: Build summary
-    total_paid = 0.0
-    total_outstanding = 0.0
-    payment_summary = defaultdict(float)
+    # ---------------------------------------------------
+    # BUILD SUMMARY (TOTALS + BANK CATEGORY BREAKDOWN)
+    # ---------------------------------------------------
+    summary = {
+        "total_sales": 0,
+        "total_paid": 0,
+        "total_due": 0,
+        "total_cash": 0,
+        "total_pos": 0,
+        "total_transfer": 0,
+        "banks": {}
+    }
 
     for sale_data in sales_map.values():
-        total_paid += sale_data["amount_paid"]
-        total_outstanding += sale_data["balance"]
+        summary["total_sales"] += sale_data["total_amount"]
+        summary["total_paid"] += sale_data["amount_paid"]
+        summary["total_due"] += sale_data["balance"]
 
         for p in sale_data["payments"]:
-            if not p["is_void"]:
-                payment_summary[p["payment_mode"]] += p["amount_paid"]
+            if p["is_void"]:
+                continue
 
-    summary = {k: float(v) for k, v in payment_summary.items()}
-    summary["Total Paid"] = float(total_paid)
-    summary["Total Outstanding"] = float(total_outstanding)
+            amount = p["amount_paid"]
+            mode = p["payment_mode"]
+            bank = (p["bank"] or "").upper().strip()
 
-    # Step 3: Redisplay only outstanding sales if needed
+            # -----------------------------
+            # COUNT PAYMENT MODE TOTALS
+            # -----------------------------
+            if mode == "CASH":
+                summary["total_cash"] += amount
+            elif mode == "POS":
+                summary["total_pos"] += amount
+            elif mode == "TRANSFER":
+                summary["total_transfer"] += amount
+
+            # -----------------------------
+            # BANK-WISE CATEGORIZATION
+            # -----------------------------
+            if bank:
+                if bank not in summary["banks"]:
+                    summary["banks"][bank] = {"pos": 0, "transfer": 0}
+
+                if mode == "POS":
+                    summary["banks"][bank]["pos"] += amount
+                elif mode == "TRANSFER":
+                    summary["banks"][bank]["transfer"] += amount
+
     redisplay_sales = [s for s in sales_map.values() if s["balance"] > 0]
 
     return {
@@ -180,13 +219,13 @@ def list_payments_with_items(
 
 
 
+
 from typing import List
 
 from sqlalchemy import func
 
 
 
-# ✅ Update a payment
 @router.put("/sales/payments/{payment_id}", response_model=RestaurantSalePaymentDisplay)
 def update_payment(
     payment_id: int,
@@ -194,28 +233,51 @@ def update_payment(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
-    payment = db.query(RestaurantSalePayment).filter(RestaurantSalePayment.id == payment_id).first()
+    # Fetch the payment
+    payment = db.query(RestaurantSalePayment).filter_by(id=payment_id).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
 
-    if payload.amount_paid is not None:
+    # Track whether we made any changes
+    updated = False
+
+    # Update fields if provided
+    if payload.amount_paid is not None and payment.amount_paid != payload.amount_paid:
         payment.amount_paid = payload.amount_paid
-    if payload.payment_mode is not None:
+        updated = True
+
+    if payload.payment_mode is not None and payment.payment_mode != payload.payment_mode:
         payment.payment_mode = payload.payment_mode
-    if payload.paid_by is not None:
+        updated = True
+
+    if payload.paid_by is not None and payment.paid_by != payload.paid_by:
         payment.paid_by = payload.paid_by
+        updated = True
 
-    payment.updated_at = datetime.utcnow()
-    db.add(payment)
+    if payload.bank is not None:
+        bank_value = str(payload.bank).strip()
+        if bank_value.upper() in ("0", "NONE", "NULL", "", "NO BANK"):
+            bank_value = None
+        if payment.bank != bank_value:
+            payment.bank = bank_value
+            updated = True
 
-    sale = db.query(RestaurantSale).filter(RestaurantSale.id == payment.sale_id).first()
-    if sale:
-        update_sale_status(sale, db)
+    if updated:
+        payment.updated_at = datetime.utcnow()
+        db.add(payment)
+        db.flush()  # ✅ ensure changes are visible to any subsequent queries
 
-    db.commit()
+        # Update linked sale status after flushing payment changes
+        sale = db.query(RestaurantSale).filter_by(id=payment.sale_id).first()
+        if sale:
+            update_sale_status(sale, db)
+
+        db.commit()
+
     db.refresh(payment)
-
     return payment
+
+
 
 # ✅ Void a payment
 # ✅ Void a payment (cancel transaction but keep history)

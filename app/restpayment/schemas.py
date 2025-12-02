@@ -9,6 +9,7 @@ from typing import List
 class PaymentCreate(BaseModel):
     amount: float
     payment_mode: str
+    bank: str | None = None   # ✅ added
     paid_by: str | None = None
 
 
@@ -17,6 +18,7 @@ class PaymentDisplay(BaseModel):
     id: int
     amount_paid: float
     payment_mode: str
+    bank: Optional[str]     # ✅ added
     paid_by: str | None
     created_at: datetime
 
@@ -30,6 +32,7 @@ class RestaurantSalePaymentDisplay(BaseModel):
     sale_id: int
     amount_paid: float
     payment_mode: str  # e.g., "cash", "POS", "transfer"
+    bank: Optional[str]     # ✅ added
     paid_by: Optional[str]
     is_void: bool
     created_at: datetime
@@ -39,10 +42,10 @@ class RestaurantSalePaymentDisplay(BaseModel):
 
 
 class UpdatePaymentSchema(BaseModel):
-    amount_paid: Optional[float]
-    payment_mode: Optional[str]
-    paid_by: Optional[str]
-
+    amount_paid: Optional[float] = None
+    payment_mode: Optional[str] = None
+    paid_by: Optional[str] = None
+    bank: Optional[str] = None   # <-- must be Optional
 
 # restpayment/schemas.py
 
