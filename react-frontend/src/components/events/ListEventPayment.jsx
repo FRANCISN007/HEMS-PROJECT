@@ -218,7 +218,7 @@ const ListEventPayment = () => {
             {summary.by_bank &&
               Object.entries(summary.by_bank).map(([bank, totals]) => (
                 <span key={bank} className="bank-summary-horizontal">
-                  {bank}: POS ₦{formatCurrency(totals.pos)} | TRANS ₦
+                  {bank}: POS ₦{formatCurrency(totals.pos)} | TRANSFER ₦
                   {formatCurrency(totals.transfer)}
                 </span>
               ))}

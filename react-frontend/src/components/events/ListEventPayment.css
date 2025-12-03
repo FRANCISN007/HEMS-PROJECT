@@ -21,7 +21,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  border-radius: 6px;
+  border-radius: 8px;
   margin-bottom: 5px;
 }
 
@@ -38,85 +38,89 @@
   width: 100%;
   max-height: 420px;
   overflow-y: auto;
-  border: 1px solid #ddd;
+  border: 1px solid #aaa;
   background: #fff;
 }
 
 /* ===============================
-   COMPACT TABLE (NO HORIZONTAL SCROLL)
+   TABLE
    =============================== */
 .event-payment-tables {
-  width: 100%; 
-  border-collapse: collapse;
-  table-layout: fixed;       /* KEY: Forces equal compact column widths */
+  width: 100%;
+  border-collapse: collapse; /* Ensures grid connects perfectly */
+  table-layout: fixed;
+  border: 1px solid #bfbfbf;   /* Outer border */
 }
 
-/* Small compact cell size */
+/* Each cell */
 .event-payment-tables th,
 .event-payment-tables td {
   padding: 2px 3px;
-  border: 1px solid #ddd;
+  border: 1px solid #c8c8c8;  /* STRONG GRID LINES */
+  outline: 0.5px solid #e1e1e1; /* Light inner grid line */
   text-align: left;
   font-size: 12px;
-  white-space: nowrap;        /* Prevent text wrap */
-  overflow: hidden;           /* Hide long text */
-  text-overflow: ellipsis;    /* Add "..." */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
-/* Reduce header height */
-.event-payment-tables th {
-  background: #f3f3f3;
-  font-weight: bold;
-  font-size: 13px;
-  height: 22px;
-}
-
-/* Force extremely narrow width per column */
-.event-payment-tables th:nth-child(1) { width: 30px; }  /* ID */
-.event-payment-tables th:nth-child(2) { width: 85px; }  /* Organiser */
-.event-payment-tables th:nth-child(3) { width: 90px; }  /* Event amt */
-.event-payment-tables th:nth-child(4) { width: 75px; }
-.event-payment-tables th:nth-child(5) { width: 65px; }
-.event-payment-tables th:nth-child(6) { width: 80px; }
-.event-payment-tables th:nth-child(7) { width: 56px; }
-.event-payment-tables th:nth-child(8) { width: 65px; }
-.event-payment-tables th:nth-child(9) { width: 60px; }  /* Method */
-.event-payment-tables th:nth-child(10) { width: 70px; } /* Bank */
-.event-payment-tables th:nth-child(11) { width: 55px; } /* Status */
-.event-payment-tables th:nth-child(12) { width: 95px; } /* Date */
-.event-payment-tables th:nth-child(13) { width: 70px; } /* Created By */
-.event-payment-tables th:nth-child(14) { width: 45px; } /* Action */
 
 /* ===============================
-   VOID ROW STYLE
+   TABLE HEADER
+   =============================== */
+.event-payment-tables th {
+  background: #2f3542;
+  color: #ffffff;
+  font-weight: 400;
+  font-size: 13px;
+  height: 24px;
+  border: 1px solid #1f2228; /* stronger border */
+}
+
+/* ===============================
+   EVEN / ODD ROW COLORS
+   =============================== */
+.event-payment-tables tbody tr:nth-child(odd) {
+  background: #ffffff;
+}
+
+.event-payment-tables tbody tr:nth-child(even) {
+  background: #edf8ed;
+}
+
+/* ===============================
+   VOIDED PAYMENTS
    =============================== */
 .voided-payment-row {
   background-color: #ffe1e1 !important;
   color: #b70000 !important;
 }
 
-.voided-status {
-  font-weight: bold;
-  color: #b70000;
-}
-
 /* ===============================
-   ERROR MESSAGE
+   COLUMN WIDTHS
    =============================== */
-.errors {
-  color: red;
-  font-weight: bold;
-  margin-bottom: 5px;
-}
+.event-payment-tables th:nth-child(1) { width: 30px; }
+.event-payment-tables th:nth-child(2) { width: 85px; }
+.event-payment-tables th:nth-child(3) { width: 85px; }
+.event-payment-tables th:nth-child(4) { width: 75px; }
+.event-payment-tables th:nth-child(5) { width: 65px; }
+.event-payment-tables th:nth-child(6) { width: 80px; }
+.event-payment-tables th:nth-child(7) { width: 56px; }
+.event-payment-tables th:nth-child(8) { width: 65px; }
+.event-payment-tables th:nth-child(9) { width: 60px; }
+.event-payment-tables th:nth-child(10) { width: 70px; }
+.event-payment-tables th:nth-child(11) { width: 55px; }
+.event-payment-tables th:nth-child(12) { width: 95px; }
+.event-payment-tables th:nth-child(13) { width: 65px; }
+.event-payment-tables th:nth-child(14) { width: 45px; }
 
 /* ===============================
-   SUMMARY HORIZONTAL BAR
+   SUMMARY BAR
    =============================== */
 .summary-horizontal {
   width: 100%;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
   gap: 8px;
   margin-top: 8px;
   padding: 6px;
@@ -140,12 +144,8 @@
   display: block;
 }
 
-/* Responsive tweak */
 @media (max-width: 900px) {
   .summary-horizontal {
     flex-wrap: wrap;
   }
 }
-
-
-
