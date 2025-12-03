@@ -9,29 +9,30 @@ class EventPaymentBase(BaseModel):
     amount_paid: float
     discount_allowed: float = 0.0
     payment_method: str
+    bank: Optional[str] = None   # 👈 Added
     payment_status: Optional[str] = "pending"
     created_by: str
 
     class Config:
-        from_attributes = True  # Replaces `orm_mode = True` for newer Pydantic versions
+        from_attributes = True
 
-# Schema for Creating an Event Payment
 class EventPaymentCreate(EventPaymentBase):
-    pass
+    note: Optional[str] = None   # Optional note field
 
-# Schema for Response when Retrieving an Event Payment
 class EventPaymentResponse(BaseModel):
     id: int
     event_id: int
     organiser: str
-    event_amount: float  #  Ensure this field exists
+    event_amount: float
     amount_paid: float
     discount_allowed: float
     balance_due: float
     payment_method: str
+    bank: Optional[str] = None   # 👈 Added
     payment_status: str
     payment_date: datetime
     created_by: str
+    note: Optional[str] = None
 
     class Config:
         from_attributes = True

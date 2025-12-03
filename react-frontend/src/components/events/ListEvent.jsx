@@ -28,40 +28,32 @@ const ListEvent = () => {
 
   roles = roles.map((r) => r.toLowerCase());
 
-
   if (!(roles.includes("admin") || roles.includes("event"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to list event.</p>
-    </div>
-  );
-}
-
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to list event.</p>
+      </div>
+    );
+  }
 
   const fetchEvents = async () => {
     setLoading(true);
     setError(null);
     try {
       const token = localStorage.getItem("token");
-      let url = `${API_BASE_URL}/events/`;  // ← trailing slash
+      let url = `${API_BASE_URL}/events/`;
       const params = new URLSearchParams();
 
       if (startDate) params.append("start_date", startDate);
       if (endDate) params.append("end_date", endDate);
       if (params.toString()) url += `?${params.toString()}`;
 
-      console.log("📡 Fetching events from:", url);
-
       const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       const data = await res.json();
-      console.log("🟢 Raw backend response:", data);
-
       const filtered = organizer
         ? (data.events || []).filter((e) =>
             e.organizer?.toLowerCase().includes(organizer.toLowerCase())
@@ -135,49 +127,62 @@ const ListEvent = () => {
                 </td>
               </tr>
             ) : (
-              events.map((event) => (
-                <tr key={event.id}>
-                  <td>{event.id}</td>
-                  <td>{event.organizer}</td>
-                  <td>{event.title}</td>
-                  <td>{event.phone_number}</td>
-                  <td>{event.start_datetime}</td>
-                  <td>{event.end_datetime}</td>
-                  <td>{event.location}</td>
-                  <td>₦{event.event_amount?.toLocaleString()}</td>
-                  <td>₦{event.caution_fee?.toLocaleString()}</td>
-                  <td>{event.payment_status}</td>
-                  <td>{event.address}</td>
-                  <td>{event.created_by}</td>
-                  <td className="action-buttons">
-                    <button
-                      className="view-btn"
-                      onClick={() =>
-                        navigate("/dashboard/events/view", { state: { event } })
-                      }
-                    >
-                      View
-                    </button>
-                    <button
-                      className="update-btn"
-                      onClick={() =>
-                        navigate("/dashboard/events/update", { state: { event } })
-                      }
-                    >
-                      Update
-                    </button>
-                    <button
-                      className="cancel-btn"
-                      onClick={() => {
-                        setSelectedEventId(event.id);
-                        setShowCancelModal(true);
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </td>
-                </tr>
-              ))
+              events.map((event) => {
+                const isCancelled = event.payment_status.toLowerCase() === "cancelled";
+                return (
+                  <tr
+                    key={event.id}
+                    className={isCancelled ? "cancelled-event-row" : ""}
+                  >
+                    <td>{event.id}</td>
+                    <td>{event.organizer}</td>
+                    <td>{event.title}</td>
+                    <td>{event.phone_number}</td>
+                    <td>{event.start_datetime}</td>
+                    <td>{event.end_datetime}</td>
+                    <td>{event.location}</td>
+                    <td>₦{event.event_amount?.toLocaleString()}</td>
+                    <td>₦{event.caution_fee?.toLocaleString()}</td>
+                    <td style={{ color: isCancelled ? "red" : "inherit" }}>
+                      {event.payment_status}
+                    </td>
+                    <td>{event.address}</td>
+                    <td>{event.created_by}</td>
+                    <td className="action-buttons">
+                      <button
+                        className="view-btn"
+                        onClick={() =>
+                          navigate("/dashboard/events/view", { state: { event } })
+                        }
+                      >
+                        View
+                      </button>
+                      <button
+                        className="update-btn"
+                        onClick={() =>
+                          navigate("/dashboard/events/update", { state: { event } })
+                        }
+                        disabled={isCancelled}
+                        style={{
+                          backgroundColor: isCancelled ? "#ccc" : "",
+                          cursor: isCancelled ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        Update
+                      </button>
+                      <button
+                        className="cancel-btn"
+                        onClick={() => {
+                          setSelectedEventId(event.id);
+                          setShowCancelModal(true);
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

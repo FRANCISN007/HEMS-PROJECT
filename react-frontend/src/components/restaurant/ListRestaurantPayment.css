@@ -208,3 +208,40 @@
 .btn.delete:hover {
   background-color: #b02a37;
 }
+
+
+
+/* Full vertical scroll wrapper */
+.scroll-wrapper {
+  height: calc(100vh - 20px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 10px;
+}
+
+/* Make table scroll if too wide */
+.payment-table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow-x: auto;
+  display: block;
+}
+
+/* Modern scrollbar */
+.scroll-wrapper::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scroll-wrapper::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.scroll-wrapper::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 10px;
+}
+
+.scroll-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}

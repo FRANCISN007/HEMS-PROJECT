@@ -200,7 +200,8 @@ const ListRestaurantPayment = () => {
   if (error) return <p>{error}</p>;
 
   return (
-    <div className="payment-list-container">
+    <div className="payment-list-container scroll-wrapper">
+
       <h1>Restaurant Payments List</h1>
 
       {/* FILTERS */}

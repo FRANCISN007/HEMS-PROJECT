@@ -161,17 +161,23 @@ def get_event(event_id: int, db: Session = Depends(get_db),
 @router.put("/{event_id}", response_model=dict)
 def update_event(
     event_id: int,
-    event: event_schemas.EventCreate, 
-    db: Session = Depends(get_db), 
+    event: event_schemas.EventCreate,
+    db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["event"]))
 ):
     db_event = db.query(event_models.Event).filter(event_models.Event.id == event_id).first()
     if not db_event:
         raise HTTPException(status_code=404, detail="Event not found")
 
+    # ✅ Prevent updates if event is cancelled
+    if db_event.payment_status.lower() == "cancelled":
+        raise HTTPException(status_code=400, detail="Cancelled events cannot be updated")
+
+    # Only creator or admin can update
     if db_event.created_by != current_user.username and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Only event creators or admins can update events")
 
+    # Update fields
     for field, value in event.dict(exclude_unset=True).items():
         setattr(db_event, field, value)
 

@@ -1,123 +1,151 @@
-/* src/components/events/ListEventPayment.css */
-
+/* ===============================
+   MAIN CONTAINER
+   =============================== */
 .list-event-payment-containers {
-  font-family: Arial, sans-serif;
-  padding: 0.2rem;
-  background-color: #f7f9fc;
-  font-size: 0.7rem;
-  border-radius: 12px;
-
+  width: 100%;
+  padding: 4px;
+  border-radius: 8px;
+  box-sizing: border-box;
 }
 
 .list-event-payment-containers h2 {
-  font-size: 1.5rem;
-  margin-bottom: 20px;
-  color: #333;
+  margin-bottom: 5px;
+  font-size: 24px;
+  font-weight: bold;
 }
 
-/* Filters */
+/* ===============================
+   FILTER BAR
+   =============================== */
 .filterss {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
   align-items: center;
+  gap: 8px;
+  border-radius: 6px;
+  margin-bottom: 5px;
 }
 
-.filterss input[type="date"] {
-  padding: 6px 8px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
+.filterss input,
+.filterss button {
+  padding: 4px 6px;
   font-size: 12px;
 }
 
-.filterss button {
-  padding: 8px 16px;
-  background-color: #2563eb;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
+/* ===============================
+   TABLE WRAPPER
+   =============================== */
+.payment-table-scroll {
+  width: 100%;
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  background: #fff;
+}
+
+/* ===============================
+   COMPACT TABLE (NO HORIZONTAL SCROLL)
+   =============================== */
+.event-payment-tables {
+  width: 100%; 
+  border-collapse: collapse;
+  table-layout: fixed;       /* KEY: Forces equal compact column widths */
+}
+
+/* Small compact cell size */
+.event-payment-tables th,
+.event-payment-tables td {
+  padding: 2px 3px;
+  border: 1px solid #ddd;
+  text-align: left;
+  font-size: 12px;
+  white-space: nowrap;        /* Prevent text wrap */
+  overflow: hidden;           /* Hide long text */
+  text-overflow: ellipsis;    /* Add "..." */
+}
+
+/* Reduce header height */
+.event-payment-tables th {
+  background: #f3f3f3;
   font-weight: bold;
-  transition: background-color 0.3s ease;
+  font-size: 13px;
+  height: 22px;
 }
 
-.filterss button:hover {
-  background-color: #1e40af;
+/* Force extremely narrow width per column */
+.event-payment-tables th:nth-child(1) { width: 30px; }  /* ID */
+.event-payment-tables th:nth-child(2) { width: 85px; }  /* Organiser */
+.event-payment-tables th:nth-child(3) { width: 90px; }  /* Event amt */
+.event-payment-tables th:nth-child(4) { width: 75px; }
+.event-payment-tables th:nth-child(5) { width: 65px; }
+.event-payment-tables th:nth-child(6) { width: 80px; }
+.event-payment-tables th:nth-child(7) { width: 56px; }
+.event-payment-tables th:nth-child(8) { width: 65px; }
+.event-payment-tables th:nth-child(9) { width: 60px; }  /* Method */
+.event-payment-tables th:nth-child(10) { width: 70px; } /* Bank */
+.event-payment-tables th:nth-child(11) { width: 55px; } /* Status */
+.event-payment-tables th:nth-child(12) { width: 95px; } /* Date */
+.event-payment-tables th:nth-child(13) { width: 70px; } /* Created By */
+.event-payment-tables th:nth-child(14) { width: 45px; } /* Action */
+
+/* ===============================
+   VOID ROW STYLE
+   =============================== */
+.voided-payment-row {
+  background-color: #ffe1e1 !important;
+  color: #b70000 !important;
 }
 
-/* Error Message */
+.voided-status {
+  font-weight: bold;
+  color: #b70000;
+}
+
+/* ===============================
+   ERROR MESSAGE
+   =============================== */
 .errors {
   color: red;
-  margin-top: 10px;
   font-weight: bold;
+  margin-bottom: 5px;
 }
 
-/* Table */
-.payment-table-wrappers {
-  overflow-x: auto;
-  border-radius: 10px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-}
-
-.event-payment-tables {
+/* ===============================
+   SUMMARY HORIZONTAL BAR
+   =============================== */
+.summary-horizontal {
   width: 100%;
-  border-collapse: collapse;
-  background-color: white;
-  min-width: 1000px;
-}
-
-.event-payment-tables th {
-  padding: 6px 10px;
-  border: 1px solid #222427;
-  text-align: left;
-  font-size: .8rem; /* Increased font size for headings */
-}
-
-.event-payment-tables td {
-  padding: 6px 10px;
-  border: 1px solid #222427;
-  text-align: left;
-  font-size: 0.8rem; /* Increased font size for data */
-}
-
-
-.event-payment-tables thead {
-  background-color: #48494e;
-  color: white;
-}
-
-.event-payment-tables tbody tr:nth-child(even) {
-  background-color: #eceef1;
-}
-
-/* Summary */
-.all-summary-wrappers {
-  margin-top: 15px;
-  background-color: #ffffff;
-  padding: 4px;
-  border-radius: 12px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-  max-width: 200px;
-}
-
-.summary-rows {
   display: flex;
   justify-content: space-between;
-  padding: 4px 0;
-  border-bottom: 1px solid #e5e7eb;
-  font-size: 0.8rem; /* Increased font size for data */
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px;
+  background: #f8f8f8;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  flex-wrap: nowrap;
 }
 
-.summary-rows:last-child {
-  border-bottom: none;
+.summary-left,
+.summary-middle,
+.summary-right {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
-.summary-lefts {
-  font-weight: 900;
-  color: #374151;
+.bank-summary-horizontal {
+  display: block;
 }
 
-.summary-rights {
-  font-weight: 900;
-  color: #111827;
+/* Responsive tweak */
+@media (max-width: 900px) {
+  .summary-horizontal {
+    flex-wrap: wrap;
+  }
 }
+
+
+

@@ -33,51 +33,43 @@ router = APIRouter()
 def create_event_payment(
     payment_data: eventpayment_schemas.EventPaymentCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["event"]))  # ✅ only admin
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["event"]))
 ):
-    # Fetch the event using event_id
+    # Fetch the event
     event = db.query(event_models.Event).filter(event_models.Event.id == payment_data.event_id).first()
-
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    #  Check if the event is canceled before proceeding with payment
     if event.payment_status.lower() == "cancelled":
         raise HTTPException(
             status_code=400,
             detail=f"Payment cannot be processed because Event ID {payment_data.event_id} is cancelled."
         )
 
-    # Fetch all previous payments for this event, excluding voided payments
+    # Calculate totals for balance
     total_paid = db.query(func.coalesce(func.sum(eventpayment_models.EventPayment.amount_paid), 0)).filter(
         eventpayment_models.EventPayment.event_id == payment_data.event_id,
-        eventpayment_models.EventPayment.payment_status != "voided"  # Exclude voided payments
+        eventpayment_models.EventPayment.payment_status != "voided"
     ).scalar()
 
     total_discount = db.query(func.coalesce(func.sum(eventpayment_models.EventPayment.discount_allowed), 0)).filter(
         eventpayment_models.EventPayment.event_id == payment_data.event_id,
-        eventpayment_models.EventPayment.payment_status != "voided"  # Exclude voided discounts
+        eventpayment_models.EventPayment.payment_status != "voided"
     ).scalar()
 
-    # Compute new total payment and discount including the new payment
     new_total_paid = total_paid + payment_data.amount_paid
     new_total_discount = total_discount + payment_data.discount_allowed
-
-        # ✅ Compute the total cost of the event (event amount + caution fee)
     total_cost = event.event_amount + event.caution_fee
-
-    # Compute balance due based on the full cost
     balance_due = total_cost - (new_total_paid + new_total_discount)
 
-    # Determine payment status
     if balance_due > 0:
         payment_status = "incomplete"
     elif balance_due == 0:
         payment_status = "complete"
     else:
-        payment_status = "excess"  # Overpayment beyond total cost
+        payment_status = "excess"
 
-    # Proceed to create the payment since the event is active
+    # Create EventPayment
     new_payment = eventpayment_models.EventPayment(
         event_id=payment_data.event_id,
         organiser=payment_data.organiser,
@@ -86,7 +78,8 @@ def create_event_payment(
         discount_allowed=payment_data.discount_allowed,
         balance_due=balance_due,
         payment_method=payment_data.payment_method,
-        payment_status=payment_status,  # Automatically set status
+        bank=payment_data.bank,  # 👈 Track bank by name
+        payment_status=payment_status,
         created_by=current_user.username
     )
 
@@ -101,64 +94,61 @@ def list_outstanding_events(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["event"]))
 ):
-    try:
-        # ✅ Step 1: Get all relevant events
-        events = db.query(event_models.Event).filter(
-            event_models.Event.payment_status != "payment completed",
-            event_models.Event.payment_status != "cancelled"
+    # Fetch events that are not fully paid or cancelled
+    events = db.query(event_models.Event).filter(
+        event_models.Event.payment_status != "payment completed",
+        event_models.Event.payment_status != "cancelled"
+    ).all()
+
+    outstanding = []
+
+    for event in events:
+        total_due = (event.event_amount or 0) + (event.caution_fee or 0)
+
+        payments = db.query(eventpayment_models.EventPayment).filter(
+            eventpayment_models.EventPayment.event_id == event.id,
+            eventpayment_models.EventPayment.payment_status != "voided"
         ).all()
 
-        if not events:
-            raise HTTPException(status_code=404, detail="No outstanding events found.")
+        total_paid = sum(p.amount_paid for p in payments)
+        total_discount = sum(p.discount_allowed or 0 for p in payments)
+        balance_due = total_due - (total_paid + total_discount)
 
-        outstanding = []
+        if balance_due > 0:
+            outstanding.append({
+                "event_id": event.id,
+                "organizer": event.organizer,
+                "title": event.title,
+                "location": event.location,
+                "start_date": event.start_datetime,
+                "end_date": event.end_datetime,
+                "total_due": total_due,
+                "total_paid": total_paid,
+                "discount_allowed": total_discount,
+                "amount_due": balance_due,
+                "payment_status": event.payment_status,
+            })
 
-        for event in events:
-            total_due = (event.event_amount or 0) + (event.caution_fee or 0)
-
-            # ✅ Step 2: Get all payments for this event
-            payments = db.query(eventpayment_models.EventPayment).filter(
-                eventpayment_models.EventPayment.event_id == event.id,
-                eventpayment_models.EventPayment.payment_status != "voided"  # or EventPayment.status if you use that
-            ).all()
-
-            total_paid = sum(p.amount_paid for p in payments)
-            total_discount = sum(p.discount_allowed or 0 for p in payments)
-            balance_due = total_due - (total_paid + total_discount)
-
-            if balance_due > 0:
-                outstanding.append({
-                    "event_id": event.id,
-                    "organizer": event.organizer,
-                    "title": event.title,
-                    "location": event.location,
-                    "start_date": event.start_datetime,
-                    "end_date": event.end_datetime,
-                    "total_due": total_due,
-                    "total_paid": total_paid,
-                    "discount_allowed": total_discount,
-                    "amount_due": balance_due,
-                    "payment_status": event.payment_status,
-                })
-
-        if not outstanding:
-            raise HTTPException(status_code=404, detail="No outstanding event balances found.")
-
-        # Sort the results
-        outstanding.sort(key=lambda x: x["start_date"], reverse=True)
-
-        total_outstanding_balance = sum(item["amount_due"] for item in outstanding)
-
+    # If no outstanding events → return empty list instead of raising 404
+    if not outstanding:
         return {
-            "total_outstanding": len(outstanding),
-            "total_outstanding_balance": total_outstanding_balance,
-            "outstanding_events": outstanding
+            "total_outstanding": 0,
+            "total_outstanding_balance": 0,
+            "outstanding_events": []
         }
 
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+    outstanding.sort(key=lambda x: x["start_date"], reverse=True)
+
+    total_outstanding_balance = sum(item["amount_due"] for item in outstanding)
+
+    return {
+        "total_outstanding": len(outstanding),
+        "total_outstanding_balance": total_outstanding_balance,
+        "outstanding_events": outstanding
+    }
+
+
+
 
 @router.get("/")
 def list_event_payments(
@@ -186,45 +176,53 @@ def list_event_payments(
     payments = query.all()
     formatted_payments = []
 
+    total_event_cost = 0
+    total_paid_amount = 0
+    total_due_amount = 0
+    unique_events = set()
+
+    # For bank summary (exclude cash)
+    bank_summary: Dict[str, Dict[str, float]] = {}
+
     for payment in payments:
-        event = db.query(event_models.Event).filter(
-            event_models.Event.id == payment.event_id
-        ).first()
-
+        event = db.query(event_models.Event).filter(event_models.Event.id == payment.event_id).first()
         if not event:
-            continue  # Skip if event is not found
+            continue
 
-        total_paid = (
-            db.query(func.sum(eventpayment_models.EventPayment.amount_paid))
+        # Calculate totals excluding voided payments
+        total_valid_paid = (
+            db.query(func.coalesce(func.sum(eventpayment_models.EventPayment.amount_paid), 0))
             .filter(
-                eventpayment_models.EventPayment.event_id == payment.event_id,
+                eventpayment_models.EventPayment.event_id == event.id,
                 eventpayment_models.EventPayment.payment_status != "voided"
             )
             .scalar()
-        ) or 0
+        )
 
-        total_discount = (
-            db.query(func.sum(eventpayment_models.EventPayment.discount_allowed))
+        total_valid_discount = (
+            db.query(func.coalesce(func.sum(eventpayment_models.EventPayment.discount_allowed), 0))
             .filter(
-                eventpayment_models.EventPayment.event_id == payment.event_id,
+                eventpayment_models.EventPayment.event_id == event.id,
                 eventpayment_models.EventPayment.payment_status != "voided"
             )
             .scalar()
-        ) or 0
+        )
 
         event_amount = float(event.event_amount or 0)
         caution_fee = float(event.caution_fee or 0)
         total_due = event_amount + caution_fee
+        balance_due = total_due - (float(total_valid_paid) + float(total_valid_discount))
 
-        balance_due = total_due - (float(total_paid) + float(total_discount))
-
-        # ✅ Recompute payment status correctly
-        if balance_due > 0:
-            payment_status = "incomplete"
-        elif balance_due == 0:
-            payment_status = "complete"
+        # Determine individual payment status
+        if payment.payment_status == "voided":
+            status = "voided"
         else:
-            payment_status = "excess"
+            if balance_due > 0:
+                status = "incomplete"
+            elif balance_due == 0:
+                status = "complete"
+            else:
+                status = "excess"
 
         formatted_payments.append({
             "id": payment.id,
@@ -237,18 +235,37 @@ def list_event_payments(
             "discount_allowed": float(payment.discount_allowed or 0),
             "balance_due": balance_due,
             "payment_method": payment.payment_method,
-            "payment_status": payment_status,   # ✅ recomputed
+            "bank": payment.bank,
+            "payment_status": status,
             "payment_date": payment.payment_date.isoformat(),
             "created_by": payment.created_by,
         })
 
-    # Summary calculations (excluding voided)
+        # Only include non-voided payments in totals
+        if payment.payment_status != "voided":
+            if payment.event_id not in unique_events:
+                unique_events.add(payment.event_id)
+                total_event_cost += total_due
+                total_due_amount += balance_due
+
+            total_paid_amount += float(payment.amount_paid or 0)
+
+            # Build bank summary (exclude cash)
+            if payment.bank:
+                bank = payment.bank.upper()
+                if bank not in bank_summary:
+                    bank_summary[bank] = {"pos": 0.0, "transfer": 0.0}
+                method = (payment.payment_method or "").lower()
+                if method in ("pos", "pos card", "card"):
+                    bank_summary[bank]["pos"] += float(payment.amount_paid or 0)
+                elif method == "bank transfer":
+                    bank_summary[bank]["transfer"] += float(payment.amount_paid or 0)
+
+    # Overall payment method summary (all banks)
     summary_query = db.query(
         eventpayment_models.EventPayment.payment_method,
         func.sum(eventpayment_models.EventPayment.amount_paid)
-    ).filter(
-        eventpayment_models.EventPayment.payment_status != "voided"
-    )
+    ).filter(eventpayment_models.EventPayment.payment_status != "voided")
 
     if start_date and end_date:
         summary_query = summary_query.filter(
@@ -259,21 +276,15 @@ def list_event_payments(
         )
 
     summary_results = summary_query.group_by(eventpayment_models.EventPayment.payment_method).all()
-
-    summary = {
-        "total_cash": 0.0,
-        "total_pos": 0.0,
-        "total_transfer": 0.0,
-    }
-
+    summary = {"total_cash": 0.0, "total_pos": 0.0, "total_transfer": 0.0}
     for method, total in summary_results:
         if method:
-            method_lower = method.lower()
-            if method_lower == "cash":
+            m = method.lower()
+            if m == "cash":
                 summary["total_cash"] = float(total)
-            elif method_lower in ("pos", "pos card", "card"):
+            elif m in ("pos", "pos card", "card"):
                 summary["total_pos"] = float(total)
-            elif method_lower == "bank transfer":
+            elif m == "bank transfer":
                 summary["total_transfer"] = float(total)
 
     summary["total_payment"] = round(
@@ -282,7 +293,13 @@ def list_event_payments(
 
     return {
         "payments": formatted_payments,
-        "summary": summary
+        "summary": {
+            "total_event_cost": total_event_cost,
+            "total_paid": total_paid_amount,
+            "total_due": total_due_amount,
+            "by_method": summary,
+            "by_bank": bank_summary
+        }
     }
 
 
@@ -489,83 +506,64 @@ def void_event_payment(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
-    # Only admins can void payments
-    #if current_user.roles != "admin":
-        #raise HTTPException(status_code=403, detail="Insufficient permissions")
-
     try:
-        # Retrieve the payment record by ID
         payment = db.query(eventpayment_models.EventPayment).filter(
             eventpayment_models.EventPayment.id == payment_id
         ).first()
 
         if not payment:
-            logger.warning(f"Event Payment with ID {payment_id} does not exist.")
-            raise HTTPException(status_code=404, detail=f"Payment with ID {payment_id} not found.")
+            raise HTTPException(status_code=404, detail="Payment not found")
 
-        # Check if payment has already been voided
         if payment.payment_status == "voided":
             raise HTTPException(status_code=400, detail="Payment has already been voided")
 
-        # Retrieve the associated event
         event = db.query(event_models.Event).filter(event_models.Event.id == payment.event_id).first()
-
         if not event:
-            logger.warning(f"Event with ID {payment.event_id} not found.")
             raise HTTPException(status_code=404, detail="Associated event not found")
 
-        # Store the event total cost
-        event_total_cost = event.event_amount
-
-        # Mark the payment as voided
         payment.payment_status = "voided"
 
-        # Calculate total valid payments (excluding voided ones)
+        # Recompute event balance excluding voided payments
         total_valid_payments = db.query(
             func.coalesce(func.sum(eventpayment_models.EventPayment.amount_paid), 0)
         ).filter(
             eventpayment_models.EventPayment.event_id == event.id,
-            eventpayment_models.EventPayment.payment_status != "voided"  # Exclude voided payments
-        ).scalar()
+            eventpayment_models.EventPayment.payment_status != "voided"
+        ).scalar() or 0
 
-        # Update the event's balance due
-        event.balance_due = event_total_cost - total_valid_payments
+        total_valid_discount = db.query(
+            func.coalesce(func.sum(eventpayment_models.EventPayment.discount_allowed), 0)
+        ).filter(
+            eventpayment_models.EventPayment.event_id == event.id,
+            eventpayment_models.EventPayment.payment_status != "voided"
+        ).scalar() or 0
 
-        # Update event's payment status based on the new balance
+        event_total_due = float(event.event_amount or 0) + float(event.caution_fee or 0)
+        event.balance_due = event_total_due - (float(total_valid_payments) + float(total_valid_discount))
         event.payment_status = "pending" if event.balance_due > 0 else "complete"
 
-        # Commit changes
         db.commit()
 
-        logger.info(f"Event Payment with ID {payment_id} marked as void. Event balance recalculated.")
-
         return {
-            "message": f"Event Payment with ID {payment_id} has been voided. Event balance updated.",
+            "message": f"Event Payment {payment_id} voided. Event balance updated.",
             "payment_details": {
                 "payment_id": payment.id,
-                "status": payment.payment_status,
+                "status": payment.payment_status
             },
             "event_details": {
                 "event_id": event.id,
                 "balance_due": event.balance_due,
-                "payment_status": event.payment_status,
-            },
+                "payment_status": event.payment_status
+            }
         }
 
-    except HTTPException as e:
-        raise e
     except Exception as e:
         db.rollback()
-        logger.error(f"Error voiding event payment: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred while voiding the event payment: {str(e)}"
-        )
-    except Exception as e:
-        import traceback
-        error_message = traceback.format_exc()
-        logger.error("Debtor list error: %s", error_message)
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise HTTPException(status_code=500, detail=f"Error voiding payment: {str(e)}")
+
+
+
+
 
 lagos_tz = pytz.timezone("Africa/Lagos")
 

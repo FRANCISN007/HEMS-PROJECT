@@ -2,7 +2,8 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import "./EventPayment.css";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
 
 const EventPayment = () => {
   const [loading, setLoading] = useState(true);
@@ -13,6 +14,7 @@ const EventPayment = () => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [banks, setBanks] = useState([]);
 
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
@@ -22,30 +24,30 @@ const EventPayment = () => {
   } else if (typeof storedUser.role === "string") {
     roles = [storedUser.role];
   }
-
   roles = roles.map((r) => r.toLowerCase());
 
-
   if (!(roles.includes("admin") || roles.includes("event"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to create event payment.</p>
-    </div>
-  );
-}
-
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to create event payment.</p>
+      </div>
+    );
+  }
 
   const [paymentForm, setPaymentForm] = useState({
     amount_paid: "",
     discount_allowed: "",
     payment_method: "cash",
+    bank_id: "", // New bank selection
   });
 
   useEffect(() => {
     fetchOutstandingEvents();
+    fetchBanks();
   }, []);
 
+  // Fetch outstanding events
   const fetchOutstandingEvents = async () => {
     const token = localStorage.getItem("token");
 
@@ -78,6 +80,19 @@ const EventPayment = () => {
     }
   };
 
+  // Fetch bank list
+  const fetchBanks = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await axios.get(`${API_BASE_URL}/bank/simple`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setBanks(response.data);
+    } catch (err) {
+      console.error("Failed to load banks", err);
+    }
+  };
+
   const openPaymentModal = (event) => {
     setSelectedEvent(event);
     setShowModal(true);
@@ -86,6 +101,7 @@ const EventPayment = () => {
       amount_paid: "",
       discount_allowed: "",
       payment_method: "cash",
+      bank_id: "",
     });
   };
 
@@ -97,14 +113,17 @@ const EventPayment = () => {
       return;
     }
 
+    const selectedBank = banks.find((b) => b.id === parseInt(paymentForm.bank_id));
+
     const paymentData = {
       event_id: selectedEvent.event_id,
-      organiser: selectedEvent.organizer, // from backend response
+      organiser: selectedEvent.organizer,
       amount_paid: parseFloat(paymentForm.amount_paid || 0),
       discount_allowed: parseFloat(paymentForm.discount_allowed || 0),
       payment_method: paymentForm.payment_method,
+      bank: selectedBank?.name || null,
       payment_status: "pending",
-      created_by: "fcn", // TODO: Replace with actual logged-in username if available
+      created_by: "fcn", // TODO: Replace with actual username
     };
 
     try {
@@ -116,9 +135,7 @@ const EventPayment = () => {
       setShowModal(false);
       fetchOutstandingEvents();
 
-      // Clear message after 4 seconds
       setTimeout(() => setSuccessMessage(""), 4000);
-
     } catch (err) {
       console.error("Payment error:", err.response?.data || err.message);
       setFormError("Payment failed: " + JSON.stringify(err.response?.data?.detail));
@@ -129,7 +146,6 @@ const EventPayment = () => {
     <div className="event-payment-wrapper">
       <h2 className="event-payment-title">Outstanding Event Payments</h2>
       {successMessage && <p className="success-message">{successMessage}</p>}
-
 
       {loading ? (
         <p className="event-payment-loading">Loading...</p>
@@ -185,7 +201,6 @@ const EventPayment = () => {
             </p>
           </div>
 
-
           {/* Modal */}
           {showModal && (
             <div className="modal-overlay">
@@ -221,6 +236,23 @@ const EventPayment = () => {
                   <option value="pos">POS</option>
                   <option value="bank transfer">Bank Transfer</option>
                 </select>
+
+                <label>Bank:</label>
+                <select
+                  value={paymentForm.bank_id}
+                  onChange={(e) =>
+                    setPaymentForm({ ...paymentForm, bank_id: e.target.value })
+                  }
+                  disabled={paymentForm.payment_method === "cash"} // disable if cash
+                >
+                  <option value="">Select Bank</option>
+                  {banks.map((bank) => (
+                    <option key={bank.id} value={bank.id}>
+                      {bank.name}
+                    </option>
+                  ))}
+                </select>
+
 
                 {formError && <p className="form-error">{formError}</p>}
 

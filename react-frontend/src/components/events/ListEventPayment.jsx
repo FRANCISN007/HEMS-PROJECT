@@ -1,28 +1,31 @@
+// src/components/payments/ListEventPayment.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./ListEventPayment.css";
 
 const API_BASE_URL =
-  process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
+  process.env.REACT_APP_API_BASE_URL ||
+  `http://${window.location.hostname}:8000`;
 
 const ListEventPayment = () => {
   const navigate = useNavigate();
+
   const [payments, setPayments] = useState([]);
   const [summary, setSummary] = useState({});
   const [loading, setLoading] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(null); // ✅ FIXED
 
-  const formatCurrency = (val) => {
-    if (val === null || val === undefined || isNaN(Number(val))) return "0";
-    return Number(val).toLocaleString();
-  };
-
+  // -------------------------------
+  //   AUTHORIZATION CHECK
+  // -------------------------------
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
+
   if (Array.isArray(storedUser.roles)) roles = storedUser.roles;
   else if (typeof storedUser.role === "string") roles = [storedUser.role];
+
   roles = roles.map((r) => r.toLowerCase());
 
   if (!(roles.includes("admin") || roles.includes("event"))) {
@@ -34,12 +37,25 @@ const ListEventPayment = () => {
     );
   }
 
+  // -------------------------------
+  //   HELPERS
+  // -------------------------------
+  const formatCurrency = (val) => {
+    if (!val || isNaN(Number(val))) return "0";
+    return Number(val).toLocaleString();
+  };
+
+  // -------------------------------
+  //   FETCH PAYMENTS
+  // -------------------------------
   const fetchPayments = async () => {
-    setLoading(true);
-    setError(null);
     try {
+      setLoading(true);
+      setError(null);
+
       const token = localStorage.getItem("token");
       let url = `${API_BASE_URL}/eventpayment/`;
+
       const params = new URLSearchParams();
       if (startDate) params.append("start_date", startDate);
       if (endDate) params.append("end_date", endDate);
@@ -49,27 +65,22 @@ const ListEventPayment = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!res.ok) throw new Error("Failed to fetch event payments");
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || "Failed to fetch event payments");
+      }
 
       const data = await res.json();
 
-      // ✅ Compute cumulative balance per event
-      const eventTotals = {}; // { event_id: cumulative_paid_so_far }
-      const paymentsWithBalance = (data.payments || []).map((p) => {
-        const totalDue = parseFloat(p.total_due || 0);
-        const paid = parseFloat(p.amount_paid || 0) + parseFloat(p.discount_allowed || 0);
+      const paymentsWithFlags = (data.payments || []).map((p) => ({
+        ...p,
+        isVoided: (p.payment_status || "").toLowerCase() === "voided",
+      }));
 
-        if (!eventTotals[p.event_id]) eventTotals[p.event_id] = 0;
-        eventTotals[p.event_id] += paid;
-
-        const balanceDue = totalDue - eventTotals[p.event_id];
-        return { ...p, balance_due: balanceDue };
-      });
-
-      setPayments(paymentsWithBalance);
+      setPayments(paymentsWithFlags);
       setSummary(data.summary || {});
     } catch (err) {
-      setError(err.message || "Failed to fetch event payments.");
+      setError(err.message || "Failed to fetch event payments");
     } finally {
       setLoading(false);
     }
@@ -80,89 +91,138 @@ const ListEventPayment = () => {
   }, []);
 
   const handleView = (payment) => {
-    navigate(`/dashboard/events/view/${payment.id}`);
+    navigate(`/dashboard/events/view/${payment.event_id}`, {
+      state: { payment },
+    });
   };
 
+  // -------------------------------
+  //   JSX RETURN
+  // -------------------------------
   return (
     <div className="list-event-payment-containers">
       <h2>📄 Event Payment List</h2>
 
       <div className="filterss">
-        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        <input
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+        />
+        <input
+          type="date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+        />
         <button onClick={fetchPayments}>↻ Refresh</button>
       </div>
 
       {loading && <p>Loading payments...</p>}
       {error && <p className="errors">{error}</p>}
 
-      <div className="payment-table-scroll">
-        <table className="event-payment-tables">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Organiser</th>
-              <th>Event Amount</th>
-              <th>Caution Fee</th>
-              <th>Total Due</th>
-              <th>Amount Paid</th>
-              <th>Discount</th>
-              <th>Balance Due</th>
-              <th>Method</th>
-              <th>Status</th>
-              <th>Payment Date</th>
-              <th>Created By</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {payments.length === 0 ? (
+      <div className="full-scroll-wrapper">
+        {/* TABLE */}
+        <div className="payment-table-scroll">
+          <table className="event-payment-tables">
+            <thead>
               <tr>
-                <td colSpan="13" style={{ textAlign: "center" }}>
-                  No event payments found
-                </td>
+                <th>ID</th>
+                <th>Organiser</th>
+                <th>Event Amount</th>
+                <th>Caution Fee</th>
+                <th>Total Due</th>
+                <th>Amount Paid</th>
+                <th>Discount</th>
+                <th>Balance Due</th>
+                <th>Method</th>
+                <th>Bank</th>
+                <th>Status</th>
+                <th>Payment Date</th>
+                <th>Created By</th>
+                <th>Actions</th>
               </tr>
-            ) : (
-              payments.map((payment) => (
-                <tr key={payment.id}>
-                  <td>{payment.id}</td>
-                  <td>{payment.organiser}</td>
-                  <td>₦{formatCurrency(payment.event_amount)}</td>
-                  <td>₦{formatCurrency(payment.caution_fee)}</td>
-                  <td>₦{formatCurrency(payment.total_due)}</td>
-                  <td>₦{formatCurrency(payment.amount_paid)}</td>
-                  <td>₦{formatCurrency(payment.discount_allowed)}</td>
-                  <td>₦{formatCurrency(payment.balance_due)}</td>
-                  <td>{payment.payment_method || "-"}</td>
-                  <td>{payment.payment_status || "-"}</td>
-                  <td>{payment.payment_date ? new Date(payment.payment_date).toLocaleString() : "-"}</td>
-                  <td>{payment.created_by || "-"}</td>
-                  <td>
-                    <button onClick={() => handleView(payment)}>View</button>
+            </thead>
+
+            <tbody>
+              {payments.length === 0 ? (
+                <tr>
+                  <td colSpan="14" style={{ textAlign: "center" }}>
+                    No event payments found
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : (
+                payments.map((payment) => (
+                  <tr
+                    key={payment.id}
+                    className={payment.isVoided ? "voided-payment-row" : ""}
+                  >
+                    <td>{payment.id}</td>
+                    <td>{payment.organiser}</td>
+                    <td>₦{formatCurrency(payment.event_amount)}</td>
+                    <td>₦{formatCurrency(payment.caution_fee)}</td>
+                    <td>₦{formatCurrency(payment.total_due)}</td>
+                    <td>₦{formatCurrency(payment.amount_paid)}</td>
+                    <td>₦{formatCurrency(payment.discount_allowed)}</td>
+                    <td>₦{formatCurrency(payment.balance_due)}</td>
+                    <td>{payment.payment_method || "-"}</td>
+                    <td>{payment.bank || "-"}</td>
+                    <td>
+                      {payment.isVoided ? (
+                        <span className="voided-status">VOID</span>
+                      ) : (
+                        (payment.payment_status || "-").toUpperCase()
+                      )}
+                    </td>
+                    <td>
+                      {payment.payment_date
+                        ? new Date(payment.payment_date).toLocaleString()
+                        : "-"}
+                    </td>
+                    <td>{payment.created_by || "-"}</td>
+                    <td>
+                      <button onClick={() => handleView(payment)}>View</button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
-      <div className="all-summary-wrappers">
-        <div className="summary-rows">
-          <div className="summary-lefts">💵 Cash Total:</div>
-          <div className="summary-rights">₦{formatCurrency(summary.total_cash)}</div>
-        </div>
-        <div className="summary-rows">
-          <div className="summary-lefts">💳 POS Total:</div>
-          <div className="summary-rights">₦{formatCurrency(summary.total_pos)}</div>
-        </div>
-        <div className="summary-rows">
-          <div className="summary-lefts">🏦 Transfer Total:</div>
-          <div className="summary-rights">₦{formatCurrency(summary.total_transfer)}</div>
-        </div>
-        <div className="summary-rows">
-          <div className="summary-lefts"><strong>Total Payment:</strong></div>
-          <div className="summary-rights"><strong>₦{formatCurrency(summary.total_payment)}</strong></div>
+        {/* SUMMARY */}
+        <div className="summary-horizontal">
+          <div className="summary-left">
+            <span>
+              <strong>Total Event Cost:</strong> ₦
+              {formatCurrency(summary.total_event_cost)}
+            </span>
+            <span>
+              <strong>Amount Paid:</strong> ₦
+              {formatCurrency(summary.total_paid)}
+            </span>
+            <span>
+              <strong>Total Due:</strong> ₦
+              {formatCurrency(summary.total_due)}
+            </span>
+          </div>
+
+          <div className="summary-middle">
+            <span>💵 Cash: ₦{formatCurrency(summary.by_method?.total_cash)}</span>
+            <span>💳 POS: ₦{formatCurrency(summary.by_method?.total_pos)}</span>
+            <span>
+              🏦 Transfer: ₦{formatCurrency(summary.by_method?.total_transfer)}
+            </span>
+          </div>
+
+          <div className="summary-right">
+            {summary.by_bank &&
+              Object.entries(summary.by_bank).map(([bank, totals]) => (
+                <span key={bank} className="bank-summary-horizontal">
+                  {bank}: POS ₦{formatCurrency(totals.pos)} | TRANS ₦
+                  {formatCurrency(totals.transfer)}
+                </span>
+              ))}
+          </div>
         </div>
       </div>
     </div>

@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import "./VoidEventPayment.css"; // Reuse the same style
+import "./VoidEventPayment.css"; // Make sure to add updated CSS
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
 
 const VoidEventPayment = () => {
   const [payments, setPayments] = useState([]);
@@ -22,19 +23,16 @@ const VoidEventPayment = () => {
   } else if (typeof storedUser.role === "string") {
     roles = [storedUser.role];
   }
-
   roles = roles.map((r) => r.toLowerCase());
 
-
   if (!(roles.includes("admin") || roles.includes("event"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to void event.</p>
-    </div>
-  );
-}
-
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to void event.</p>
+      </div>
+    );
+  }
 
   const fetchPayments = async () => {
     if (!startDate || !endDate) {
@@ -53,9 +51,7 @@ const VoidEventPayment = () => {
       const url = `${API_BASE_URL}/eventpayment/?${params.toString()}`;
 
       const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
 
       const data = await res.json();
@@ -77,8 +73,8 @@ const VoidEventPayment = () => {
     setVoiding(true);
     try {
       const res = await fetch(
-      `${API_BASE_URL}/eventpayment/void/${selectedPayment.id}/`,
-      {
+        `${API_BASE_URL}/eventpayment/void/${selectedPayment.id}/`,
+        {
           method: "PUT",
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -166,36 +162,43 @@ const VoidEventPayment = () => {
                   </td>
                 </tr>
               ) : (
-                payments.map((p) => (
-                  <tr
-                    key={p.id}
-                    className={p.payment_status === "voided" ? "voided-payment" : ""}
-                  >
-                    <td>{p.id}</td>
-                    <td>{p.organiser}</td>
-                    <td>₦{p.event_amount?.toLocaleString()}</td>
-                    <td>₦{p.amount_paid?.toLocaleString()}</td>
-                    <td>₦{p.discount_allowed?.toLocaleString()}</td>
-                    <td>₦{p.balance_due?.toLocaleString()}</td>
-                    <td>{p.payment_method}</td>
-                    <td>{p.payment_status}</td>
-                    <td>{new Date(p.payment_date).toLocaleString()}</td>
-                    <td>
-                      {p.payment_status !== "voided" && (
-                        <button className="void-btn" onClick={() => openVoidDialog(p)}>
-                          ❌Void
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                payments.map((p) => {
+                  const isVoided = p.payment_status === "voided";
+                  return (
+                    <tr
+                      key={p.id}
+                      className={isVoided ? "voided-payment-row" : ""}
+                    >
+                      <td>{p.id}</td>
+                      <td>{p.organiser}</td>
+                      <td>₦{p.event_amount?.toLocaleString()}</td>
+                      <td>₦{p.amount_paid?.toLocaleString()}</td>
+                      <td>₦{p.discount_allowed?.toLocaleString()}</td>
+                      <td>₦{p.balance_due?.toLocaleString()}</td>
+                      <td>{p.payment_method}</td>
+                      <td className={isVoided ? "voided-status" : ""}>
+                        {isVoided ? "VOID" : p.payment_status}
+                      </td>
+                      <td>{new Date(p.payment_date).toLocaleString()}</td>
+                      <td>
+                        {!isVoided && (
+                          <button
+                            className="void-btn"
+                            onClick={() => openVoidDialog(p)}
+                          >
+                            ❌Void
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Modal for Confirming Void */}
       {showDialog && selectedPayment && (
         <div className="modal-overlay">
           <div className="modal-box">
