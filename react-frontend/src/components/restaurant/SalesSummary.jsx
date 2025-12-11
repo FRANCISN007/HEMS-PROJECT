@@ -62,12 +62,11 @@ const SalesSummary = () => {
       if (startDate) params.start_date = startDate;
       if (endDate) params.end_date = endDate;
 
-      const res = await axiosWithAuth().get("/restaurant/sales/items-summary", {
-        params,
-      });
+      const res = await axiosWithAuth().get("/restaurant/sales/items-summary", { params });
 
-      setItemSummary(res.data.items_sold || []);
-      setGrandTotal(Number(res.data.grand_total) || 0);
+      // ✅ Use correct keys from backend
+      setItemSummary(res.data.items || []);
+      setGrandTotal(Number(res.data.summary?.grand_total) || 0);
     } catch (err) {
       console.error("❌ Error fetching summary:", err);
       setItemSummary([]);

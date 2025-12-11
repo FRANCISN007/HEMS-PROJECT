@@ -78,7 +78,7 @@ const StoreDashboardPage = () => {
 
   const storeMenu = [
     {
-      name: "📂 Drinks Category",
+      name: "📂 Create Category",
       path: "category/list", // 👈 Directly links to List Category
     },
 
@@ -94,12 +94,25 @@ const StoreDashboardPage = () => {
       ],
     },
     {
-      name: "🍶 Issue to Bar",
+      name: "🍶 Manage Bar",
       submenu: [
-        { label: "📤 Issue Items", path: "issue/create" },
+        { label: "📤 Issue to Bar", path: "issue/create" },
         { label: "📃 List Items", path: "issue/list" },
       ],
     },
+
+
+    {
+      name: "👨‍🍳 Manage Kitchen",
+      submenu: [
+        { label: "➕ Create Kitchen", path: "kitchen/create" },
+        { label: "📃 Issue to Kitchen", path: "kitchen/list" },
+        
+      ],
+    },
+
+
+
     {
       name: "⚖️ Stock Adjustment",
       submenu: [
@@ -117,6 +130,12 @@ const StoreDashboardPage = () => {
     {
       name: "📊 Bar Stock Balance",
       path: "barstock-balance",
+    },
+
+
+    {
+      name: "👨‍🍳 Kitchen Stock",
+      path: "kitchenstock",
     },
 
     {

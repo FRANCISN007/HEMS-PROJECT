@@ -220,6 +220,7 @@ class BarStockBalance(BaseModel):
     item_id: int
     item_name: str
     category_name: str     # ✅ added
+    item_type: Optional[str]   # <--- ADD THIS
     unit: str              # ✅ added
     total_received: int
     total_sold: int

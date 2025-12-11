@@ -15,8 +15,10 @@ class StoreCategory(Base):
     __tablename__ = "store_categories"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, nullable=False)
+    name = Column(String, unique=True, nullable=False)  # <- not category_name
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    items = relationship("StoreItem", back_populates="category")
 
 
 # ----------------------------
@@ -30,12 +32,17 @@ class StoreItem(Base):
     unit = Column(String, nullable=False)
     category_id = Column(Integer, ForeignKey("store_categories.id"), nullable=True)
     unit_price = Column(Float, nullable=False, default=0.0)  # ✅ ADD THIS
+    item_type = Column(String(20), nullable=True)  # NEW FIELD
     category = relationship("StoreCategory")
+
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
     stock_entries = relationship("StoreStockEntry", back_populates="item")  # 🔧 This line fixes the error
     
+    issue_items = relationship("StoreIssueItem", back_populates="item")
+    
+    meal_order_items = relationship("MealOrderItem", back_populates="store_item")
 
 # ----------------------------
 # 3. Store Stock Entry (Purchase)
@@ -82,14 +89,22 @@ class StoreIssue(Base):
     __tablename__ = "store_issues"
 
     id = Column(Integer, primary_key=True, index=True)
-    issue_to = Column(String, nullable=False)  # "bar" or "restaurant"
-    issued_to_id = Column(Integer, ForeignKey("bars.id"), nullable=False)
+    issue_to = Column(String, nullable=False)
     issued_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    bar_id = Column(Integer, ForeignKey("bars.id"), nullable=True)
+    kitchen_id = Column(Integer, ForeignKey("kitchens.id"), nullable=True)
     issue_date = Column(DateTime, default=datetime.utcnow)
 
-    # Relationships
-    issue_items = relationship("StoreIssueItem", back_populates="issue", cascade="all, delete-orphan")
-    issued_to = relationship("Bar", back_populates="issues")
+    # Correct relationship name
+    issue_items = relationship(
+        "StoreIssueItem",
+        back_populates="issue",
+        cascade="all, delete-orphan"
+    )
+
+    bar = relationship("Bar", back_populates="issues")
+    kitchen = relationship("Kitchen", back_populates="issues")
+
 
 
     
@@ -105,7 +120,8 @@ class StoreIssueItem(Base):
 
 
     issue = relationship("StoreIssue", back_populates="issue_items")
-    item = relationship("StoreItem")
+
+    item = relationship("StoreItem", back_populates="issue_items")
 
 
 

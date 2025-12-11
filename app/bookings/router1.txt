@@ -816,3 +816,159 @@ def cancel_booking(
             status_code=500,
             detail=f"An error occurred while canceling the booking: {str(e)}"
         )
+
+
+
+
+
+
+@router.post("/meal-orders", response_model=restaurant_schemas.MealOrderDisplay)
+def create_meal_order(
+    order: restaurant_schemas.MealOrderCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(role_required(["restaurant"]))
+):
+
+    # ------------------------------------------------------------
+    # 1️⃣ Load all kitchen items once
+    # ------------------------------------------------------------
+    kitchen_items = (
+        db.query(store_models.StoreItem)
+        .filter(
+            func.lower(store_models.StoreItem.item_type).in_([
+                "kitchen",
+                "kitchen items",
+                "meal",
+                "food",
+            ])
+        )
+        .all()
+    )
+
+    if not kitchen_items:
+        raise HTTPException(404, "No kitchen items found in store")
+
+    kitchen_map = {item.id: item for item in kitchen_items}
+
+    # ------------------------------------------------------------
+    # 2️⃣ Validate each order item — do kitchen stock restriction
+    # ------------------------------------------------------------
+    for it in order.items:
+
+        if it.store_item_id not in kitchen_map:
+            raise HTTPException(
+                404,
+                f"Store item {it.store_item_id} not found or not a kitchen item"
+            )
+
+        store_item = kitchen_map[it.store_item_id]
+
+        # 🔥 PER-KITCHEN STOCK BALANCE
+        stock_balance = (
+            db.query(
+                func.coalesce(func.sum(store_models.StoreIssueItem.quantity), 0).label("issued"),
+                func.coalesce(
+                    func.sum(restaurant_models.MealOrderItem.store_qty_used), 
+                    0
+                ).label("used"),
+            )
+            .join(
+                store_models.StoreIssue,
+                store_models.StoreIssue.id == store_models.StoreIssueItem.issue_id
+            )
+            .outerjoin(
+                restaurant_models.MealOrderItem,
+                restaurant_models.MealOrderItem.store_item_id == store_item.id
+            )
+            .filter(store_models.StoreIssue.kitchen_id == order.location_id)  # THIS KITCHEN
+            .filter(store_models.StoreIssueItem.item_id == store_item.id)  # CORRECT FIELD
+            .first()
+        )
+
+        issued = stock_balance.issued or 0
+        used = stock_balance.used or 0
+        balance = issued - used
+
+        if balance <= 0:
+            raise HTTPException(
+                400,
+                f"'{store_item.name}' has not been issued to this kitchen."
+            )
+
+        if balance < it.quantity:
+            raise HTTPException(
+                400,
+                f"Not enough '{store_item.name}' in this kitchen. "
+                f"Requested: {it.quantity}, Available: {balance}"
+            )
+
+    # ------------------------------------------------------------
+    # 3️⃣ Create Meal Order
+    # ------------------------------------------------------------
+    db_order = restaurant_models.MealOrder(
+        order_type=order.order_type,
+        guest_name=order.guest_name,
+        room_number=order.room_number,
+        location_id=order.location_id,
+        created_at=datetime.utcnow(),
+        status=order.status or "open",
+        created_by=current_user.id,
+    )
+    db.add(db_order)
+    db.commit()
+    db.refresh(db_order)
+
+    # ------------------------------------------------------------
+    # 4️⃣ Deduct FIFO kitchen stock (correct version)
+    # ------------------------------------------------------------
+    for it in order.items:
+
+        store_item = kitchen_map[it.store_item_id]
+        qty_needed = it.quantity
+
+        # 1️⃣ Fetch all issue entries made to THIS kitchen for THIS item
+        issue_entries = (
+            db.query(store_models.StoreIssueItem)
+            .join(store_models.StoreIssue, store_models.StoreIssue.id == store_models.StoreIssueItem.issue_id)
+            .filter(store_models.StoreIssue.kitchen_id == order.location_id)
+            .filter(store_models.StoreIssueItem.item_id == store_item.id)
+            .order_by(store_models.StoreIssueItem.id)  # FIFO
+            .all()
+        )
+
+        for entry in issue_entries:
+            if qty_needed <= 0:
+                break
+
+            deduct_qty = min(entry.quantity, qty_needed)
+            entry.quantity -= deduct_qty
+            qty_needed -= deduct_qty
+            db.add(entry)
+
+        # 2️⃣ Determine price
+        if it.price_per_unit and it.price_per_unit > 0:
+            price_per_unit = it.price_per_unit
+        else:
+            menu_entry = (
+                db.query(kitchen_models.KitchenMenu)
+                .filter(kitchen_models.KitchenMenu.item_id == store_item.id)
+                .order_by(kitchen_models.KitchenMenu.id.desc())
+                .first()
+            )
+            price_per_unit = menu_entry.selling_price if menu_entry else store_item.unit_price
+
+        # 3️⃣ Save order item
+        db_item = restaurant_models.MealOrderItem(
+            order_id=db_order.id,
+            store_item_id=store_item.id,
+            quantity=it.quantity,
+            store_qty_used=it.quantity,
+            item_name=store_item.name,
+            price_per_unit=price_per_unit,
+            total_price=price_per_unit * it.quantity,
+        )
+        db.add(db_item)
+
+        db.commit()
+        db.refresh(db_order)
+        return db_order

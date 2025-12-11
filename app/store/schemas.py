@@ -9,6 +9,7 @@ from app.vendor.schemas import VendorOut
 from pydantic import BaseModel, Field
 from typing import Optional, List, Literal, Union
 from app.bar.schemas import BarDisplaySimple
+from app.kitchen.schemas import KitchenDisplaySimple
 
 
 
@@ -44,6 +45,9 @@ class StoreItemBase(BaseModel):
     unit: str
     unit_price: float
     category_id: Optional[int] = None
+    item_type: Optional[str] = None
+
+
 
 
 class StoreItemCreate(StoreItemBase):
@@ -56,6 +60,9 @@ class StoreItemOut(BaseModel):
     name: str
     unit: str
     unit_price: float
+    category_id: Optional[int] = None
+    item_type: Optional[str] = None
+
 
     class Config:
         from_attributes = True
@@ -66,6 +73,7 @@ class StoreItemDisplay(BaseModel):
     name: str
     unit: str
     category: Optional[StoreCategoryDisplay]
+    item_type: Optional[str] = None
     unit_price: float
     created_at: datetime
 
@@ -193,8 +201,8 @@ class IssueItemCreate(BaseModel):  # ✅ renamed from StoreIssueItemBase
 
 
 class IssueCreate(BaseModel):  # ✅ renamed from StoreIssueCreate
-    issue_to: Literal["bar", "restaurant"]
-    issued_to_id: int        # ID of the bar/restaurant
+    issue_to: Literal["bar", "kitchen"]
+    issued_to_id: int        # ID of the bar/kitchen
     issue_items: List[IssueItemCreate]  # ✅ renamed from 'items'
     issue_date: datetime = Field(default_factory=datetime.utcnow)
 
@@ -212,9 +220,10 @@ class IssueItemDisplay(BaseModel):
 
 class IssueDisplay(BaseModel):
     id: int
-    issue_to: str  # "bar" or "restaurant"
+    issue_to: str  # "bar" or "kitchen"
     issued_to_id: int
-    issued_to: Optional[BarDisplaySimple] = None  # Will be set from backend logic
+    # Use a Union so it can be Bar or Kitchen display
+    issued_to: Optional[Union['BarDisplaySimple', 'KitchenDisplaySimple']] = None
     issue_date: datetime
     issue_items: List[IssueItemDisplay]
 
@@ -262,6 +271,7 @@ class BarStockBalanceRow(BaseModel):
     item_name: str
     unit: Optional[str]        # ✅ Ensure this exists
     category_name: Optional[str]  # ✅ Ensure this exists
+    item_type: Optional[str]   # <--- ADD THIS
     unit: Optional[str] = None
     quantity: float
     selling_price: float
@@ -271,3 +281,20 @@ class BarStockBalanceResponse(BaseModel):
     rows: List[BarStockBalanceRow]
     total_entries: int
     total_amount: float
+
+
+class StoreStockBalance(BaseModel):
+    item_id: int
+    item_name: str
+    category_name: Optional[str] = None
+    item_type: Optional[str] = None   # NEW FIELD
+    unit: Optional[str] = None
+    total_received: float
+    total_issued: float
+    total_adjusted: float
+    balance: float
+    current_unit_price: float
+    balance_total_amount: float
+
+    class Config:
+        from_attributes = True

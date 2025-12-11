@@ -74,7 +74,7 @@ const ListIssues = () => {
       if (barName) params.bar_name = barName;
       if (sDate) params.start_date = sDate;
       if (eDate) params.end_date = eDate;
-      const res = await axiosWithAuth().get("/store/issues", { params });
+      const res = await axiosWithAuth().get("/store/bar", { params });
       setIssues(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Error fetching issues", err);
@@ -186,7 +186,7 @@ const ListIssues = () => {
         })),
       };
 
-      await axiosWithAuth().put(`/store/issues/${id}`, payload);
+      await axiosWithAuth().put(`/store/bar-issues/${id}`, payload);
       showMessage("✅ Issue updated successfully.");
       setEditingIssue(null);
       setFormData({ issue_to: "bar", issued_to_id: "", issue_date: getToday(), issue_items: [] });
@@ -202,7 +202,8 @@ const ListIssues = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this issue?")) return;
     try {
-      await axiosWithAuth().delete(`/store/issues/${id}`);
+      await axiosWithAuth().delete(`/store/bar-issues/${id}`);
+
       showMessage("✅ Issue deleted successfully.");
       fetchIssues(startDate, endDate);
     } catch (err) {

@@ -45,7 +45,7 @@ const LoginPage = () => {
         </h1>
 
         <p className="app-description">
-          HEMS 5-in-1 App is a complete hospitality management solution designed to
+          HEMS 6-in-1 App is a complete hospitality management solution designed to
           simplify, automate, and centralize operations across:
         </p>
 
@@ -55,6 +55,7 @@ const LoginPage = () => {
           <li>Restaurant Services</li>
           <li>Event Management</li>
           <li>Store & Inventory Control</li>
+          <li>Kitchen Services</li>
         </ul>
 
         <p className="app-tagline">

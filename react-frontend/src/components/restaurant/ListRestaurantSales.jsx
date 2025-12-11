@@ -199,7 +199,7 @@ const fetchSalesWithDates = async (from, to) => {
             ? selectedSale.items.map(
                 (item) => `
                   <div class="receipt-item">
-                    <span>${item.quantity} × ${item.meal_name}</span>
+                    <span>${item.quantity} × ${item.item_name}</span>
                     <span>₦${Number(item.total_price).toLocaleString()}</span>
                   </div>`
               ).join("")
@@ -304,7 +304,7 @@ const fetchSalesWithDates = async (from, to) => {
                   {sale.items && sale.items.length > 0 ? (
                     sale.items.map((item, idx) => (
                       <div key={idx} className="sale-item">
-                        <span>{item.meal_name} × {item.quantity}</span>
+                        <span>{item.item_name} × {item.quantity}</span>
                         <span>₦{formatAmount(item.total_price)}</span>
                       </div>
                     ))
@@ -356,7 +356,7 @@ const fetchSalesWithDates = async (from, to) => {
                 {selectedSale.items && selectedSale.items.length > 0 ? (
                   selectedSale.items.map((item, idx) => (
                     <div key={idx} className="receipt-item">
-                      <span>{item.quantity} × {item.meal_name}</span>
+                      <span>{item.quantity} × {item.item_name}</span>
                       <span className="amount">₦{formatAmount(item.total_price)}</span>
                     </div>
                   ))

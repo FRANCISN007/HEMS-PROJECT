@@ -12,30 +12,26 @@ const IssueItems = () => {
   const [issueDate, setIssueDate] = useState("");
   const [message, setMessage] = useState("");
 
-  // 👉 Helper to format today's date as YYYY-MM-DD
+  // 👉 Format as YYYY-MM-DD
   const getToday = () => {
     const today = new Date();
     return today.toISOString().split("T")[0];
   };
 
-  // ✅ Set default issue date on mount
   useEffect(() => {
     setIssueDate(getToday());
   }, []);
 
-  // ✅ Get user roles from localStorage
+  // Get user roles
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
-  let roles = [];
-
-  if (Array.isArray(storedUser.roles)) {
-    roles = storedUser.roles;
-  } else if (typeof storedUser.role === "string") {
-    roles = [storedUser.role];
-  }
+  let roles = Array.isArray(storedUser.roles)
+    ? storedUser.roles
+    : storedUser.role
+    ? [storedUser.role]
+    : [];
 
   roles = roles.map((r) => r.toLowerCase());
 
-  // ❌ Deny unauthorized users
   if (!(roles.includes("admin") || roles.includes("store"))) {
     return (
       <div className="unauthorized">
@@ -45,7 +41,7 @@ const IssueItems = () => {
     );
   }
 
-  // ✅ Fetch Bars and Items
+  // Fetch Bars & Items
   useEffect(() => {
     fetchBars();
     fetchItems();
@@ -61,31 +57,26 @@ const IssueItems = () => {
   const fetchBars = async () => {
     try {
       const res = await axiosWithAuth().get("/bar/bars/simple");
-      if (Array.isArray(res.data)) {
-        setBars(res.data);
-      } else if (Array.isArray(res.data.bars)) {
-        setBars(res.data.bars);
-      } else {
-        throw new Error("Unexpected bars response format");
-      }
+      setBars(Array.isArray(res.data) ? res.data : res.data.bars || []);
     } catch (err) {
-      console.error("❌ Error fetching bars", err?.response?.data || err);
+      console.error("❌ Error fetching bars", err);
     }
   };
 
   const fetchItems = async () => {
     try {
-      const res = await axiosWithAuth().get("/store/items/simple");
-      setItems(res.data);
+      const res = await axiosWithAuth().get("/bar/items/simple");
+      setItems(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Error fetching items", err);
     }
   };
 
+
   const handleRowChange = (index, field, value) => {
-    const updatedRows = [...rows];
-    updatedRows[index][field] = value;
-    setRows(updatedRows);
+    const updated = [...rows];
+    updated[index][field] = value;
+    setRows(updated);
   };
 
   const addRow = () => {
@@ -98,7 +89,9 @@ const IssueItems = () => {
     setRows(updated);
   };
 
-  // ✅ Handle Submit
+  // =============================
+  //  SUBMIT HANDLER (MAIN FIX)
+  // =============================
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -107,6 +100,9 @@ const IssueItems = () => {
       return;
     }
 
+    // Convert "2025-12-06" → "2025-12-06T00:00:00"
+    const issueDateISO = issueDate + "T00:00:00";
+
     const payload = {
       issue_to: "bar",
       issued_to_id: parseInt(issuedTo),
@@ -114,15 +110,18 @@ const IssueItems = () => {
         item_id: parseInt(row.itemId),
         quantity: parseFloat(row.quantity),
       })),
-      issue_date: issueDate, // ✅ backend enforces rules
+      issue_date: issueDateISO,
     };
 
+
     try {
-      await axiosWithAuth().post("/store/issues", payload);
+      await axiosWithAuth().post("/store/bar", payload);
       setMessage("✅ Items successfully issued to bar.");
+
+      // Reset
       setRows([{ itemId: "", quantity: "" }]);
       setIssuedTo("");
-      setIssueDate(getToday()); // ✅ reset to today's date
+      setIssueDate(getToday());
     } catch (err) {
       setMessage(err.response?.data?.detail || "❌ Error issuing items.");
       console.error("Issue error", err);
@@ -133,6 +132,7 @@ const IssueItems = () => {
     <div className="issue-items-container">
       <h2>📤 Issue Items to Bar</h2>
       <form onSubmit={handleSubmit} className="issue-form">
+
         <label>Select Bar</label>
         <select
           value={issuedTo}
@@ -153,7 +153,7 @@ const IssueItems = () => {
           value={issueDate}
           onChange={(e) => setIssueDate(e.target.value)}
           required
-          readOnly={roles.includes("store")} // ✅ store sees but cannot change
+          readOnly={roles.includes("store")} // store cannot change date
         />
 
         <table className="issue-table">
@@ -177,12 +177,14 @@ const IssueItems = () => {
                   >
                     <option value="">-- Item --</option>
                     {items.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
+                      <option key={item.item_id} value={item.item_id}>
+                      {item.item_name}
+                    </option>
+
                     ))}
                   </select>
                 </td>
+
                 <td>
                   <input
                     type="number"
@@ -195,6 +197,7 @@ const IssueItems = () => {
                     required
                   />
                 </td>
+
                 <td>
                   {rows.length > 1 && (
                     <button type="button" onClick={() => removeRow(idx)}>
@@ -210,6 +213,7 @@ const IssueItems = () => {
         <button type="button" onClick={addRow} className="add-row-btn">
           ➕ Add Item
         </button>
+
         <button type="submit" className="submit-btn">
           📤 Issue Items
         </button>

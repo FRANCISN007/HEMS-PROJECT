@@ -97,6 +97,25 @@ const ListBarSales = () => {
 
   const handleUpdate = async (e) => {
     e.preventDefault();
+
+    // Validate items
+    for (let i = 0; i < editingSale.items.length; i++) {
+      const item = editingSale.items[i];
+      if (!item.item_id) {
+        alert(`⚠️ Row ${i + 1}: Please select an item or remove this entry.`);
+        return;
+      }
+      if (!item.quantity || Number(item.quantity) <= 0) {
+        alert(`⚠️ Row ${i + 1}: Quantity must be greater than 0.`);
+        return;
+      }
+      if (!item.selling_price || Number(item.selling_price) <= 0) {
+        alert(`⚠️ Row ${i + 1}: Selling price must be greater than 0.`);
+        return;
+      }
+    }
+
+    // All items valid, proceed to save
     try {
       await axiosWithAuth().put(`/bar/sales/${editingSale.id}`, {
         bar_id: editingSale.bar_id,
@@ -109,6 +128,7 @@ const ListBarSales = () => {
       setMessage(err.response?.data?.detail || "❌ Failed to update sale.");
     }
   };
+
 
   const updateItemField = (index, field, value) => {
     const updated = [...editingSale.items];
@@ -217,7 +237,19 @@ const ListBarSales = () => {
 
               {editingSale.items.map((item, idx) => (
                 <div key={idx} className="sale-item-card">
-                  <h4>Item {idx + 1}</h4>
+                  <div className="sale-item-header">
+                    <h4>Item {idx + 1}</h4>
+                    <button
+                      type="button"
+                      className="btn-remove-item"
+                      onClick={() => {
+                        const updatedItems = editingSale.items.filter((_, i) => i !== idx);
+                        setEditingSale({ ...editingSale, items: updatedItems });
+                      }}
+                    >
+                      ❌
+                    </button>
+                  </div>
 
                   <div className="form-row">
                     <label>Item</label>
@@ -253,6 +285,7 @@ const ListBarSales = () => {
                   </div>
                 </div>
               ))}
+
 
               <button
                 type="button"

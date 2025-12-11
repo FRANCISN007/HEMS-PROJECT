@@ -133,7 +133,10 @@ useEffect(() => {
 
     try {
       const axios = axiosWithAuth();
+
       for (const row of rows) {
+        if (!row.itemId || !row.quantity || !row.unitPrice) continue;
+
         const item = items.find((i) => i.id === parseInt(row.itemId));
         if (!item) continue;
 
@@ -144,13 +147,9 @@ useEffect(() => {
         formData.append("quantity", String(row.quantity));
         formData.append("unit_price", String(row.unitPrice));
         formData.append("vendor_id", String(vendorId));
-        formData.append(
-          "purchase_date",
-          new Date(purchaseDate).toISOString()
-        );
-        if (attachment) {
-          formData.append("attachment", attachment);
-        }
+        formData.append("purchase_date", purchaseDate);
+
+        if (attachment) formData.append("attachment", attachment);
 
         await axios.post("/store/purchases", formData, {
           headers: { "Content-Type": "multipart/form-data" },
@@ -158,17 +157,17 @@ useEffect(() => {
       }
 
       setMessage("✅ Purchase saved successfully.");
-      setRows([
-        { categoryId: "", itemId: "", quantity: "", unitPrice: "", total: 0 },
-      ]);
+      setRows([{ categoryId: "", itemId: "", quantity: "", unitPrice: "", total: 0 }]);
       setVendorId("");
-      setPurchaseDate("");
       setInvoiceNumber("");
+      setPurchaseDate(new Date().toISOString().split("T")[0]);
       setAttachment(null);
     } catch (err) {
+      console.log("❌ Backend error:", err.response?.data);
       setMessage(err.response?.data?.detail || "❌ Failed to save purchase.");
     }
   };
+
 
   // Calculate invoice total
   const invoiceTotal = rows.reduce(

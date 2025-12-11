@@ -149,13 +149,14 @@ const OrderToSales = () => {
 
                 <div className="order-items">
                   {order.items.map((item, idx) => (
-                    <div key={idx} className="order-item">
-                      <span>
-                        {item.meal_name} × {item.quantity}
-                      </span>
-                      <span>₦{item.total_price?.toFixed(2)}</span>
-                    </div>
-                  ))}
+                  <div key={idx} className="order-item">
+                    <span>
+                      {item.item_name} × {item.quantity}
+                    </span>
+                    <span>₦{item.total_price?.toFixed(2)}</span>
+                  </div>
+                ))}
+
                 </div>
 
                 <div className="order-footer">

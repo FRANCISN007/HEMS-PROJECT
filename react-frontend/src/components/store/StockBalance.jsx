@@ -6,6 +6,7 @@ const StockBalance = () => {
   const [balances, setBalances] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedItemType, setSelectedItemType] = useState(""); // ✔ NEW
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
@@ -34,9 +35,9 @@ const StockBalance = () => {
   }, []);
 
   useEffect(() => {
-    // Whenever category changes, fetch filtered balances
-    fetchStockBalances(selectedCategory);
-  }, [selectedCategory]);
+    // Fetch when either filter changes
+    fetchStockBalances(selectedCategory, selectedItemType);
+  }, [selectedCategory, selectedItemType]);
 
   const fetchCategories = async () => {
     try {
@@ -48,17 +49,25 @@ const StockBalance = () => {
     }
   };
 
-  const fetchStockBalances = async (categoryId = "") => {
+  const fetchStockBalances = async (categoryId = "", itemType = "") => {
     try {
       setLoading(true);
       const axios = axiosWithAuth();
-      const url = categoryId
-        ? `/store/balance-stock?category_id=${categoryId}`
-        : `/store/balance-stock`;
+
+      let url = `/store/balance-stock`;
+
+      // Build query params dynamically
+      const params = [];
+      if (categoryId) params.push(`category_id=${categoryId}`);
+      if (itemType) params.push(`item_type=${itemType}`);
+
+      if (params.length > 0) {
+        url += `?${params.join("&")}`;
+      }
 
       const res = await axios.get(url);
 
-      // 🔥 Sort alphabetically by item_name
+      // Sort alphabetically
       const sorted = (res.data || []).sort((a, b) =>
         a.item_name.localeCompare(b.item_name)
       );
@@ -77,6 +86,10 @@ const StockBalance = () => {
     setSelectedCategory(e.target.value);
   };
 
+  const handleItemTypeChange = (e) => {
+    setSelectedItemType(e.target.value);
+  };
+
   const totalStockAmount = balances.reduce(
     (sum, item) => sum + (item.balance_total_amount || 0),
     0
@@ -90,7 +103,7 @@ const StockBalance = () => {
         <h2>📊 Stock Balance Report</h2>
 
         <div className="filter-frame">
-          <label htmlFor="categoryFilter">Filter by Category:</label>
+          <label htmlFor="categoryFilter">Category:</label>
           <select
             id="categoryFilter"
             value={selectedCategory}
@@ -102,6 +115,20 @@ const StockBalance = () => {
                 {cat.name}
               </option>
             ))}
+          </select>
+
+          {/* NEW ITEM TYPE FILTER */}
+          <label htmlFor="itemTypeFilter">Item Type:</label>
+          <select
+            id="itemTypeFilter"
+            value={selectedItemType}
+            onChange={handleItemTypeChange}
+          >
+            <option value="">All Types</option>
+            <option value="Store">Store</option>
+            <option value="Kitchen">Kitchen</option>
+            <option value="Bar">Bar</option>
+            <option value="Restaurant">Restaurant</option>
           </select>
         </div>
 
@@ -119,11 +146,12 @@ const StockBalance = () => {
             <th>Items</th>
             <th>Unit</th>
             <th>Category</th>
+            <th>Item Type</th>
             <th>Total Received</th>
             <th>Total Issued</th>
             <th>Total Adjusted</th>
             <th>Balance</th>
-            <th>Current Unit Price</th> {/* Updated column header */}
+            <th>Current Unit Price</th>
             <th>Balance Value</th>
           </tr>
         </thead>
@@ -136,6 +164,7 @@ const StockBalance = () => {
               <td>{item.item_name}</td>
               <td>{item.unit}</td>
               <td>{item.category_name}</td>
+              <td>{item.item_type}</td>
               <td>{item.total_received}</td>
               <td>{item.total_issued}</td>
               <td>{item.total_adjusted}</td>
@@ -143,8 +172,7 @@ const StockBalance = () => {
               <td>
                 {item.current_unit_price
                   ? `₦${item.current_unit_price.toLocaleString()}`
-                  : "-"}{" "}
-                {/* Use current_unit_price */}
+                  : "-"}
               </td>
               <td>
                 {item.balance_total_amount

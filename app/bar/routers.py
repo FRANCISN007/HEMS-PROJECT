@@ -249,9 +249,7 @@ def delete_bar_inventory(inventory_id: int, db: Session = Depends(get_db),
 @router.get("/items/simple", response_model=List[bar_schemas.BarSaleItemSummary])
 def get_bar_items(
     db: Session = Depends(get_db),
-    #current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
 ):
-    # Get latest selling_price per item (avoid duplicates)
     subquery = (
         db.query(
             bar_models.BarInventory.item_id,
@@ -265,24 +263,26 @@ def get_bar_items(
         db.query(
             store_models.StoreItem.id.label("item_id"),
             store_models.StoreItem.name.label("item_name"),
+            store_models.StoreItem.item_type.label("item_type"),
             bar_models.BarInventory.selling_price.label("selling_price"),
         )
-        .join(subquery, subquery.c.item_id == store_models.StoreItem.id)
-        .join(bar_models.BarInventory, bar_models.BarInventory.id == subquery.c.latest_inventory_id)
+        .outerjoin(subquery, subquery.c.item_id == store_models.StoreItem.id)
+        .outerjoin(bar_models.BarInventory, bar_models.BarInventory.id == subquery.c.latest_inventory_id)
+        .filter(store_models.StoreItem.item_type == "bar")
         .all()
     )
 
-    # Convert to schema format
     result = [
         bar_schemas.BarSaleItemSummary(
             item_id=item.item_id,
             item_name=item.item_name,
-            selling_price=item.selling_price,
+            selling_price=item.selling_price or 0,  # default 0 if not set yet
             quantity=0,
             total_amount=0
         )
         for item in items
     ]
+
     return result
 
 
@@ -400,15 +400,21 @@ def create_bar_sale(
         for item in sale.sale_items:
             inventory = item.bar_inventory
             store_item = inventory.item if inventory else None
+
+            # Skip kitchen items 🛑
+            if store_item and getattr(store_item, "item_type", None) != "bar":
+                continue
+
             item_name = store_item.name if store_item else "Unknown"
 
             sale_items.append(bar_schemas.BarSaleItemSummary(
                 item_id=inventory.item_id if inventory else 0,
                 item_name=item_name,
                 quantity=item.quantity,
-                selling_price=item.selling_price,   # 👈 now reflecting sale record price
+                selling_price=item.selling_price,
                 total_amount=item.total_amount
             ))
+
 
         return bar_schemas.BarSaleDisplay(
             id=sale.id,
@@ -880,38 +886,55 @@ def delete_bar_sale(
 
 
 
+
+
+
 @router.get("/stock-balance", response_model=List[bar_schemas.BarStockBalance])
 def get_bar_stock_balance(
-    bar_id: Optional[int] = None,
+    bar_id: Optional[int] = Query(None),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar", "admin"]))
 ):
     try:
-        # Step 1: Fetch issued items
-        issued_query = db.query(
-            store_models.StoreIssueItem.item_id,
-            store_models.StoreIssue.issued_to_id.label("bar_id"),  # ✅ NEW
-            func.sum(store_models.StoreIssueItem.quantity).label("total_received")
-        ).join(store_models.StoreIssue)
+        # Ensure bar_id is int
+        if bar_id:
+            try:
+                bar_id = int(bar_id)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid bar_id")
+
+        # Step 1: Issued items
+        issued_query = (
+            db.query(
+                store_models.StoreIssueItem.item_id,
+                store_models.StoreIssue.bar_id.label("bar_id"),
+                func.sum(store_models.StoreIssueItem.quantity).label("total_received")
+            )
+            .join(store_models.StoreIssue)
+        )
 
         if bar_id:
-            issued_query = issued_query.filter(store_models.StoreIssue.issued_to_id == bar_id)
+            issued_query = issued_query.filter(store_models.StoreIssue.bar_id == bar_id)
         if start_date:
             issued_query = issued_query.filter(store_models.StoreIssue.issued_at >= start_date)
         if end_date:
             issued_query = issued_query.filter(store_models.StoreIssue.issued_at <= end_date)
 
-        issued_query = issued_query.group_by(store_models.StoreIssueItem.item_id, store_models.StoreIssue.issued_to_id)
+        issued_query = issued_query.group_by(store_models.StoreIssueItem.item_id, store_models.StoreIssue.bar_id)
         issued_data = {(row.item_id, row.bar_id): row.total_received for row in issued_query.all()}
 
-        # Step 2: Fetch sold items
-        sold_query = db.query(
-            bar_models.BarInventory.item_id,
-            bar_models.BarSale.bar_id,  # ✅ NEW
-            func.sum(bar_models.BarSaleItem.quantity).label("total_sold")
-        ).join(bar_models.BarSaleItem.bar_inventory).join(bar_models.BarSaleItem.sale)
+        # Step 2: Sold items
+        sold_query = (
+            db.query(
+                bar_models.BarInventory.item_id,
+                bar_models.BarSale.bar_id,
+                func.sum(bar_models.BarSaleItem.quantity).label("total_sold")
+            )
+            .join(bar_models.BarSaleItem.bar_inventory)
+            .join(bar_models.BarSaleItem.sale)
+        )
 
         if bar_id:
             sold_query = sold_query.filter(bar_models.BarSale.bar_id == bar_id)
@@ -923,10 +946,10 @@ def get_bar_stock_balance(
         sold_query = sold_query.group_by(bar_models.BarInventory.item_id, bar_models.BarSale.bar_id)
         sold_data = {(row.item_id, row.bar_id): row.total_sold for row in sold_query.all()}
 
-        # Step 3: Fetch adjusted items
+        # Step 3: Adjusted items
         adjusted_query = db.query(
             bar_models.BarInventoryAdjustment.item_id,
-            bar_models.BarInventoryAdjustment.bar_id,  # ✅ NEW
+            bar_models.BarInventoryAdjustment.bar_id,
             func.sum(bar_models.BarInventoryAdjustment.quantity_adjusted).label("total_adjusted")
         )
 
@@ -940,25 +963,30 @@ def get_bar_stock_balance(
         adjusted_query = adjusted_query.group_by(bar_models.BarInventoryAdjustment.item_id, bar_models.BarInventoryAdjustment.bar_id)
         adjusted_data = {(row.item_id, row.bar_id): row.total_adjusted for row in adjusted_query.all()}
 
-        # Step 4: Merge all data
+        # Step 4: Merge all keys
         all_keys = set(issued_data.keys()) | set(sold_data.keys()) | set(adjusted_data.keys())
         results = []
 
         for (item_id, b_id) in all_keys:
+            if b_id is None:
+                continue
+
             issued = issued_data.get((item_id, b_id), 0)
             sold = sold_data.get((item_id, b_id), 0)
             adjusted = adjusted_data.get((item_id, b_id), 0)
             balance = issued - sold - adjusted
 
-            item = db.query(store_models.StoreItem).get(item_id)
-            bar = db.query(bar_models.Bar).get(b_id)  # ✅ NEW
+            # Use db.get for SQLAlchemy 2.x safe fetch
+            item = db.get(store_models.StoreItem, item_id)
+            bar = db.get(bar_models.Bar, b_id)
 
             results.append(bar_schemas.BarStockBalance(
                 bar_id=b_id,
-                bar_name=bar.name if bar else "Unknown",  # ✅ NEW
+                bar_name=bar.name if bar else "Unknown",
                 item_id=item_id,
                 item_name=item.name if item else "Unknown",
                 category_name=item.category.name if item and item.category else "Uncategorized",
+                item_type=item.item_type if item else "-",
                 unit=item.unit if item else "-",
                 total_received=issued,
                 total_sold=sold,
@@ -969,7 +997,10 @@ def get_bar_stock_balance(
         return results
 
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to retrieve stock balance: {str(e)}")
+
     
 
 
@@ -1121,24 +1152,29 @@ def get_store_items_received(
         .subquery()
     )
 
-    query = db.query(
-        store_models.StoreIssueItem.item_id,
-        store_models.StoreItem.name,
-        store_models.StoreItem.unit,
-        store_models.StoreIssue.issued_to_id.label("bar_id"),
-        store_models.StoreIssue.issue_date,
-        store_models.StoreIssueItem.quantity,
-        subquery.c.unit_price
-    ).join(
-        store_models.StoreIssue, store_models.StoreIssue.id == store_models.StoreIssueItem.issue_id
-    ).join(
-        store_models.StoreItem, store_models.StoreItem.id == store_models.StoreIssueItem.item_id
-    ).outerjoin(
-        subquery, subquery.c.item_id == store_models.StoreIssueItem.item_id
+    query = (
+        db.query(
+            store_models.StoreIssueItem.item_id,
+            store_models.StoreItem.name,
+            store_models.StoreItem.unit,
+            store_models.StoreIssue.bar_id.label("bar_id"),
+            store_models.StoreIssue.issue_date,
+            store_models.StoreIssueItem.quantity,
+            subquery.c.unit_price
+        )
+        .join(store_models.StoreIssue,
+            store_models.StoreIssue.id == store_models.StoreIssueItem.issue_id)
+        .join(store_models.StoreItem,
+            store_models.StoreItem.id == store_models.StoreIssueItem.item_id)
+        .outerjoin(subquery, subquery.c.item_id == store_models.StoreIssueItem.item_id)
+        .filter(store_models.StoreItem.item_type == "bar")   # ✅ ONLY BAR ITEMS
     )
 
+    
+
     if bar_id:
-        query = query.filter(store_models.StoreIssue.issued_to_id == bar_id)
+        query = query.filter(store_models.StoreIssue.bar_id == bar_id)
+
 
     if start_date:
         query = query.filter(store_models.StoreIssue.issue_date >= start_date)

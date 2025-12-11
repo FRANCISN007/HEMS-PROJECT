@@ -1,0 +1,106 @@
+.stock-balance-container {
+  padding: 20px;
+}
+
+.stock-balance-container h2 {
+  margin-bottom: 15px;
+}
+
+.stock-balance-container table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.stock-balance-container th,
+.stock-balance-container td {
+  padding: 4px;
+  border: 1px solid #ccc;
+  border-radius: px;
+  text-align: left;
+}
+
+.stock-balance-container th {
+  background: #f4f4f4;
+}
+
+.even-row {
+  background-color: #f9f9f9;
+}
+
+.odd-row {
+  background-color: #ffffff;
+}
+
+.message {
+  background-color: #e7f5e9;
+  color: green;
+  padding: 8px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+}
+
+.stock-balance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.total-stock {
+  font-size: 16px;
+  color: #2d572c;
+  background: #e6f4ea;
+  padding: 5px 10px;
+  border-radius: 5px;
+}
+
+
+
+
+
+
+/* Filter container */
+.filter-frame {
+  display: flex;
+  align-items: center;
+  gap: 20px; /* more space between Category and Bar */
+  background: #ffffff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
+  flex-wrap: wrap; /* allow wrapping on smaller screens */
+}
+
+/* Each filter group (label + select) */
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Label styling with fixed width */
+.filter-group label {
+  display: inline-block;
+  width: 70px;   /* ✅ fixed width so both align */
+  font-weight: 500;
+  font-size: 14px;
+  color: #333;
+  white-space: nowrap;
+}
+
+/* Select styling */
+.filter-group select {
+  flex: 1;
+  min-width: 150px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  background: #fafafa;
+  transition: border 0.2s;
+}
+
+.filter-group select:focus {
+  border-color: #007bff;
+  outline: none;
+}

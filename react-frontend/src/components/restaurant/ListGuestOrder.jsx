@@ -59,11 +59,20 @@ const ListGuestOrder = () => {
     fetchOrdersWithDates(today, today);
   }, []);
 
+  useEffect(() => {
+  if (startDate && endDate) {
+    fetchOrdersWithDates(startDate, endDate);
+  }
+}, [status, locationFilter, startDate, endDate]);
+
+
   const [meals, setMeals] = useState([]);
+
+
 
   const fetchMeals = async () => {
     try {
-      const res = await axiosWithAuth().get("/restaurant/meals");
+      const res = await axiosWithAuth().get("/restaurant/items/simple");
       setMeals(res.data || []);
     } catch (err) {
       console.error("Failed to load meals:", err);
@@ -97,24 +106,32 @@ const ListGuestOrder = () => {
     }, [message]);
 
     // Fetch Orders
-    const fetchOrdersWithDates = async (from, to) => {
-    try {
-      const params = {};
-      if (status) params.status = status;
-      if (from) params.start_date = from;
-      if (to) params.end_date = to;
-      if (locationFilter) params.location_id = locationFilter;
+const fetchOrdersWithDates = async (from, to) => {
+  try {
+    const params = {};
+    if (status) params.status = status;
+    if (from) params.start_date = from;
+    if (to) params.end_date = to;
+    if (locationFilter) params.location_id = Number(locationFilter);
 
-      const res = await axiosWithAuth().get("/restaurant/list", { params });
-      setOrders(res.data || []);
-    } catch (err) {
-      setMessage("❌ Failed to load orders.");
-      console.error(err);
-    }
-  };
+    const res = await axiosWithAuth().get("/restaurant/meal-orders", { params });
+
+    console.log("📌 RAW ORDER RESPONSE:", res.data);   // <=== ADD THIS
+
+    setOrders(Array.isArray(res.data) ? res.data : res.data?.orders || []);
+
+  } catch (err) {
+    setMessage("❌ Failed to load orders.");
+    console.error(err);
+  }
+};
+
 
 // keep your existing fetchOrders for filter button reuse
-const fetchOrders = () => fetchOrdersWithDates(startDate, endDate);
+const fetchOrders = () => {
+  fetchOrdersWithDates(startDate, endDate);
+};
+
 
 
   // Fetch Locations
@@ -130,16 +147,22 @@ const fetchOrders = () => fetchOrdersWithDates(startDate, endDate);
 
   // Derived totals
   const entriesTotal = orders.length;
-  const grossTotal = orders.reduce((sum, o) => {
-    const orderTotal = o.items.reduce(
-      (s, it) =>
-        s +
-        (Number(it.total_price) ||
-          (Number(it.price_per_unit) || 0) * (Number(it.quantity) || 0)),
-      0
-    );
-    return sum + orderTotal;
-  }, 0);
+  const grossTotal = Array.isArray(orders)
+    ? orders.reduce((sum, o) => {
+        const orderTotal = Array.isArray(o.items)
+          ? o.items.reduce(
+              (s, it) =>
+                s +
+                (Number(it.total_price) ||
+                  (Number(it.price_per_unit) || 0) * (Number(it.quantity) || 0)),
+              0
+            )
+          : 0;
+
+        return sum + orderTotal;
+      }, 0)
+    : 0;
+
 
   
 
@@ -147,7 +170,7 @@ const fetchOrders = () => fetchOrdersWithDates(startDate, endDate);
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this order?")) return;
     try {
-      await axiosWithAuth().delete(`/restaurant/${id}`);
+      await axiosWithAuth().delete(`/restaurant/meal-orders/${id}`);
       setMessage("✅ Order deleted successfully!");
       fetchOrders();
     } catch (err) {
@@ -165,11 +188,12 @@ const fetchOrders = () => fetchOrdersWithDates(startDate, endDate);
       order_type: order.order_type,
       location_id: order.location_id,
       items: order.items.map((i) => ({
-        meal_id: i.meal_id,
-        meal_name: i.meal_name,
+        store_item_id: i.store_item_id,
+        item_name: i.item_name,
         quantity: Number(i.quantity),
         price_per_unit: Number(i.price_per_unit || 0),
-      })),
+      }))
+
     });
   };
 
@@ -212,14 +236,13 @@ const fetchOrders = () => fetchOrdersWithDates(startDate, endDate);
   // Update item field (quantity)
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...formData.items];
-    if (field === "quantity") {
-      const qty = Number(value);
-      updatedItems[index][field] = isNaN(qty) ? 0 : qty;
-    } else {
-      updatedItems[index][field] = value;
-    }
+    updatedItems[index] = {
+      ...updatedItems[index],
+      [field]: field === "quantity" ? Number(value) : Number(value),
+    };
     setFormData({ ...formData, items: updatedItems });
   };
+
 
   // Remove item from edit
   const removeItemFromEdit = (index) => {
@@ -236,12 +259,14 @@ const fetchOrders = () => fetchOrdersWithDates(startDate, endDate);
         order_type: formData.order_type,
         location_id: Number(formData.location_id) || null,
         items: formData.items.map((i) => ({
-          meal_id: i.meal_id,
-          quantity: Number(i.quantity),
-        })),
+        store_item_id: i.store_item_id,
+        quantity: Number(i.quantity),
+        price_per_unit: Number(i.price_per_unit || 0)  // ✅ include this
+      }))
+
       };
 
-      await axiosWithAuth().put(`/restaurant/${editingOrder.id}`, payload);
+      await axiosWithAuth().put(`/restaurant/meal-orders/${editingOrder.id}`, payload);
       setMessage(`✅ Order #${editingOrder.id} updated successfully!`);
       setEditingOrder(null);
       fetchOrders();
@@ -334,69 +359,57 @@ const fetchOrders = () => fetchOrdersWithDates(startDate, endDate);
           </tr>
         </thead>
         <tbody>
-          {orders.length > 0 ? (
-            orders.map((o) => {
-              const total = o.items.reduce(
-                (sum, it) =>
-                  sum +
-                  (Number(it.total_price) ||
-                    (Number(it.price_per_unit) || 0) * (Number(it.quantity) || 0)),
-                0
-              );
+        {orders.length > 0 ? (
+          orders.map((order) => {
+            const orderTotal = order.items.reduce(
+              (sum, it) =>
+                sum + (Number(it.total_price) || (Number(it.price_per_unit) || 0) * (Number(it.quantity) || 0)),
+              0
+            );
 
-              return (
-                <tr key={o.id}>
-                  <td>{o.id}</td>
-                  <td>{o.guest_name || "--"}</td>
-                  <td>{o.room_number || "--"}</td>
-                  <td>{o.order_type}</td>
-                  <td>
-                    <span
-                      className={`status-badge ${
-                        o.status === "open" ? "open" : "closed"
-                      }`}
-                    >
-                      {o.status}
-                    </span>
-                  </td>
-                  <td>
-                    {new Date(o.created_at).toLocaleString("en-NG", {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
-                  </td>
-                  <td>{currencyNGN(total)}</td>
-                  <td>
-                    <button
-                      className="action-btn edit"
-                      onClick={() => handleEdit(o)}
-                    >
-                      ✏️ Edit
-                    </button>
-                    <button
-                      className="action-btn delete"
-                      onClick={() => handleDelete(o.id)}
-                    >
-                      🗑️ Delete
-                    </button>
-                    <button
-                      className="action-btn print"
-                      onClick={() => handlePrint(o)}
-                    >
-                      🖨️ Print
-                    </button>
-                  </td>
-                </tr>
-              );
-            })
-          ) : (
-            <tr>
-              <td colSpan="8" style={{ textAlign: "center", padding: "20px" }}>
-                No orders found.
+            return (
+              <tr key={order.id}>
+                <td>{order.id}</td>
+                <td>{order.guest_name}</td>
+                <td>{order.room_number}</td>
+                <td>{order.order_type}</td>
+                <td>{order.status}</td>
+                <td>{new Date(order.created_at).toLocaleString()}</td>
+                <td>{currencyNGN(orderTotal)}</td>
+                <td>
+                <button
+                  className="action-btn edit"
+                  onClick={() => handleEdit(order)}
+                >
+                  ✏️ Edit
+                </button>
+                <button
+                  className="action-btn print"
+                  onClick={() => handlePrint(order)}
+                >
+                  🖨️ Print
+                </button>
+                <button
+                  className="action-btn delete"
+                  onClick={() => handleDelete(order.id)}
+                >
+                  ❌ Delete
+                </button>
               </td>
-            </tr>
-          )}
-        </tbody>
+
+              </tr>
+            );
+          })
+        ) : (
+          <tr>
+            <td colSpan="8" style={{ textAlign: "center", padding: "12px" }}>
+              No guest orders found.
+            </td>
+          </tr>
+        )}
+      </tbody>
+
+
       </table>
 
       {/* ✅ Print Modal for Kitchen */}
@@ -432,7 +445,7 @@ const fetchOrders = () => fetchOrdersWithDates(startDate, endDate);
                   printOrder.items.map((item, idx) => (
                     <div key={idx} className="receipt-item">
                       <span>
-                        {item.quantity} × {item.meal_name}
+                        {item.quantity} × {item.item_name}
                       </span>
                       <span className="amount">
                         {currencyNGN(
@@ -561,11 +574,13 @@ const fetchOrders = () => fetchOrdersWithDates(startDate, endDate);
                     items: [
                       ...formData.items,
                       {
-                        meal_id: meal.id,
-                        meal_name: meal.name,
+                        store_item_id: meal.id,
+                        item_name: meal.name,
                         quantity: Number(formData.newQty) || 1,
-                        price_per_unit: meal.price,
-                      },
+                        price_per_unit: Number(meal.price)  // Load once only for new entries
+
+                      }
+
                     ],
                     newMealId: "",
                     newQty: "",
@@ -590,39 +605,47 @@ const fetchOrders = () => fetchOrdersWithDates(startDate, endDate);
               <tbody>
                 {formData.items.length > 0 ? (
                   formData.items.map((item, idx) => {
-                    const unit = Number(item.price_per_unit || 0);
+                    const unit = Number(item.price_per_unit);
                     const qty = Number(item.quantity || 0);
                     return (
                       <tr key={idx}>
-                        <td>{item.meal_name}</td>
-                        <td>
-                          <input
-                            className="qty-input"
-                            type="number"
-                            min="1"
-                            value={qty}
-                            onChange={(e) =>
-                              handleItemChange(
-                                idx,
-                                "quantity",
-                                Number(e.target.value)
-                              )
-                            }
-                          />
-                        </td>
-                        <td>{currencyNGN(unit)}</td>
-                        <td>{currencyNGN(unit * qty)}</td>
-                        <td>
-                          <button
-                            className="action-btn delete"
-                            onClick={() => removeItemFromEdit(idx)}
-                            title="Remove item"
-                            type="button"
-                          >
-                            ✖
-                          </button>
-                        </td>
-                      </tr>
+                    <td>{item.item_name}</td>
+                    <td>
+                      <input
+                        className="qty-input"
+                        type="number"
+                        min="1"
+                        value={qty}
+                        onChange={(e) =>
+                          handleItemChange(idx, "quantity", Number(e.target.value))
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="price-input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={unit}
+                        onChange={(e) =>
+                          handleItemChange(idx, "price_per_unit", Number(e.target.value))
+                        }
+                      />
+                    </td>
+                    <td>{currencyNGN(unit * qty)}</td>
+                    <td>
+                      <button
+                        className="action-btn delete"
+                        onClick={() => removeItemFromEdit(idx)}
+                        title="Remove item"
+                        type="button"
+                      >
+                        ✖
+                      </button>
+                    </td>
+                  </tr>
+
                     );
                   })
                 ) : (

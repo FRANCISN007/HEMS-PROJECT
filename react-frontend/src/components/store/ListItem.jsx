@@ -4,65 +4,60 @@ import "./ListItem.css";
 
 const ListItem = () => {
   const [items, setItems] = useState([]);
-  const [simpleItems, setSimpleItems] = useState([]); // <-- new
+  const [simpleItems, setSimpleItems] = useState([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+
   const [editingItem, setEditingItem] = useState(null);
   const [updateName, setUpdateName] = useState("");
   const [updateUnit, setUpdateUnit] = useState("");
   const [updateCategoryId, setUpdateCategoryId] = useState("");
   const [updateUnitPrice, setUpdateUnitPrice] = useState("");
-  const [categories, setCategories] = useState([]);
+  const [updateItemType, setUpdateItemType] = useState("");
 
+  const [categories, setCategories] = useState([]);
   const [newName, setNewName] = useState("");
   const [newUnit, setNewUnit] = useState("");
   const [newUnitPrice, setNewUnitPrice] = useState("");
   const [newCategoryId, setNewCategoryId] = useState("");
+  const [newItemType, setNewItemType] = useState("");
+
+  const [selectedSimpleItemId, setSelectedSimpleItemId] = useState("");
+
   const unitOptions = ["Carton", "Pack", "Crate", "Piece"];
-
-
-  const [selectedSimpleItemId, setSelectedSimpleItemId] = useState(""); // <-- new
+  const itemTypeOptions = ["All", "bar", "kitchen", "housekeeping", "maintenance", "general"];
 
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
-  let roles = [];
-
-  if (Array.isArray(storedUser.roles)) {
-    roles = storedUser.roles;
-  } else if (typeof storedUser.role === "string") {
-    roles = [storedUser.role];
-  }
-
+  let roles = Array.isArray(storedUser.roles) ? storedUser.roles : storedUser.role ? [storedUser.role] : [];
   roles = roles.map((r) => r.toLowerCase());
 
-
   if (!(roles.includes("admin") || roles.includes("store"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to manage items.</p>
-    </div>
-  );
-}
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to manage items.</p>
+      </div>
+    );
+  }
 
   useEffect(() => {
     fetchItems();
     fetchCategories();
-    fetchSimpleItems(); // <-- fetch simple items on mount
+    fetchSimpleItems();
   }, []);
 
   useEffect(() => {
     if (message) {
       const timer = setTimeout(() => setMessage(""), 3000);
-      return () => clearTimeout(timer); // cleanup if message changes or component unmounts
+      return () => clearTimeout(timer);
     }
   }, [message]);
 
   const fetchItems = async () => {
     try {
-      const axios = axiosWithAuth();
-      const response = await axios.get("/store/items");
-      setItems(response.data);
-    } catch (error) {
+      const res = await axiosWithAuth().get("/store/items");
+      setItems(res.data);
+    } catch (err) {
       setMessage("❌ Failed to load items");
     } finally {
       setLoading(false);
@@ -71,9 +66,7 @@ const ListItem = () => {
 
   const fetchSimpleItems = async () => {
     try {
-      const axios = axiosWithAuth();
-      const res = await axios.get("/store/items/simple");
-      // response is expected as an array of simple items
+      const res = await axiosWithAuth().get("/store/items/simple");
       setSimpleItems(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("❌ Failed to load simple items", err);
@@ -83,26 +76,22 @@ const ListItem = () => {
 
   const fetchCategories = async () => {
     try {
-      const axios = axiosWithAuth();
-      const response = await axios.get("/store/categories");
-      setCategories(response.data);
-    } catch (error) {
-      console.error("Failed to fetch categories");
+      const res = await axiosWithAuth().get("/store/categories");
+      setCategories(res.data);
+    } catch (err) {
+      console.error("❌ Failed to fetch categories", err);
     }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this item?")) return;
-
     try {
-      const axios = axiosWithAuth();
-      await axios.delete(`/store/items/${id}`);
-      setItems(items.filter((item) => item.id !== id));
+      await axiosWithAuth().delete(`/store/items/${id}`);
+      setItems(items.filter((i) => i.id !== id));
       setMessage("✅ Item deleted successfully.");
-      // refresh simple items too
       fetchSimpleItems();
-    } catch (error) {
-      setMessage(error.response?.data?.detail || "❌ Failed to delete item.");
+    } catch (err) {
+      setMessage(err.response?.data?.detail || "❌ Failed to delete item.");
     }
   };
 
@@ -112,61 +101,43 @@ const ListItem = () => {
     setUpdateUnit(item.unit || "");
     setUpdateCategoryId(item.category?.id || "");
     setUpdateUnitPrice(item.unit_price || "");
-    setSelectedSimpleItemId(item.id); // select the item in simple items
+    setUpdateItemType(item.item_type || "All");
+    setSelectedSimpleItemId(item.id);
   };
 
-  // When the user selects a different simple item, populate name/unit/unit_price
   const handleSimpleItemChange = (value) => {
     setSelectedSimpleItemId(value);
     const selected = simpleItems.find((it) => String(it.id) === String(value));
     if (selected) {
-      // populate the existing fields (user can still edit them)
       setUpdateName(selected.name || "");
       setUpdateUnit(selected.unit || "");
-      // some simple endpoints return 0 when no price — set to empty string if null/undefined
-      setUpdateUnitPrice(
-        typeof selected.unit_price === "number" ? String(selected.unit_price) : (selected.unit_price || "")
-      );
-      // Note: simple endpoint doesn't include category, so we don't change updateCategoryId
+      setUpdateUnitPrice(typeof selected.unit_price === "number" ? String(selected.unit_price) : (selected.unit_price || ""));
+      setUpdateItemType(selected.item_type || "All");
     }
   };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
     const price = parseFloat(updateUnitPrice);
-    if (isNaN(price)) {
-      setMessage("❌ Unit price must be a number.");
-      return;
-    }
-
-    if (!updateName.trim() || !updateUnit.trim()) {
-      setMessage("❌ Name and Unit are required.");
-      return;
-    }
-
+    if (isNaN(price)) return setMessage("❌ Unit price must be a number.");
+    if (!updateName.trim() || !updateUnit.trim()) return setMessage("❌ Name and Unit are required.");
     const parsedCategoryId = parseInt(updateCategoryId);
-    if (!parsedCategoryId || isNaN(parsedCategoryId)) {
-      setMessage("❌ Please select a valid category.");
-      return;
-    }
-
+    if (!parsedCategoryId || isNaN(parsedCategoryId)) return setMessage("❌ Please select a valid category.");
     try {
-      const axios = axiosWithAuth();
       const payload = {
         name: updateName.trim(),
         unit: updateUnit.trim(),
         category_id: parsedCategoryId,
         unit_price: price,
+        item_type: updateItemType,
       };
-
-      await axios.put(`/store/items/${editingItem.id}`, payload);
+      await axiosWithAuth().put(`/store/items/${editingItem.id}`, payload);
       setMessage("✅ Item updated successfully.");
       setEditingItem(null);
       fetchItems();
       fetchSimpleItems();
-    } catch (error) {
-      console.error("Update Error:", error.response?.data || error.message);
-      setMessage(error.response?.data?.detail || "❌ Failed to update item.");
+    } catch (err) {
+      setMessage(err.response?.data?.detail || "❌ Failed to update item.");
     }
   };
 
@@ -174,32 +145,28 @@ const ListItem = () => {
     e.preventDefault();
     const price = parseFloat(newUnitPrice);
     const parsedCategoryId = parseInt(newCategoryId);
-
     if (!newName.trim() || !newUnit.trim() || isNaN(price) || isNaN(parsedCategoryId)) {
-      setMessage("❌ All fields are required and must be valid.");
-      return;
+      return setMessage("❌ All fields are required and must be valid.");
     }
-
     try {
-      const axios = axiosWithAuth();
       const payload = {
         name: newName.trim(),
         unit: newUnit.trim(),
         category_id: parsedCategoryId,
         unit_price: price,
+        item_type: newItemType || "All",
       };
-
-      await axios.post("/store/items", payload);
+      await axiosWithAuth().post("/store/items", payload);
       setMessage("✅ Item created successfully.");
       setNewName("");
       setNewUnit("");
       setNewUnitPrice("");
       setNewCategoryId("");
+      setNewItemType("");
       fetchItems();
       fetchSimpleItems();
-    } catch (error) {
-      console.error("Create Error:", error.response?.data || error.message);
-      setMessage(error.response?.data?.detail || "❌ Failed to create item.");
+    } catch (err) {
+      setMessage(err.response?.data?.detail || "❌ Failed to create item.");
     }
   };
 
@@ -212,54 +179,37 @@ const ListItem = () => {
       <form onSubmit={handleCreate} className="create-item-form">
         <label>
           Name:
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="e.g. Coke, Fanta"
-            required
-          />
+          <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Coke, Fanta" required />
         </label>
+
         <label>
           Unit:
-          <select
-            value={newUnit}
-            onChange={(e) => setNewUnit(e.target.value)}
-            required
-          >
+          <select value={newUnit} onChange={(e) => setNewUnit(e.target.value)} required>
             <option value="">Select Unit</option>
-            {unitOptions.map((unit) => (
-              <option key={unit} value={unit}>{unit}</option>
-            ))}
+            {unitOptions.map((u) => <option key={u} value={u}>{u}</option>)}
           </select>
         </label>
 
         <label>
           Unit Price:
-          <input
-            type="number"
-            step="0.01"
-            value={newUnitPrice}
-            onChange={(e) => setNewUnitPrice(e.target.value)}
-            placeholder="e.g. 1000"
-            required
-          />
+          <input type="number" step="0.01" value={newUnitPrice} onChange={(e) => setNewUnitPrice(e.target.value)} placeholder="e.g. 1000" required />
         </label>
+
         <label>
           Category:
-          <select
-            value={newCategoryId}
-            onChange={(e) => setNewCategoryId(e.target.value)}
-            required
-          >
+          <select value={newCategoryId} onChange={(e) => setNewCategoryId(e.target.value)} required>
             <option value="">Select Category</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
+            {categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
           </select>
         </label>
+
+        <label>
+          Item Type:
+          <select value={newItemType} onChange={(e) => setNewItemType(e.target.value)} className="item-type-dropdown">
+            {itemTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+          </select>
+        </label>
+
         <button type="submit" className="save-btn">➕ Add Item</button>
       </form>
 
@@ -278,6 +228,7 @@ const ListItem = () => {
               <th>Category</th>
               <th>Unit Price</th>
               <th>Unit</th>
+              <th>Item Type</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -289,13 +240,10 @@ const ListItem = () => {
                 <td>{item.category?.name}</td>
                 <td>{item.unit_price}</td>
                 <td>{item.unit}</td>
+                <td>{item.item_type || "All"}</td>
                 <td>
-                  <button className="edit-btn" onClick={() => openEditModal(item)}>
-                    ✏️ Edit
-                  </button>
-                  <button className="delete-btn" onClick={() => handleDelete(item.id)}>
-                    🗑 Delete
-                  </button>
+                  <button className="edit-btn" onClick={() => openEditModal(item)}>✏️ Edit</button>
+                  <button className="delete-btn" onClick={() => handleDelete(item.id)}>🗑 Delete</button>
                 </td>
               </tr>
             ))}
@@ -303,23 +251,18 @@ const ListItem = () => {
         </table>
       )}
 
-      {/* Edit Modal */}
       {editingItem && (
         <div className="modal-backdrop">
           <div className="modal-content">
             <h3>✏️ Update Item</h3>
 
-            {/* NEW: show select populated from /store/items/simple */}
             <label>
               Select Item (catalog):
-              <select
-                value={selectedSimpleItemId}
-                onChange={(e) => handleSimpleItemChange(e.target.value)}
-              >
+              <select value={selectedSimpleItemId} onChange={(e) => handleSimpleItemChange(e.target.value)}>
                 <option value="">-- Select Item --</option>
                 {simpleItems.map((it) => (
                   <option key={it.id} value={it.id}>
-                    {it.name} ({it.unit}) {it.unit_price ? `- ₦${it.unit_price}` : ""}
+                    {it.name} ({it.unit}) {it.unit_price ? `- ₦${it.unit_price}` : ""} - {it.item_type || "All"}
                   </option>
                 ))}
               </select>
@@ -328,57 +271,40 @@ const ListItem = () => {
             <form onSubmit={handleUpdate}>
               <label>
                 Name:
-                <input
-                  type="text"
-                  value={updateName}
-                  onChange={(e) => setUpdateName(e.target.value)}
-                  required
-                />
+                <input type="text" value={updateName} onChange={(e) => setUpdateName(e.target.value)} required />
               </label>
+
               <label>
                 Unit:
-                <select
-                  value={updateUnit}
-                  onChange={(e) => setUpdateUnit(e.target.value)}
-                  required
-                >
+                <select value={updateUnit} onChange={(e) => setUpdateUnit(e.target.value)} required>
                   <option value="">Select Unit</option>
-                  {unitOptions.map((unit) => (
-                    <option key={unit} value={unit}>{unit}</option>
-                  ))}
+                  {unitOptions.map((u) => <option key={u} value={u}>{u}</option>)}
                 </select>
               </label>
 
               <label>
                 Unit Price:
-                <input
-                  type="number"
-                  step="0.01"
-                  value={updateUnitPrice}
-                  onChange={(e) => setUpdateUnitPrice(e.target.value)}
-                  required
-                />
+                <input type="number" step="0.01" value={updateUnitPrice} onChange={(e) => setUpdateUnitPrice(e.target.value)} required />
               </label>
+
               <label>
                 Category:
-                <select
-                  value={updateCategoryId}
-                  onChange={(e) => setUpdateCategoryId(e.target.value)}
-                  required
-                >
+                <select value={updateCategoryId} onChange={(e) => setUpdateCategoryId(e.target.value)} required>
                   <option value="">Select Category</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
+                  {categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                 </select>
               </label>
+
+              <label>
+                Item Type:
+                <select value={updateItemType} onChange={(e) => setUpdateItemType(e.target.value)} className="item-type-dropdown">
+                  {itemTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+                </select>
+              </label>
+
               <div className="modal-buttons">
                 <button type="submit" className="save-btn">💾 Save</button>
-                <button type="button" className="cancel-btn" onClick={() => setEditingItem(null)}>
-                  ❌ Cancel
-                </button>
+                <button type="button" className="cancel-btn" onClick={() => setEditingItem(null)}>❌ Cancel</button>
               </div>
             </form>
           </div>

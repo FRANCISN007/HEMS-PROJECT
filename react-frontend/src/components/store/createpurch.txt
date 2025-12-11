@@ -1,389 +1,208 @@
 import React, { useEffect, useState } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
-import "./CreatePurchase.css";
+import "./BarBalanceStock.css";
 
-const CreatePurchase = () => {
-  const [categories, setCategories] = useState([]);
+const BarBalanceStock = () => {
+  const [balances, setBalances] = useState([]);
+  const [bars, setBars] = useState([]);
   const [items, setItems] = useState([]);
-  const [vendors, setVendors] = useState([]);
-  const [rows, setRows] = useState([
-    { categoryId: "", itemId: "", quantity: "", unitPrice: "", total: 0 },
-  ]);
-  const [vendorId, setVendorId] = useState("");
-  const [purchaseDate, setPurchaseDate] = useState("");
-  const [attachment, setAttachment] = useState(null);
+  const [selectedBar, setSelectedBar] = useState("");
+  const [selectedItem, setSelectedItem] = useState("");
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
-  const axios = axiosWithAuth();
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = [];
 
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+  roles = roles.map((r) => r.toLowerCase());
+
+  if (!(roles.includes("admin") || roles.includes("store"))) {
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to view bar stock.</p>
+      </div>
+    );
+  }
+
+  // Load bars + items on mount
   useEffect(() => {
-    fetchCategories();
+    fetchBars();
     fetchItems();
-    fetchVendors();
   }, []);
 
-  const fetchCategories = async () => {
-  try {
-    const axios = axiosWithAuth();
-    const response = await axios.get("/store/categories");
+  // Reload when filters change
+  useEffect(() => {
+    fetchStockBalances(selectedItem, selectedBar);
+  }, [selectedItem, selectedBar]);
 
-    // Handle if response is wrapped in an object
-    const data = response.data;
-
-    if (Array.isArray(data)) {
-      setCategories(data);
-    } else if (Array.isArray(data.categories)) {
-      setCategories(data.categories);
-    } else {
-      console.error("Expected array but got:", data);
-      setCategories([]);
+  const fetchBars = async () => {
+    try {
+      const axios = axiosWithAuth();
+      const res = await axios.get("/bar/bars/simple");
+      setBars(res.data || []);
+    } catch (error) {
+      console.error("Error fetching bars:", error);
     }
-  } catch (error) {
-    console.error("Failed to fetch categories:", error);
-  }
-};
+  };
 
   const fetchItems = async () => {
     try {
-      const res = await axios.get("/store/items/list");
-      setItems(res.data);
-    } catch (err) {
-      console.error("Failed to fetch items:", err);
+      const axios = axiosWithAuth();
+      const res = await axios.get("/store/items/simple");
+
+      // 🔥 EXCLUDE NON-BAR ITEMS
+      const filteredItems = (res.data || []).filter(
+        (itm) => itm.item_type && itm.item_type.toLowerCase() === "bar"
+      );
+
+      setItems(filteredItems);
+    } catch (error) {
+      console.error("Error fetching items:", error.response || error);
     }
   };
 
-  const fetchVendors = async () => {
-  try {
-    const axios = axiosWithAuth();
-    const response = await axios.get("/store/vendors");
-    
-    // Check if the response is an array
-    if (Array.isArray(response.data)) {
-      setVendors(response.data);
-    } else {
-      console.error("Expected array but got:", response.data);
-      setVendors([]);
-    }
-  } catch (error) {
-    console.error("Failed to fetch vendors:", error);
-  }
-};
-
-  const handleRowChange = (index, field, value) => {
-    const updatedRows = [...rows];
-    updatedRows[index][field] = value;
-
-    const quantity = parseFloat(updatedRows[index].quantity) || 0;
-    const unitPrice = parseFloat(updatedRows[index].unitPrice) || 0;
-    updatedRows[index].total = quantity * unitPrice;
-
-    setRows(updatedRows);
-  };
-
-  const addRow = () => {
-    setRows([...rows, { categoryId: "", itemId: "", quantity: "", unitPrice: "", total: 0 }]);
-  };
-
-  const removeRow = (index) => {
-    const updatedRows = rows.filter((_, i) => i !== index);
-    setRows(updatedRows);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setMessage("");
-
+  const fetchStockBalances = async (itemId = "", barId = "") => {
     try {
-      for (const row of rows) {
-        const item = items.find((i) => i.id === parseInt(row.itemId));
-        if (!item) continue;
+      setLoading(true);
+      const axios = axiosWithAuth();
 
-        const formData = new FormData();
-        formData.append("item_id", item.id);
-        formData.append("item_name", item.name);
-        formData.append("quantity", row.quantity);
-        formData.append("unit_price", row.unitPrice);
-        formData.append("vendor_id", vendorId);
-        formData.append("purchase_date", new Date(purchaseDate).toISOString());
-        if (attachment) {
-          formData.append("attachment", attachment);
-        }
+      const params = {};
+      if (itemId) params.item_id = parseInt(itemId); // convert to integer
+      if (barId) params.bar_id = parseInt(barId);     // convert to integer
 
-        await axios.post("/store/purchases", formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-      }
-
-      setMessage("✅ Purchase saved successfully.");
-      setRows([{ categoryId: "", itemId: "", quantity: "", unitPrice: "", total: 0 }]);
-      setVendorId("");
-      setPurchaseDate("");
-      setAttachment(null);
-    } catch (err) {
-      const detail = err.response?.data?.detail || "❌ Failed to save purchase.";
-      console.error("Error:", err);
-      setMessage(detail);
+      const res = await axios.get("/store/bar-balance-stock", { params });
+      setBalances(res.data || []);
+    } catch (error) {
+      console.error("Error fetching stock balances:", error.response || error);
+      setMessage("❌ Failed to load stock balances");
+      setTimeout(() => setMessage(""), 3000);
+    } finally {
+      setLoading(false);
     }
   };
+
+
+  const handleItemChange = (e) => setSelectedItem(e.target.value);
+  const handleBarChange = (e) => setSelectedBar(e.target.value);
+
+  const totalStockAmount = balances.reduce(
+    (sum, item) => sum + (item.balance_total_amount || 0),
+    0
+  );
+
+  const totalStockBalance = balances.reduce(
+    (sum, item) => sum + (item.balance || 0),
+    0
+  );
+
+  if (loading) return <p>Loading...</p>;
 
   return (
-    <div className="create-purchase-container">
-      <h2>Add New Purchase</h2>
-      <form onSubmit={handleSubmit} className="purchase-form">
-        <div className="form-group">
-          <label>Vendor</label>
-          <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} required>
-            <option value="">Select Vendor</option>
-            {vendors.map((vendor) => (
-              <option key={vendor.id} value={vendor.id}>
-                {vendor.name}
-              </option>
-            ))}
-          </select>
-        </div>
+    <div className="stock-balance-container">
+      <div className="stock-balance-header">
+        <h2>📊 Bar Stock Balance Report</h2>
 
-        <div className="form-group">
-          <label>Purchase Date</label>
-          <input
-            type="date"
-            value={purchaseDate}
-            onChange={(e) => setPurchaseDate(e.target.value)}
-            required
-          />
-        </div>
-
-        <div className="form-group">
-          <label>Attachment (optional)</label>
-          <input type="file" onChange={(e) => setAttachment(e.target.files[0])} />
-        </div>
-
-        {rows.map((row, index) => (
-          <div key={index} className="row-entry">
-            <div>
-              <label>Category</label>
-              <select
-                value={row.categoryId}
-                onChange={(e) => handleRowChange(index, "categoryId", e.target.value)}
-              >
-                <option value="">Select</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label>Item</label>
-              <select
-                value={row.itemId}
-                onChange={(e) => handleRowChange(index, "itemId", e.target.value)}
-              >
-                <option value="">Select</option>
-                {items
-                  .filter((item) => item.category_id === parseInt(row.categoryId))
-                  .map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            <div>
-              <label>Quantity</label>
-              <input
-                type="number"
-                value={row.quantity}
-                onChange={(e) => handleRowChange(index, "quantity", e.target.value)}
-                required
-              />
-            </div>
-
-            <div>
-              <label>Unit Price</label>
-              <input
-                type="number"
-                value={row.unitPrice}
-                onChange={(e) => handleRowChange(index, "unitPrice", e.target.value)}
-                required
-              />
-            </div>
-
-            <div>
-              <label>Total</label>
-              <input type="number" value={row.total} readOnly />
-            </div>
-
-            <div>
-              <button type="button" onClick={() => removeRow(index)}>
-                Remove
-              </button>
-            </div>
+        <div className="filter-frame">
+          {/* 🔥 ITEM FILTER USING item_type */}
+          <div className="filter-group">
+            <label htmlFor="itemFilter">Item:</label>
+            <select
+              id="itemFilter"
+              value={selectedItem}
+              onChange={handleItemChange}
+            >
+              <option value="">All Items</option>
+              {items.map((itm) => (
+                <option key={itm.id} value={itm.id}>
+                  {itm.name}
+                </option>
+              ))}
+            </select>
           </div>
-        ))}
 
-        <button type="button" onClick={addRow}>
-          + Add Item
-        </button>
+          {/* BAR FILTER */}
+          <div className="filter-group">
+            <label htmlFor="barFilter">Bar:</label>
+            <select
+              id="barFilter"
+              value={selectedBar}
+              onChange={handleBarChange}
+            >
+              <option value="">All Bars</option>
+              {bars.map((bar) => (
+                <option key={bar.id} value={bar.id}>
+                  {bar.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-        <button type="submit" className="submit-button">
-          Add Purchase
-        </button>
+        <div className="total-stock">
+          <div>
+            Total Stock Value:{" "}
+            <strong>₦{totalStockAmount.toLocaleString()}</strong>
+          </div>
+          <div>
+            Stock Balance (Quantity):{" "}
+            <strong>{totalStockBalance.toLocaleString()}</strong>
+          </div>
+        </div>
+      </div>
 
-        {message && <p className="message">{message}</p>}
-      </form>
+      {message && <div className="message">{message}</div>}
+
+      <table>
+        <thead>
+          <tr>
+            <th>Bar</th>
+            <th>Item</th>
+            <th>Unit</th>
+            <th>Category</th>
+            <th>Total Received</th>
+            <th>Total Sold</th>
+            <th>Total Adjusted</th>
+            <th>Balance</th>
+            <th>Current Unit Price</th>
+            <th>Balance Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {balances.map((item, index) => (
+            <tr
+              key={`${item.item_id}-${item.bar_id}`}
+              className={index % 2 === 0 ? "even-row" : "odd-row"}
+            >
+              <td>{item.bar_name}</td>
+              <td>{item.item_name}</td>
+              <td>{item.unit}</td>
+              <td>{item.category_name}</td>
+              <td>{item.total_received}</td>
+              <td>{item.total_sold}</td>
+              <td>{item.total_adjusted}</td>
+              <td>{item.balance}</td>
+              <td>
+                {item.last_unit_price
+                  ? `₦${item.last_unit_price.toLocaleString()}`
+                  : "-"}
+              </td>
+              <td>
+                {item.balance_total_amount
+                  ? `₦${item.balance_total_amount.toLocaleString()}`
+                  : "-"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 };
 
-export default CreatePurchase;
-
-
-
-
-
-
-
-
-.create-purchase-container {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 30px;
-  background-color: #f9f9f9;
-  border: 1px solid #ddd;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-}
-
-.create-purchase-container h2 {
-  text-align: center;
-  margin-bottom: 20px;
-  color: #2c3e50;
-}
-
-.purchase-form label {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: 600;
-  color: #333;
-}
-
-.purchase-form input,
-.purchase-form select {
-  width: 100%;
-  padding: 8px 10px;
-  margin-bottom: 15px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-size: 14px;
-  background-color: #fff;
-}
-
-.purchase-form .row-container {
-  display: grid;
-  grid-template-columns: 1fr 1.5fr 1fr 1fr 0.5fr;
-  gap: 10px;
-  margin-bottom: 10px;
-  align-items: center;
-}
-
-.purchase-form .row-container select,
-.purchase-form .row-container input {
-  width: 100%;
-}
-
-.purchase-form .add-row-btn {
-  margin-top: 10px;
-  background-color: #2c3e50;
-  color: white;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.purchase-form .add-row-btn:hover {
-  background-color: #34495e;
-}
-
-.purchase-form .submit-btn {
-  margin-top: 20px;
-  background-color: #27ae60;
-  color: white;
-  padding: 10px 20px;
-  border: none;
-  font-size: 15px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.purchase-form .submit-btn:hover {
-  background-color: #219150;
-}
-
-.message {
-  margin-top: 15px;
-  font-weight: 500;
-}
-
-.message.success {
-  color: #27ae60;
-}
-
-.message.error {
-  color: #e74c3c;
-}
-
-
-
-
-/* Container that wraps all row-entry blocks */
-.rows-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  width: 100%;
-  justify-content: flex-start;
-  margin-top: 20px;
-}
-
-/* Each item block */
-.row-entry {
-  flex: 0 0 calc((100% - 30px) / 3); /* 3 per row, minus 2×20px gaps */
-  box-sizing: border-box;
-  padding: 16px;
-  border-radius: 10px;
-  border: 1px solid #ddd;
-  background-color: #f9f9f9;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-
-
-/* Field containers */
-.row-entry div {
-  display: flex;
-  flex-direction: column;
-}
-
-/* Label and input style */
-.row-entry label {
-  font-size: 13px;
-  margin-bottom: 4px;
-  color: #333;
-}
-
-.row-entry input,
-.row-entry select {
-  padding: 8px 10px;
-  font-size: 14px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  min-width: 120px; /* allows 15+ characters comfortably */
-  width: 100%;
-  box-sizing: border-box;
-}
+export default BarBalanceStock;

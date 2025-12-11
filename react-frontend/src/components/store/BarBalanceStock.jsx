@@ -4,9 +4,7 @@ import "./BarBalanceStock.css";
 
 const BarBalanceStock = () => {
   const [balances, setBalances] = useState([]);
-  const [items, setItems] = useState([]); // 🔹 replaced categories with items
   const [bars, setBars] = useState([]);
-  const [selectedItem, setSelectedItem] = useState(""); // 🔹 filter by item
   const [selectedBar, setSelectedBar] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -19,7 +17,6 @@ const BarBalanceStock = () => {
   } else if (typeof storedUser.role === "string") {
     roles = [storedUser.role];
   }
-
   roles = roles.map((r) => r.toLowerCase());
 
   if (!(roles.includes("admin") || roles.includes("store"))) {
@@ -31,25 +28,15 @@ const BarBalanceStock = () => {
     );
   }
 
+  // Load bars on mount
   useEffect(() => {
-    fetchItems();
     fetchBars();
   }, []);
 
+  // Load balances when bar changes
   useEffect(() => {
-    // Whenever item or bar changes, fetch filtered balances
-    fetchStockBalances(selectedItem, selectedBar);
-  }, [selectedItem, selectedBar]);
-
-  const fetchItems = async () => {
-    try {
-      const axios = axiosWithAuth();
-      const res = await axios.get("/store/items/simple");
-      setItems(res.data || []);
-    } catch (error) {
-      console.error("Error fetching items:", error);
-    }
-  };
+    fetchStockBalances(selectedBar);
+  }, [selectedBar]);
 
   const fetchBars = async () => {
     try {
@@ -61,13 +48,12 @@ const BarBalanceStock = () => {
     }
   };
 
-  const fetchStockBalances = async (itemId = "", barId = "") => {
+  const fetchStockBalances = async (barId = "") => {
     try {
       setLoading(true);
       const axios = axiosWithAuth();
 
       let url = `/store/bar-balance-stock?`;
-      if (itemId) url += `item_id=${itemId}&`; // 🔹 filter by item_id
       if (barId) url += `bar_id=${barId}`;
 
       const res = await axios.get(url);
@@ -81,15 +67,8 @@ const BarBalanceStock = () => {
     }
   };
 
-  const handleItemChange = (e) => {
-    setSelectedItem(e.target.value);
-  };
+  const handleBarChange = (e) => setSelectedBar(e.target.value);
 
-  const handleBarChange = (e) => {
-    setSelectedBar(e.target.value);
-  };
-
-  // 🔹 Compute totals
   const totalStockAmount = balances.reduce(
     (sum, item) => sum + (item.balance_total_amount || 0),
     0
@@ -105,25 +84,10 @@ const BarBalanceStock = () => {
   return (
     <div className="stock-balance-container">
       <div className="stock-balance-header">
-        <h2>📊 Bar Stock Balance Report</h2>
+        <h2>📊 Bar Stock Balance Report.</h2>
 
         <div className="filter-frame">
-          <div className="filter-group">
-            <label htmlFor="itemFilter">Item:</label>
-            <select
-              id="itemFilter"
-              value={selectedItem}
-              onChange={handleItemChange}
-            >
-              <option value="">All Items</option>
-              {items.map((itm) => (
-                <option key={itm.id} value={itm.id}>
-                  {itm.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
+          {/* 🔥 ONLY BAR FILTER REMAINS */}
           <div className="filter-group">
             <label htmlFor="barFilter">Bar:</label>
             <select
@@ -141,7 +105,6 @@ const BarBalanceStock = () => {
           </div>
         </div>
 
-        {/* 🔹 Totals Display */}
         <div className="total-stock">
           <div>
             Total Stock Value:{" "}
@@ -163,6 +126,7 @@ const BarBalanceStock = () => {
             <th>Item</th>
             <th>Unit</th>
             <th>Category</th>
+            <th>Item Type</th>
             <th>Total Received</th>
             <th>Total Sold</th>
             <th>Total Adjusted</th>
@@ -181,6 +145,7 @@ const BarBalanceStock = () => {
               <td>{item.item_name}</td>
               <td>{item.unit}</td>
               <td>{item.category_name}</td>
+              <td>{item.item_type}</td>
               <td>{item.total_received}</td>
               <td>{item.total_sold}</td>
               <td>{item.total_adjusted}</td>
@@ -204,3 +169,5 @@ const BarBalanceStock = () => {
 };
 
 export default BarBalanceStock;
+
+

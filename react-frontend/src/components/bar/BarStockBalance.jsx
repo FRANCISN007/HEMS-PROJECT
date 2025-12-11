@@ -8,36 +8,28 @@ const BarStockBalance = () => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
-  // 🔍 filters
-  const [barFilter, setBarFilter] = useState("");
+  // Filters
+  const [barFilter, setBarFilter] = useState(""); // stores bar ID
   const [itemFilter, setItemFilter] = useState("");
 
-  // ✅ Get user roles from localStorage
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const roles = user.roles || [];
 
-  // ✅ Restrict access: only admin and bar can create payments
   if (!(roles.includes("admin") || roles.includes("bar"))) {
     return (
       <div className="unauthorized">
         <h2>🚫 Access Denied</h2>
-        <p>You do not have permission to record bar stock balance.</p>
+        <p>You do not have permission to view bar stock balance.</p>
       </div>
     );
   }
 
-
-  // ⏬ fetch list of bars for dropdown
+  // Fetch bars for dropdown
   useEffect(() => {
     const fetchBars = async () => {
       try {
         const res = await axiosWithAuth().get("/bar/bars/simple");
-        if (Array.isArray(res.data)) {
-          setBars(res.data);
-        } else {
-          console.error("⚠️ Expected array for bars, got:", res.data);
-          setBars([]);
-        }
+        setBars(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
         console.error("❌ Failed to fetch bars:", err);
         setBars([]);
@@ -46,11 +38,36 @@ const BarStockBalance = () => {
     fetchBars();
   }, []);
 
-  // ⏬ fetch stock balance
+  // Fetch stock balance
   useEffect(() => {
     fetchStockBalance();
   }, []);
 
+  const fetchStockBalance = async () => {
+    try {
+      setLoading(true);
+      const axios = axiosWithAuth();
+      const res = await axios.get("/bar/stock-balance");
+      setStockData(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("❌ Failed to fetch bar stock balance:", err);
+      setMessage("❌ Failed to load stock balance.");
+      setStockData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter by bar ID and item name
+  const filteredData = stockData.filter((item) => {
+    const matchesBar = barFilter ? item.bar_id === parseInt(barFilter) : true;
+    const matchesItem = itemFilter
+      ? item.item_name?.toLowerCase().includes(itemFilter.toLowerCase())
+      : true;
+    return matchesBar && matchesItem;
+  });
+
+  // Auto-clear messages
   useEffect(() => {
     if (message) {
       const timer = setTimeout(() => setMessage(""), 3000);
@@ -58,32 +75,7 @@ const BarStockBalance = () => {
     }
   }, [message]);
 
-  const fetchStockBalance = async () => {
-    try {
-      const res = await axiosWithAuth().get("/bar/stock-balance");
-      setStockData(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
-      console.error("❌ Failed to fetch bar stock balance:", err);
-      setMessage("❌ Failed to load stock balance.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ✅ Filtered data
-  const filteredData = stockData.filter((item) => {
-    const matchesBar = barFilter
-      ? item.bar_name === barFilter
-      : true;
-    const matchesItem = itemFilter
-      ? item.item_name?.toLowerCase().includes(itemFilter.toLowerCase())
-      : true;
-    return matchesBar && matchesItem;
-  });
-
-  if (loading) {
-    return <p className="bar-message">⏳ Loading stock balance...</p>;
-  }
+  if (loading) return <p className="bar-message">⏳ Loading stock balance...</p>;
 
   return (
     <div className="bar-container">
@@ -91,19 +83,15 @@ const BarStockBalance = () => {
         <h2>📊 Bar Stock Balance</h2>
       </div>
 
-      {/* 🔍 Filter controls */}
-      <div
-        className="filter-controls"
-        style={{ marginBottom: "15px", display: "flex", gap: "10px" }}
-      >
+      <div className="filter-controls" style={{ marginBottom: "15px", display: "flex", gap: "10px" }}>
         <select
           value={barFilter}
           onChange={(e) => setBarFilter(e.target.value)}
           className="filter-input"
         >
-          <option value="">-- Select Bar --</option>
+          <option value="">-- All Bars --</option>
           {bars.map((bar) => (
-            <option key={bar.id} value={bar.name}>
+            <option key={bar.id} value={bar.id}>
               {bar.name}
             </option>
           ))}
@@ -133,10 +121,7 @@ const BarStockBalance = () => {
           <tbody>
             {filteredData.length > 0 ? (
               filteredData.map((item, index) => (
-                <tr
-                  key={index}
-                  className={index % 2 === 0 ? "even-row" : "odd-row"}
-                >
+                <tr key={index} className={index % 2 === 0 ? "even-row" : "odd-row"}>
                   <td>{item.bar_name || "—"}</td>
                   <td>{item.item_name}</td>
                   <td>{item.total_received}</td>

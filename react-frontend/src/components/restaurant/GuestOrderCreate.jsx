@@ -1,8 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./GuestOrderCreate.css";
-
-
 
 const currencyNGN = (value) =>
   new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" })
@@ -10,10 +8,7 @@ const currencyNGN = (value) =>
 
 const GuestOrderCreate = () => {
   const [locations, setLocations] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [meals, setMeals] = useState([]);
-
-  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [items, setItems] = useState([]);
   const [message, setMessage] = useState("");
 
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
@@ -27,70 +22,66 @@ const GuestOrderCreate = () => {
 
   roles = roles.map((r) => r.toLowerCase());
 
-
   if (!(roles.includes("admin") || roles.includes("restaurant"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to create guest order.</p>
-    </div>
-  );
-}
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to create guest order.</p>
+      </div>
+    );
+  }
 
   const [order, setOrder] = useState({
     location_id: "",
-    order_type: "room_service", // room_service | dine_in | takeaway
+    order_type: "room_service",
     room_number: "",
     guest_name: "",
     status: "open",
-    items: [], // [{ meal_id, quantity }]
+    items: [], // [{ store_item_id, quantity, price_per_unit }]
   });
 
-  const [newItem, setNewItem] = useState({ meal_id: "", quantity: 1 });
+  const [newItem, setNewItem] = useState({
+    store_item_id: "",
+    quantity: 1,
+    price_per_unit: "",
+  });
 
-  // Auto-clear flash message
   useEffect(() => {
     if (!message) return;
     const t = setTimeout(() => setMessage(""), 3000);
     return () => clearTimeout(t);
   }, [message]);
 
-  // Fetch dropdown data
+  // Fetch dropdown values
   useEffect(() => {
     const api = axiosWithAuth();
     Promise.all([
       api.get("/restaurant/locations"),
-      api.get("/restaurant/meal-categories"),
-      api.get("/restaurant/meals"),
+      api.get("/restaurant/items/simple"),
     ])
-      .then(([locRes, catRes, mealRes]) => {
+      .then(([locRes, itemRes]) => {
         setLocations(locRes.data || []);
-        // sort by id asc if backend doesn’t already
-        setCategories([...catRes.data].sort((a, b) => a.id - b.id));
-        setMeals([...mealRes.data].sort((a, b) => a.id - b.id));
+        setItems([...itemRes.data].sort((a, b) => a.id - b.id));
       })
       .catch(() => setMessage("❌ Failed to load dropdown data"));
   }, []);
 
-  // Meals filtered by selected category
-  const filteredMeals = useMemo(() => {
-    if (!selectedCategoryId) return meals;
-    return meals.filter((m) => String(m.category_id) === String(selectedCategoryId));
-  }, [meals, selectedCategoryId]);
-
   const addItem = () => {
-    if (!newItem.meal_id || Number(newItem.quantity) <= 0) return;
+    if (!newItem.store_item_id || Number(newItem.quantity) <= 0) return;
+
     setOrder((prev) => ({
       ...prev,
       items: [
         ...prev.items,
         {
-          meal_id: Number(newItem.meal_id),
+          store_item_id: Number(newItem.store_item_id),
           quantity: Number(newItem.quantity),
+          price_per_unit: Number(newItem.price_per_unit),
         },
       ],
     }));
-    setNewItem({ meal_id: "", quantity: 1 });
+
+    setNewItem({ store_item_id: "", quantity: 1, price_per_unit: "" });
   };
 
   const removeItem = (idx) => {
@@ -103,15 +94,17 @@ const GuestOrderCreate = () => {
   const submitOrder = async (e) => {
     e.preventDefault();
 
-    // Basic validations
+    // Check for missing or invalid location and items
     if (!order.location_id) {
       setMessage("❌ Please select a location.");
       return;
     }
+
     if (order.items.length === 0) {
-      setMessage("❌ Please add at least one meal item.");
+      setMessage("❌ Please add at least one item.");
       return;
     }
+
     if (order.order_type === "room_service" && !order.room_number) {
       setMessage("❌ Room Service requires a room number.");
       return;
@@ -121,13 +114,15 @@ const GuestOrderCreate = () => {
       ...order,
       location_id: Number(order.location_id),
       items: order.items.map((i) => ({
-        meal_id: Number(i.meal_id),
+        store_item_id: Number(i.store_item_id),
         quantity: Number(i.quantity),
+        price_per_unit: Number(i.price_per_unit),
       })),
     };
 
     try {
-      await axiosWithAuth().post("/restaurant/orders/", payload);
+      // Send the order to the backend
+      await axiosWithAuth().post("/restaurant/meal-orders", payload);
       setMessage("✅ Guest order created successfully!");
       setOrder({
         location_id: "",
@@ -137,21 +132,21 @@ const GuestOrderCreate = () => {
         status: "open",
         items: [],
       });
-      setSelectedCategoryId("");
     } catch (err) {
-      setMessage(
-        err?.response?.data?.detail || "❌ Failed to create order."
-      );
+      // If the backend returns an error (e.g., stock is insufficient), display it
+      setMessage(err?.response?.data?.detail || "❌ Failed to create order.");
     }
   };
 
-  // Compute total for table preview
+
+  // Table preview
   const rows = order.items.map((it) => {
-    const meal = meals.find((m) => Number(m.id) === Number(it.meal_id));
-    const unit = meal?.price || 0;
+    const storeItem = items.find((m) => Number(m.id) === Number(it.store_item_id));
+    const unit = it.price_per_unit || storeItem?.price || 0;
     const line = Number(unit) * Number(it.quantity || 0);
+
     return {
-      name: meal?.name || "--",
+      name: storeItem?.name || "--",
       quantity: it.quantity,
       unitPrice: unit,
       lineTotal: line,
@@ -191,46 +186,32 @@ const GuestOrderCreate = () => {
           <option value="takeaway">Takeaway</option>
         </select>
 
-        {/* Guest / Room */}
+        {/* Guest Name */}
         <input
           type="text"
           placeholder="Guest Name (optional)"
           value={order.guest_name}
           onChange={(e) => setOrder({ ...order, guest_name: e.target.value })}
         />
+
+        {/* Room Number */}
         <input
           type="text"
-          placeholder="Room Number (required for Room Service)"
+          placeholder="Room Number (required for room service)"
           value={order.room_number}
           onChange={(e) => setOrder({ ...order, room_number: e.target.value })}
         />
 
-        {/* Category filter */}
-        <select
-          value={selectedCategoryId}
-          onChange={(e) => setSelectedCategoryId(e.target.value)}
-          title="Filter meals by category"
-        >
-          <option value="">All Categories</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-
         {/* Add Item */}
         <div className="guestorder-item-form">
           <select
-            value={newItem.meal_id}
-            onChange={(e) =>
-              setNewItem({ ...newItem, meal_id: e.target.value })
-            }
+            value={newItem.store_item_id}
+            onChange={(e) => setNewItem({ ...newItem, store_item_id: e.target.value })}
           >
-            <option value="">-- Select Meal --</option>
-            {filteredMeals.map((meal) => (
-              <option key={meal.id} value={meal.id}>
-                {meal.name} ({currencyNGN(meal.price)})
+            <option value="">-- Select Item --</option>
+            {items.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name} ({currencyNGN(item.price)})
               </option>
             ))}
           </select>
@@ -239,9 +220,16 @@ const GuestOrderCreate = () => {
             type="number"
             min="1"
             value={newItem.quantity}
-            onChange={(e) =>
-              setNewItem({ ...newItem, quantity: e.target.value })
-            }
+            onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
+          />
+
+          {/* NEW PRICE INPUT */}
+          <input
+            type="number"
+            min="0"
+            placeholder="Price (₦)"
+            value={newItem.price_per_unit}
+            onChange={(e) => setNewItem({ ...newItem, price_per_unit: e.target.value })}
           />
 
           <button type="button" onClick={addItem}>
@@ -254,7 +242,7 @@ const GuestOrderCreate = () => {
           <table className="guestorder-table">
             <thead>
               <tr>
-                <th>Meal</th>
+                <th>Item</th>
                 <th>Qty</th>
                 <th>Unit Price</th>
                 <th>Line Total</th>
@@ -269,16 +257,13 @@ const GuestOrderCreate = () => {
                   <td>{currencyNGN(r.unitPrice)}</td>
                   <td>{currencyNGN(r.lineTotal)}</td>
                   <td>
-                    <button
-                      type="button"
-                      className="delete action-btn"
-                      onClick={() => removeItem(i)}
-                    >
+                    <button type="button" className="delete action-btn" onClick={() => removeItem(i)}>
                       ❌
                     </button>
                   </td>
                 </tr>
               ))}
+
               <tr>
                 <td colSpan="3" style={{ textAlign: "right", fontWeight: 600 }}>
                   Total

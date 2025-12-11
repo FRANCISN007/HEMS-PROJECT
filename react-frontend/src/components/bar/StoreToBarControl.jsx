@@ -7,17 +7,14 @@ const StoreToBarControl = () => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
-  // 🔍 filters
   const [bars, setBars] = useState([]);
   const [barId, setBarId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  // ✅ Get user roles from localStorage
   const user = JSON.parse(localStorage.getItem("user")) || {};
-  const roles = user.roles || [];
+  const roles = Array.isArray(user.roles) ? user.roles : [user.role];
 
-  // ✅ Restrict access
   if (!(roles.includes("admin") || roles.includes("bar"))) {
     return (
       <div className="unauthorized">
@@ -27,7 +24,7 @@ const StoreToBarControl = () => {
     );
   }
 
-  // ⏬ fetch list of bars
+  // Fetch list of bars
   useEffect(() => {
     const fetchBars = async () => {
       try {
@@ -41,16 +38,15 @@ const StoreToBarControl = () => {
     fetchBars();
   }, []);
 
-  // ⏬ Set default date range to today's date
+  // Default date = today
   useEffect(() => {
     const today = new Date();
-    const formatDate = (date) => date.toISOString().split("T")[0];
-    const currentDate = formatDate(today);
-    setStartDate(currentDate);
-    setEndDate(currentDate);
+    const formatDate = (d) => d.toISOString().split("T")[0];
+    setStartDate(formatDate(today));
+    setEndDate(formatDate(today));
   }, []);
 
-  // ⏬ Fetch issues automatically when filters change
+  // Fetch issues when filters change
   useEffect(() => {
     if (startDate && endDate) {
       fetchIssues();
@@ -59,6 +55,7 @@ const StoreToBarControl = () => {
 
   const fetchIssues = async () => {
     setLoading(true);
+    setMessage("");
     try {
       const res = await axiosWithAuth().get("/bar/store-issue-control", {
         params: {
@@ -70,20 +67,22 @@ const StoreToBarControl = () => {
       setIssues(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("❌ Failed to fetch store issue control:", err);
-      setMessage("❌ Failed to load store issue control data.");
+      setMessage(
+        err.response?.data?.detail ||
+          "❌ Failed to load store issue control data."
+      );
+      setIssues([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // 🧭 Reset filters to today's date
   const handleResetToToday = () => {
     const today = new Date();
-    const formatDate = (date) => date.toISOString().split("T")[0];
-    const currentDate = formatDate(today);
-    setStartDate(currentDate);
-    setEndDate(currentDate);
-    setBarId(""); // optional: reset bar
+    const formatDate = (d) => d.toISOString().split("T")[0];
+    setStartDate(formatDate(today));
+    setEndDate(formatDate(today));
+    setBarId("");
   };
 
   if (loading) {
@@ -96,7 +95,7 @@ const StoreToBarControl = () => {
         <h2>🏪 Store Issues Control</h2>
       </div>
 
-      {/* 🔍 Filters */}
+      {/* Filters */}
       <div className="filter-controls">
         <select value={barId} onChange={(e) => setBarId(e.target.value)}>
           <option value="">-- Select Bar --</option>
@@ -123,7 +122,7 @@ const StoreToBarControl = () => {
         </button>
       </div>
 
-      {/* 📊 Table */}
+      {/* Table */}
       <div className="table-wrapper">
         <table className="bar-table">
           <thead>
@@ -133,26 +132,33 @@ const StoreToBarControl = () => {
               <th>Bar</th>
               <th>Issue Date</th>
               <th>Quantity</th>
+              
             </tr>
           </thead>
           <tbody>
             {issues.length > 0 ? (
               issues.map((item, index) => {
-                const bar = bars.find((b) => b.id === item.bar_id);
+                const bar = bars.find((b) => Number(b.id) === Number(item.bar_id));
                 return (
                   <tr
                     key={index}
                     className={index % 2 === 0 ? "even-row" : "odd-row"}
                   >
-                    <td>{item.item_name}</td>
-                    <td>{item.unit}</td>
-                    <td>{bar ? bar.name : item.bar_id}</td>
-                    <td>{item.issue_date}</td>
-                    <td>{item.quantity}</td>
+                    <td>{item.item_name || "-"}</td>
+                    <td>{item.unit || "-"}</td>
+                    <td>{bar ? bar.name : item.bar_id || "-"}</td>
+                    <td>
+                      {item.issue_date
+                        ? new Date(item.issue_date).toLocaleDateString()
+                        : "-"}
+                    </td>
+                    <td>{item.quantity ?? "-"}</td>
+                    
+                    
                   </tr>
-                );
-              })
-            ) : (
+                  );
+                })
+              ) : (
               <tr>
                 <td colSpan="7" className="no-data">
                   No data found.

@@ -1,0 +1,152 @@
+/* ============================
+   MAIN CONTAINER
+============================ */
+.kitchen-container {
+  width: 100%;
+  max-width: 900px;   /* adjust to how slim you want it */
+  margin: 0 auto;      /* centers the container */
+  padding: 20px 25px;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+
+
+.kitchen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.kitchen-header h2 {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.close-btn {
+  background: #ff4d4f;
+  color: #fff;
+  border: none;
+  font-size: 22px;
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* ============================
+   FORM
+============================ */
+.kitchen-form {
+  display: flex;
+  gap: 10px;
+  margin: 15px 0;
+}
+
+.kitchen-form input {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #bbb;
+  border-radius: 5px;
+}
+
+.kitchen-form button {
+  padding: 10px 16px;
+  background: #0066cc;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.kitchen-form button:hover {
+  background: #004d99;
+}
+
+/* ============================
+   TABLE
+============================ */
+.kitchen-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+}
+
+.kitchen-table th,
+.kitchen-table td {
+  border: 1px solid #ddd;
+  padding: 10px;
+}
+
+.kitchen-table th {
+  background: #f0f0f0;
+  font-weight: bold;
+}
+
+.even-row {
+  background-color: #fafafa;
+}
+
+.odd-row {
+  background-color: #ffffff;
+}
+
+/* ============================
+   ACTION BUTTONS
+============================ */
+.action-btn {
+  padding: 5px 10px;
+  margin-right: 6px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+}
+
+.update {
+  background: #ffc107;
+}
+
+.delete {
+  background: #dc3545;
+  color: white;
+}
+
+.save {
+  background: #28a745;
+  color: white;
+}
+
+.cancel {
+  background: #6c757d;
+  color: white;
+}
+
+/* ============================
+   MESSAGE
+============================ */
+.kitchen-message {
+  margin-top: 15px;
+  font-weight: bold;
+  color: #008000;
+  text-align: center;
+}
+
+/* ============================
+   UNAUTHORIZED
+============================ */
+.unauthorized {
+  padding: 40px;
+  text-align: center;
+}
+
+
+.kitchen-table th {
+  text-align: left;
+  padding-left: 8px; /* optional: match td spacing */
+}
+
+.kitchen-table td {
+  text-align: left;
+  padding-left: 8px; /* to align perfectly with th */
+}

@@ -75,8 +75,8 @@ const RestDashboardPage = () => {
 
   const restaurantMenu = [
     { name: "📍 Location", path: "/restaurant/location" },
-    { name: "🍽️ Meal Category", path: "/restaurant/mealcategory" },
-    { name: "🍲 Meal", path: "/restaurant/mealcreate" },
+    //{ name: "🍽️ Meal Category", path: "/restaurant/mealcategory" },
+    //{ name: "🍲 Meal", path: "/restaurant/mealcreate" },
     {
       name: "🧾 Guest Order",
       submenu: [
@@ -99,6 +99,9 @@ const RestDashboardPage = () => {
         { label: "📃 List Payment", path: "/restaurant/ListRestaurantPayment" },
       ],
     },
+
+    { name: "👨‍🍳 Kitchen Stock", path: "kitchenstock" },
+
   ];
 
   return (

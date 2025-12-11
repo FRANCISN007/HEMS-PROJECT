@@ -48,11 +48,15 @@ import CreatePurchase from "./components/store/CreatePurchase";
 import ListPurchase from "./components/store/ListPurchase";
 import IssueItems from "./components/store/IssueItems";
 import ListIssues from "./components/store/ListIssues";
+
+import CreateKitchen from "./components/store/CreateKitchen";
+import IssuesToKitchen from "./components/store/IssuesToKitchen";
+
 import StockAdjustment from "./components/store/StockAdjustment";
 import ListAdjustment from "./components/store/ListAdjustment";
 import StockBalance from "./components/store/StockBalance";
 import BarBalanceStock from "./components/store/BarBalanceStock";
-
+import KitchenStock from "./components/restaurant/KitchenStock";
 
 
 import ListBar from "./components/bar/ListBar";
@@ -79,6 +83,7 @@ import OrderToSales from "./components/restaurant/OrderToSales";
 import ListRestaurantSales from "./components/restaurant/ListRestaurantSales";
 import RestaurantPayment from "./components/restaurant/RestaurantPayment";
 import ListRestaurantPayment from "./components/restaurant/ListRestaurantPayment";
+import KitchenBalanceStock from "./components/store/KitchenBalanceStock";
 
 import SalesSummary from "./components/restaurant/SalesSummary";
 
@@ -128,6 +133,10 @@ const App = () => {
           <Route path="adjustment/list" element={<ListAdjustment />} />
           <Route path="stock-balance" element={<StockBalance />} />
           <Route path="barstock-balance" element={<BarBalanceStock />} />
+          <Route path="kitchenstock" element={<KitchenBalanceStock />} />
+          <Route path="kitchen/create" element={<CreateKitchen />} />
+          <Route path="kitchen/list" element={<IssuesToKitchen />} />
+
         </Route>
 
 
@@ -161,6 +170,8 @@ const App = () => {
           <Route path="ListRestaurantSales" element={<ListRestaurantSales />} />
           <Route path="RestaurantPayment" element={<RestaurantPayment />} />
           <Route path="ListRestaurantPayment" element={<ListRestaurantPayment />} />
+          <Route path="kitchenstock" element={<KitchenBalanceStock />} />
+
           <Route path="SalesSummary" element={<SalesSummary />} />
           
         </Route>

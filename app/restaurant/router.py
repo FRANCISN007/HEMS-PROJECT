@@ -12,12 +12,17 @@ from app.users.models import User
 from fastapi import Query
 from datetime import date
 from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.users import schemas as user_schemas
 from app.restaurant import models as restaurant_models
 from app.restaurant import schemas as restaurant_schemas
+from app.store import  models as store_models
+from app.kitchen import models as kitchen_models
 
 from app.restaurant.models import MealOrder, MealOrderItem, Meal, RestaurantLocation
 from app.restaurant.schemas import MealOrderCreate, MealOrderDisplay
+from app.store.models import StoreStockEntry, StoreItem
 
 from app.restaurant.models import MealOrder, RestaurantSale  # assuming MealOrder is in restaurant.models
 from app.restpayment.models import RestaurantSalePayment     # payment model from restpayment folder
@@ -110,22 +115,30 @@ def toggle_location_active(location_id: int,
     db.refresh(location)
     return location
 
-
+#
 @router.post("/meal-categories", response_model=restaurant_schemas.MealCategoryDisplay)
-def create_meal_category(category: restaurant_schemas.MealCategoryCreate, 
+def create_meal_category(
+    category: restaurant_schemas.MealCategoryCreate,
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
-    # Check if name exists
-    existing = db.query(restaurant_models.MealCategory).filter_by(name=category.name).first()
+    # Check if category name already exists
+    existing = (
+        db.query(restaurant_models.MealCategory)
+        .filter_by(name=category.name)
+        .first()
+    )
     if existing:
         raise HTTPException(status_code=400, detail="Meal category already exists")
-    
-    db_category = restaurant_models.MealCategory(**category.dict())
+
+    # Create new meal category
+    db_category = restaurant_models.MealCategory(name=category.name)
     db.add(db_category)
     db.commit()
     db.refresh(db_category)
+
     return db_category
+
 
 
 @router.get("/meal-categories", response_model=list[restaurant_schemas.MealCategoryDisplay])
@@ -179,59 +192,444 @@ def delete_meal_category(
 
 # --- Meal Endpoints ---
 
-@router.post("/meals", response_model=restaurant_schemas.MealDisplay)
-def create_meal(meal: restaurant_schemas.MealCreate, 
+@router.get("/items/simple", response_model=List[restaurant_schemas.RestaurantMealItem])
+def get_restaurant_items(db: Session = Depends(get_db)):
+    """
+    Fetch all kitchen store items with their latest selling price from KitchenMenu.
+    Include items even if they do not have a KitchenMenu entry yet (price=0).
+    """
+    # Subquery: latest menu id per item
+    subquery = (
+        db.query(
+            kitchen_models.KitchenMenu.item_id,
+            func.max(kitchen_models.KitchenMenu.id).label("latest_menu_id")
+        )
+        .group_by(kitchen_models.KitchenMenu.item_id)
+        .subquery()
+    )
+
+    # Left join store items to latest KitchenMenu (so we don't lose items without price yet)
+    items = (
+        db.query(
+            store_models.StoreItem.id.label("item_id"),
+            store_models.StoreItem.name.label("item_name"),
+            store_models.StoreItem.item_type.label("item_type"),
+            kitchen_models.KitchenMenu.selling_price.label("selling_price"),
+        )
+        .outerjoin(subquery, subquery.c.item_id == store_models.StoreItem.id)
+        .outerjoin(kitchen_models.KitchenMenu, kitchen_models.KitchenMenu.id == subquery.c.latest_menu_id)
+        .filter(store_models.StoreItem.item_type == "kitchen")
+        .order_by(store_models.StoreItem.name.asc())
+        .all()
+    )
+
+    # Convert to schema format
+    result = [
+        restaurant_schemas.RestaurantMealItem(
+            id=item.item_id,
+            name=item.item_name,
+            price=item.selling_price or 0,
+            item_type=item.item_type
+        )
+        for item in items
+    ]
+
+    return result
+
+@router.post("/meal-orders", response_model=restaurant_schemas.MealOrderDisplay)
+def create_meal_order(
+    order: restaurant_schemas.MealOrderCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
+    current_user=Depends(role_required(["restaurant"]))
 ):
-    db_meal = restaurant_models.Meal(**meal.dict())
-    db.add(db_meal)
+    # 1️⃣ Load kitchen items
+    kitchen_items = (
+        db.query(store_models.StoreItem)
+        .filter(
+            func.lower(store_models.StoreItem.item_type).in_([
+                "kitchen",
+                "kitchen items",
+                "meal",
+                "food",
+            ])
+        )
+        .all()
+    )
+    if not kitchen_items:
+        raise HTTPException(404, "No kitchen items found in store")
+
+    kitchen_map = {item.id: item for item in kitchen_items}
+
+    # 2️⃣ Validate each order item & check stock before proceeding with the creation
+    for it in order.items:
+        # ❌ Reject if quantity is 0 or negative
+        if it.quantity <= 0:
+            raise HTTPException(
+                400,
+                f"Invalid quantity for '{it.store_item_id}'. Quantity must be greater than 0."
+            )
+
+        if it.store_item_id not in kitchen_map:
+            raise HTTPException(404, f"Store item {it.store_item_id} not found or not a kitchen item")
+
+        store_item = kitchen_map[it.store_item_id]
+
+        # Get available FIFO stock
+        stock_entries = (
+            db.query(store_models.StoreStockEntry)
+            .filter(
+                store_models.StoreStockEntry.item_id == store_item.id,
+                store_models.StoreStockEntry.quantity > 0
+            )
+            .order_by(store_models.StoreStockEntry.id)  # FIFO
+            .all()
+        )
+
+        if not stock_entries:
+            raise HTTPException(
+                400,
+                f"'{store_item.name}' has not been issued to the kitchen yet."
+            )
+
+        total_available = sum(e.quantity for e in stock_entries)
+        # ❌ Reject if stock is less than requested
+        if total_available < it.quantity:
+            raise HTTPException(
+                400,
+                f"Not enough kitchen stock for '{store_item.name}'. Requested: {it.quantity}, Available: {total_available}"
+            )
+
+    # 3️⃣ Create Meal Order (only if all items passed the stock check)
+    db_order = restaurant_models.MealOrder(
+        order_type=order.order_type,
+        guest_name=order.guest_name,
+        room_number=order.room_number,
+        location_id=order.location_id,
+        created_at=datetime.utcnow(),
+        status=order.status or "open",
+        created_by=current_user.id,
+    )
+    db.add(db_order)
     db.commit()
-    db.refresh(db_meal)
-    return db_meal
+    db.refresh(db_order)
 
+    # 4️⃣ Deduct stock & create order items
+    for it in order.items:
+        store_item = kitchen_map[it.store_item_id]
+        qty_needed = it.quantity
 
-@router.get("/meals", response_model=list[restaurant_schemas.MealDisplay])
-def list_meals(
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
-):
-    return db.query(restaurant_models.Meal).order_by(restaurant_models.Meal.id.asc()).all()
+        # Deduct from FIFO stock entries
+        stock_entries = (
+            db.query(store_models.StoreStockEntry)
+            .filter(
+                store_models.StoreStockEntry.item_id == store_item.id,
+                store_models.StoreStockEntry.quantity > 0
+            )
+            .order_by(store_models.StoreStockEntry.id)  # FIFO
+            .all()
+        )
 
-# ✅ Update Meal
-@router.put("/meals/{meal_id}", response_model=restaurant_schemas.MealDisplay)
-def update_meal(
-    meal_id: int,
-    meal: restaurant_schemas.MealCreate,   # you can also create a MealUpdate schema if needed
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
-):
-    db_meal = db.query(restaurant_models.Meal).filter(restaurant_models.Meal.id == meal_id).first()
-    if not db_meal:
-        raise HTTPException(status_code=404, detail="Meal not found")
+        for entry in stock_entries:
+            if qty_needed <= 0:
+                break
+            deduct_qty = min(entry.quantity, qty_needed)
+            entry.quantity -= deduct_qty
+            qty_needed -= deduct_qty
+            db.add(entry)  # update entry
 
-    for key, value in meal.dict().items():
-        setattr(db_meal, key, value)
+        # Determine price
+        if it.price_per_unit and it.price_per_unit > 0:
+            price_per_unit = it.price_per_unit
+        else:
+            menu_entry = (
+                db.query(kitchen_models.KitchenMenu)
+                .filter(kitchen_models.KitchenMenu.item_id == store_item.id)
+                .order_by(kitchen_models.KitchenMenu.id.desc())
+                .first()
+            )
+            price_per_unit = menu_entry.selling_price if menu_entry else store_item.unit_price
+
+        db_item = restaurant_models.MealOrderItem(
+            order_id=db_order.id,
+            store_item_id=store_item.id,
+            quantity=it.quantity,
+            store_qty_used=it.quantity,
+            item_name=store_item.name,
+            price_per_unit=price_per_unit,
+            total_price=price_per_unit * it.quantity,
+        )
+        db.add(db_item)
 
     db.commit()
-    db.refresh(db_meal)
-    return db_meal
+    db.refresh(db_order)
+    return db_order
+
+
+
+
+@router.get("/meal-orders", response_model=List[restaurant_schemas.MealOrderDisplay])
+def list_meal_orders(
+    status: Optional[str] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    location_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
+):
+    # 1️⃣ Base query
+    query = db.query(restaurant_models.MealOrder)
+
+    if location_id:
+        query = query.filter(restaurant_models.MealOrder.location_id == location_id)
+
+    if status:
+        query = query.filter(restaurant_models.MealOrder.status == status)
+
+    if start_date:
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        query = query.filter(restaurant_models.MealOrder.created_at >= start_dt)
+
+    if end_date:
+        end_dt = datetime.combine(end_date, datetime.max.time())
+        query = query.filter(restaurant_models.MealOrder.created_at <= end_dt)
+
+    orders = query.order_by(restaurant_models.MealOrder.created_at.desc()).all()
+
+    # 2️⃣ Preload kitchen items to filter
+    kitchen_items = db.query(store_models.StoreItem).filter(
+        func.lower(store_models.StoreItem.item_type) == "kitchen"
+    ).all()
+    kitchen_item_ids = {item.id for item in kitchen_items}
+
+    # 3️⃣ Build response
+    response = []
+    for order in orders:
+        kitchen_order_items = [
+            restaurant_schemas.MealOrderItemDisplay(
+                store_item_id=item.store_item_id,
+                item_name=item.item_name,
+                quantity=item.quantity,
+                price_per_unit=item.price_per_unit,
+                total_price=item.total_price,
+            )
+            for item in order.items
+            if item.store_item_id in kitchen_item_ids
+        ]
+
+        # Skip orders with no kitchen items
+        if not kitchen_order_items:
+            continue
+
+        response.append(restaurant_schemas.MealOrderDisplay(
+            id=order.id,
+            location_id=order.location_id,
+            order_type=order.order_type,
+            room_number=order.room_number,
+            guest_name=order.guest_name,
+            status=order.status,
+            created_at=order.created_at,
+            items=kitchen_order_items
+        ))
+
+    return response
+
+
+
+
+@router.put("/meal-orders/{order_id}", response_model=restaurant_schemas.MealOrderDisplay)
+def update_meal_order(
+    order_id: int,
+    data: restaurant_schemas.MealOrderCreate,
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["restaurant"])
+    ),
+):
+    # 1️⃣ Fetch the existing order
+    order = (
+        db.query(restaurant_models.MealOrder)
+        .filter(restaurant_models.MealOrder.id == order_id)
+        .first()
+    )
+
+    if not order:
+        raise HTTPException(404, "Meal order not found")
+
+    if order.status == "closed":
+        raise HTTPException(400, "Closed orders cannot be edited")
+
+    try:
+        # --- 2️⃣ RESTORE STOCK FOR OLD ITEMS ---
+        # (Before validation of new request)
+        for old_item in order.items:
+            stock_entries = (
+                db.query(store_models.StoreStockEntry)
+                .filter(store_models.StoreStockEntry.item_id == old_item.store_item_id)
+                .order_by(store_models.StoreStockEntry.id.desc())
+                .with_for_update()
+                .all()
+            )
+
+            qty_to_restore = old_item.store_qty_used
+
+            for entry in stock_entries:
+                entry.quantity += qty_to_restore
+                break
+
+        db.flush()
+
+        # --- 3️⃣ VALIDATE STOCK BEFORE APPLYING NEW ORDER ITEMS ---
+        for item in data.items:
+            # Kitchen item check
+            store_item = (
+                db.query(store_models.StoreItem)
+                .filter(
+                    store_models.StoreItem.id == item.store_item_id,
+                    func.lower(store_models.StoreItem.item_type).in_(
+                        ["kitchen", "kitchen items", "meal", "food"]
+                    ),
+                )
+                .first()
+            )
+
+            if not store_item:
+                raise HTTPException(
+                    400, f"Store item {item.store_item_id} not found or not kitchen-type"
+                )
+
+            # Check kitchen stock balance
+            stock_entries = (
+                db.query(store_models.StoreStockEntry)
+                .filter(
+                    store_models.StoreStockEntry.item_id == store_item.id,
+                    store_models.StoreStockEntry.quantity > 0,
+                )
+                .order_by(store_models.StoreStockEntry.id)  # FIFO
+                .with_for_update()
+                .all()
+            )
+
+            total_stock = sum(e.quantity for e in stock_entries)
+
+            if total_stock < item.quantity:
+                raise HTTPException(
+                    400,
+                    f"Insufficient stock for {store_item.name} "
+                    f"(available: {total_stock}, needed: {item.quantity})",
+                )
+
+        # --- 4️⃣ CLEAR OLD ORDER ITEMS ---
+        db.query(restaurant_models.MealOrderItem).filter(
+            restaurant_models.MealOrderItem.order_id == order.id
+        ).delete()
+        db.flush()
+
+        # --- 5️⃣ UPDATE MAIN ORDER FIELDS ---
+        order.order_type = data.order_type
+        order.room_number = data.room_number
+        order.guest_name = data.guest_name
+        order.location_id = data.location_id
+
+        # --- 6️⃣ CREATE NEW ITEMS & DEDUCT STOCK ---
+        for item in data.items:
+            store_item = db.query(store_models.StoreItem).filter(
+                store_models.StoreItem.id == item.store_item_id
+            ).first()
+
+            # GET STOCK ENTRIES FOR DEDUCTION
+            stock_entries = (
+                db.query(store_models.StoreStockEntry)
+                .filter(
+                    store_models.StoreStockEntry.item_id == store_item.id,
+                    store_models.StoreStockEntry.quantity > 0,
+                )
+                .order_by(store_models.StoreStockEntry.id)  # FIFO
+                .with_for_update()
+                .all()
+            )
+
+            # PRICE
+            price_per_unit = (
+                item.price_per_unit
+                if item.price_per_unit is not None
+                else store_item.unit_price
+            )
+
+            total_price = price_per_unit * item.quantity
+
+            # ADD NEW ORDER ITEM
+            new_item = restaurant_models.MealOrderItem(
+                order_id=order.id,
+                store_item_id=store_item.id,
+                item_name=store_item.name,
+                quantity=item.quantity,
+                price_per_unit=price_per_unit,
+                total_price=total_price,
+                store_qty_used=item.quantity,
+            )
+            db.add(new_item)
+
+            # STOCK DEDUCTION FIFO
+            qty_to_deduct = item.quantity
+            for entry in stock_entries:
+                if entry.quantity >= qty_to_deduct:
+                    entry.quantity -= qty_to_deduct
+                    break
+                else:
+                    qty_to_deduct -= entry.quantity
+                    entry.quantity = 0
+
+        db.commit()
+        db.refresh(order)
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Could not update meal order: {str(e)}")
+
+    # --- 7️⃣ RETURN RESPONSE ---
+    items_display = [
+        restaurant_schemas.MealOrderItemDisplay(
+            store_item_id=i.store_item_id,
+            item_name=i.item_name,
+            quantity=i.quantity,
+            price_per_unit=i.price_per_unit,
+            total_price=i.total_price,
+        )
+        for i in order.items
+    ]
+
+    return restaurant_schemas.MealOrderDisplay(
+        id=order.id,
+        location_id=order.location_id,
+        order_type=order.order_type,
+        room_number=order.room_number,
+        guest_name=order.guest_name,
+        status=order.status,
+        created_at=order.created_at,
+        items=items_display,
+    )
 
 
 # ✅ Delete Meal
-@router.delete("/meals/{meal_id}", response_model=dict)
-def delete_meal(
-    meal_id: int,
+@router.delete("/meal-orders/{order_id}", response_model=dict)
+def delete_meal_order(
+    order_id: int,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant", "admin"]))
 ):
-    db_meal = db.query(restaurant_models.Meal).filter(restaurant_models.Meal.id == meal_id).first()
-    if not db_meal:
-        raise HTTPException(status_code=404, detail="Meal not found")
+    # 1️⃣ Fetch the meal order
+    db_order = db.query(restaurant_models.MealOrder).filter(
+        restaurant_models.MealOrder.id == order_id
+    ).first()
 
-    db.delete(db_meal)
+    if not db_order:
+        raise HTTPException(status_code=404, detail="Meal order not found")
+
+    # 2️⃣ Delete the order (MealOrderItem will cascade)
+    db.delete(db_order)
     db.commit()
-    return {"detail": "Meal deleted successfully"}
+
+    return {"detail": "Meal order deleted successfully"}
 
 
 @router.patch("/meals/{meal_id}/toggle-availability", response_model=restaurant_schemas.MealDisplay)
@@ -249,132 +647,42 @@ def toggle_meal_availability(meal_id: int,
     return meal
 
 
-@router.post("/orders/", response_model=MealOrderDisplay)
-def create_meal_order(order_data: MealOrderCreate, 
+
+
+@router.post("/map")
+def map_store_item_to_store_item(
+    store_item_id: int,
+    quantity_used: float = 1,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
+    current_user=Depends(role_required(["restaurant"]))
 ):
-    # Create the MealOrder
-    order = MealOrder(
-        order_type=order_data.order_type,
-        guest_name=order_data.guest_name,
-        room_number=order_data.room_number,
-        location_id=order_data.location_id,
-        created_at=datetime.utcnow(),
-        status=order_data.status or "pending"
+    # ✅ Check if store item exists
+    store_item = db.query(StoreItem).filter(StoreItem.id == store_item_id).first()
+    if not store_item:
+        raise HTTPException(status_code=404, detail="Store item not found")
+
+    # ✅ Create mapping using store_item_id only
+    link = StoreItem(
+        store_item_id=store_item_id,
+        quantity_used=quantity_used
     )
-    db.add(order)
-    db.flush()  # ensures order.id is available
 
-    # Create and add MealOrderItems
-    for item in order_data.items:
-        db_item = MealOrderItem(
-            meal_id=item.meal_id,
-            quantity=item.quantity,
-            order_id=order.id,
-            status=order.status,
-            created_at=datetime.utcnow()
-        )
-        db.add(db_item)
-
+    db.add(link)
     db.commit()
-    db.refresh(order)
+    db.refresh(link)
 
-    # Build items display list
-    items = []
-    order_items = db.query(MealOrderItem).filter(MealOrderItem.order_id == order.id).all()
-    for item in order_items:
-        meal = db.query(Meal).filter(Meal.id == item.meal_id).first()
-        items.append(MealOrderItemDisplay(
-            meal_id=item.meal_id,
-            meal_name=meal.name if meal else None,
-            quantity=item.quantity,
-            price_per_unit=meal.price if meal else None,
-            total_price=(meal.price * item.quantity) if meal else None,
-        ))
-
-    # Return full display model
-    return MealOrderDisplay(
-        id=order.id,
-        location_id=order.location_id,
-        order_type=order.order_type,
-        room_number=order.room_number,
-        guest_name=order.guest_name,
-        status=order.status,
-        created_at=order.created_at,
-        items=items
-    )
+    return {"message": "Mapping created successfully", "data": {
+        "id": link.id,
+        "store_item_id": link.store_item_id,
+        "quantity_used": link.quantity_used
+    }}
 
 
 
 
-
-from datetime import datetime, timedelta
-
-@router.get("/list", response_model=list[MealOrderDisplay])
-def list_meal_orders(
-    status: str = Query(None, description="Filter by status: open or closed"),
-    start_date: date = Query(None, description="Start date for filtering"),
-    end_date: date = Query(None, description="End date for filtering"),
-    location_id: int = Query(None, description="Filter by location ID"),  # ✅ new filter
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
-):
-    query = db.query(MealOrder)
-
-    # ✅ filter by location first
-    if location_id:
-        query = query.filter(MealOrder.location_id == location_id)
-
-    if status:
-        query = query.filter(MealOrder.status == status)
-
-    if start_date:
-        start_datetime = datetime.combine(start_date, datetime.min.time())
-        query = query.filter(MealOrder.created_at >= start_datetime)
-
-    if end_date:
-        # ✅ include entire end date by setting time to 23:59:59
-        end_datetime = datetime.combine(end_date, datetime.max.time())
-        query = query.filter(MealOrder.created_at <= end_datetime)
-
-    orders = query.order_by(MealOrder.created_at.desc()).all()
-    response = []
-
-    for order in orders:
-        items = []
-        for item in order.items:
-            meal = db.query(Meal).filter(Meal.id == item.meal_id).first()
-            items.append(MealOrderItemDisplay(
-                meal_id=item.meal_id,
-                meal_name=meal.name if meal else None,
-                quantity=item.quantity,
-                price_per_unit=meal.price if meal else None,
-                total_price=(meal.price * item.quantity) if meal else None,
-            ))
-        response.append(MealOrderDisplay(
-            id=order.id,
-            location_id=order.location_id,
-            order_type=order.order_type,
-            room_number=order.room_number,
-            guest_name=order.guest_name,
-            status=order.status,
-            created_at=order.created_at,
-            items=items
-        ))
-
-    return response
+from sqlalchemy.orm import joinedload
 
 
-
-
-
-from datetime import datetime
-from typing import Optional
-
-from datetime import datetime, date, timedelta  # make sure this is at the top
-
-from datetime import datetime, date
 
 @router.get("/sales", response_model=dict)
 def list_sales(
@@ -385,27 +693,29 @@ def list_sales(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
-    query = db.query(RestaurantSale)
+    query = db.query(restaurant_models.RestaurantSale)
 
-    # ✅ Status filter
+    # 1️⃣ Status filter
     if status:
-        query = query.filter(RestaurantSale.status == status)
+        query = query.filter(restaurant_models.RestaurantSale.status == status)
 
-    # ✅ Date filters (inclusive, using served_at)
+    # 2️⃣ Date filters (inclusive)
     if start_date:
         start_dt = datetime.combine(start_date, datetime.min.time())
-        query = query.filter(RestaurantSale.served_at >= start_dt)
+        query = query.filter(restaurant_models.RestaurantSale.served_at >= start_dt)
     if end_date:
         end_dt = datetime.combine(end_date, datetime.max.time())
-        query = query.filter(RestaurantSale.served_at <= end_dt)
+        query = query.filter(restaurant_models.RestaurantSale.served_at <= end_dt)
 
-    # ✅ Prevent invalid date range
+    # 3️⃣ Prevent invalid date range
     if start_date and end_date and start_date > end_date:
         raise HTTPException(status_code=400, detail="Start date cannot be after end date")
 
-    # ✅ Always order by served_at, fallback to created_at if None
-    sales = query.order_by(RestaurantSale.served_at.desc().nullslast(),
-                           RestaurantSale.created_at.desc()).all()
+    # 4️⃣ Order by served_at descending, fallback to created_at
+    sales = query.order_by(
+        restaurant_models.RestaurantSale.served_at.desc().nullslast(),
+        restaurant_models.RestaurantSale.created_at.desc()
+    ).all()
 
     result = []
     total_sales_amount = 0.0
@@ -414,22 +724,23 @@ def list_sales(
 
     for sale in sales:
         order = sale.order
-        items = []
+        items_display = []
         order_location_id = None
         guest_name = None
 
         if order:
             order_location_id = order.location_id
             guest_name = order.guest_name
-            items = [
-                MealOrderItemDisplay.from_orm_with_meal(item)
+            items_display = [
+                restaurant_schemas.MealOrderItemDisplay.from_orm(item)
                 for item in order.items
             ]
 
-        # ✅ Location filter
+        # 5️⃣ Location filter
         if location_id is not None and order_location_id != location_id:
             continue
 
+        # 6️⃣ Calculate payments & balance
         amount_paid = sum(
             (payment.amount_paid or 0)
             for payment in sale.payments
@@ -441,6 +752,14 @@ def list_sales(
         total_paid_amount += amount_paid
         total_balance += balance
 
+        # 🔥 7️⃣ Compute status dynamically
+        if amount_paid == 0:
+            computed_status = "unpaid"
+        elif 0 < amount_paid < (sale.total_amount or 0):
+            computed_status = "partial"
+        else:
+            computed_status = "paid"
+
         sale_display = {
             "id": sale.id,
             "order_id": sale.order_id,
@@ -450,12 +769,13 @@ def list_sales(
             "total_amount": sale.total_amount,
             "amount_paid": amount_paid,
             "balance": balance,
-            "status": sale.status,
+            "status": computed_status,   # <-- 🔥 fixed here
             "served_at": sale.served_at,
             "created_at": sale.created_at,
-            "items": items,
+            "items": items_display,
         }
         result.append(sale_display)
+
 
     summary = {
         "total_sales_amount": total_sales_amount,
@@ -466,18 +786,32 @@ def list_sales(
     return {"sales": result, "summary": summary}
 
 
+
 @router.get("/sales/items-summary", response_model=dict)
 def summarize_items_sold(
-    status: Optional[str] = Query(None, description="Filter by status: unpaid, partial, paid"),
-    start_date: Optional[date] = Query(None, description="Start date in YYYY-MM-DD format"),
-    end_date: Optional[date] = Query(None, description="End date in YYYY-MM-DD format"),
-    location_id: Optional[int] = Query(None, description="Filter sales by restaurant location"),
+    status: Optional[str] = Query(None, description="Filter by sale status: unpaid, partial, paid"),
+    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    location_id: Optional[int] = Query(None, description="Filter by restaurant location"),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
-    query = db.query(RestaurantSale)
+    # ===============================
+    # 1) Base Query
+    # ===============================
+    query = (
+        db.query(RestaurantSale)
+        .join(RestaurantSale.order)
+        .options(
+            joinedload(RestaurantSale.order)
+            .joinedload(MealOrder.items)
+            .joinedload(MealOrderItem.store_item)  # Load store_item relationship
+        )
+    )
 
-    # ✅ Apply same filters as /sales
+    # ===============================
+    # 2) Filters
+    # ===============================
     if status:
         query = query.filter(RestaurantSale.status == status)
 
@@ -492,9 +826,14 @@ def summarize_items_sold(
     if start_date and end_date and start_date > end_date:
         raise HTTPException(status_code=400, detail="Start date cannot be after end date")
 
+    if location_id:
+        query = query.filter(MealOrder.location_id == location_id)
+
     sales = query.all()
 
-    # ✅ Aggregate items
+    # ===============================
+    # 3) Aggregation
+    # ===============================
     item_summary = {}
     grand_total = 0.0
 
@@ -503,17 +842,20 @@ def summarize_items_sold(
         if not order:
             continue
 
-        # ✅ Location filter
-        if location_id is not None and order.location_id != location_id:
-            continue
-
         for item in order.items:
-            meal_item = MealOrderItemDisplay.from_orm_with_meal(item)
 
-            name = meal_item.meal_name
-            qty = meal_item.quantity
-            price = meal_item.price_per_unit   # ✅ use price_per_unit instead of price
-            amount = meal_item.total_price or (qty * (price or 0))
+            # ✅ Prefer store_item name & unit_price
+            store_item = item.store_item
+            if not store_item:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Store item missing for order item ID {item.id}. Data integrity issue."
+                )
+
+            name = store_item.name
+            price = store_item.unit_price or item.price_per_unit or 0
+            qty = item.quantity
+            amount = item.total_price or (qty * price)
 
             if name not in item_summary:
                 item_summary[name] = {"qty": 0, "price": price, "amount": 0}
@@ -522,8 +864,10 @@ def summarize_items_sold(
             item_summary[name]["amount"] += amount
             grand_total += amount
 
-    # ✅ Convert dict → list
-    items_sold = [
+    # ===============================
+    # 4) Format Response
+    # ===============================
+    items = [
         {
             "item": name,
             "qty": data["qty"],
@@ -533,136 +877,160 @@ def summarize_items_sold(
         for name, data in item_summary.items()
     ]
 
+    summary = {
+        "grand_total": grand_total,
+        "total_items": len(items)
+    }
+
     return {
-        "items_sold": items_sold,
-        "grand_total": grand_total
+        "items": items,
+        "summary": summary
     }
 
 
-
-
 @router.get("/sales/outstanding", response_model=dict)
-def list_outstanding(
-    location_id: int = Query(None, description="Filter by location"),
-    start_date: date = Query(None, description="Start date for filtering"),
-    end_date: date = Query(None, description="End date for filtering"),
+def list_outstanding_sales(
+    location_id: Optional[int] = Query(None, description="Filter by restaurant location"),
+    start_date: Optional[date] = Query(None, description="Start date"),
+    end_date: Optional[date] = Query(None, description="End date"),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
-    # ✅ Get all sales (not filtering by status, we’ll compute balance ourselves)
-    query = db.query(RestaurantSale)
+    query = db.query(restaurant_models.RestaurantSale)
 
-    # ✅ Filter by location if provided
-    if location_id:
-        query = query.join(RestaurantSale.order).filter(MealOrder.location_id == location_id)
-
+    # 1️⃣ Date filters
     if start_date:
-        query = query.filter(RestaurantSale.created_at >= start_date)
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        query = query.filter(restaurant_models.RestaurantSale.served_at >= start_dt)
+
     if end_date:
-        query = query.filter(RestaurantSale.created_at <= end_date)
+        end_dt = datetime.combine(end_date, datetime.max.time())
+        query = query.filter(restaurant_models.RestaurantSale.served_at <= end_dt)
 
-    sales = query.order_by(RestaurantSale.created_at.desc()).all()
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=400, detail="Start date cannot be after end date")
+
+    # 2️⃣ Order results
+    sales = query.order_by(
+        restaurant_models.RestaurantSale.served_at.desc().nullslast(),
+        restaurant_models.RestaurantSale.created_at.desc()
+    ).all()
+
     result = []
-
-    # Summary totals
     total_sales_amount = 0.0
     total_paid_amount = 0.0
     total_balance = 0.0
 
     for sale in sales:
         order = sale.order
-        items = []
-        location_id = None
-        location_name = None
+        items_display = []
+        order_location_id = None
         guest_name = None
 
         if order:
-            location_id = order.location_id
+            order_location_id = order.location_id
             guest_name = order.guest_name
-            if order.location:
-                location_name = order.location.name
-            items = [
-                MealOrderItemDisplay.from_orm_with_meal(item)
+            items_display = [
+                restaurant_schemas.MealOrderItemDisplay.from_orm(item)
                 for item in order.items
             ]
 
-        # ✅ Compute payments excluding voided ones
-        valid_payments = [p for p in sale.payments if not p.is_void]
-        amount_paid = sum(p.amount_paid for p in valid_payments)
-        balance = float(sale.total_amount or 0) - float(amount_paid or 0)
+        # 3️⃣ Location filter
+        if location_id is not None and order_location_id != location_id:
+            continue
 
+        # 4️⃣ Compute payments
+        amount_paid = sum(
+            (payment.amount_paid or 0)
+            for payment in sale.payments
+            if not payment.is_void
+        )
+
+        balance = (sale.total_amount or 0) - amount_paid
+
+        # 5️⃣ Outstanding only
         if balance <= 0:
-            continue  # ✅ Only list sales with positive balance
+            continue
 
-        # Update totals
-        total_sales_amount += float(sale.total_amount or 0)
-        total_paid_amount += float(amount_paid or 0)
-        total_balance += float(balance or 0)
+        # 6️⃣ Totals update
+        total_sales_amount += (sale.total_amount or 0)
+        total_paid_amount += amount_paid
+        total_balance += balance
 
-        sale_display = {
+        result.append({
             "id": sale.id,
             "order_id": sale.order_id,
             "guest_name": guest_name,
-            "location_id": location_id,
+            "location_id": order_location_id,
             "served_by": sale.served_by,
-            "total_amount": float(sale.total_amount or 0),
-            "amount_paid": float(amount_paid or 0),
-            "balance": float(balance or 0),
-            "status": "partial" if amount_paid > 0 else "unpaid",  # ✅ Dynamic status
+            "total_amount": sale.total_amount,
+            "amount_paid": amount_paid,
+            "balance": balance,
+            "status": sale.status,  # You can recompute if needed
             "served_at": sale.served_at,
             "created_at": sale.created_at,
-            "items": items,
-            "payments": [
-                {
-                    "id": p.id,
-                    "amount_paid": float(p.amount_paid or 0),
-                    "payment_mode": p.payment_mode,
-                    "paid_by": p.paid_by,
-                    "created_at": p.created_at,
-                }
-                for p in valid_payments
-            ]
-        }
-        result.append(sale_display)
+            "items": items_display,
+        })
 
     summary = {
-        "total_sales_amount": float(total_sales_amount),
-        "total_paid_amount": float(total_paid_amount),
-        "total_balance": float(total_balance),
+        "total_sales_amount": total_sales_amount,
+        "total_paid_amount": total_paid_amount,
+        "total_balance": total_balance,
     }
 
     return {"sales": result, "summary": summary}
 
 
-@router.get("/sales/{sale_id}", response_model=RestaurantSaleDisplay)
+@router.get("/sales/{sale_id}", response_model=restaurant_schemas.RestaurantSaleDisplay)
 def get_sale(
     sale_id: int,
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
-    sale = db.query(RestaurantSale).filter(RestaurantSale.id == sale_id).first()
+    # 1️⃣ Fetch the sale
+    sale = db.query(restaurant_models.RestaurantSale).filter(
+        restaurant_models.RestaurantSale.id == sale_id
+    ).first()
+
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
 
+    # 2️⃣ Fetch the associated order
     order = sale.order
+    items_display = []
+    order_location_id = None
+    guest_name = None
 
-    if not order:
-        items = []
-    else:
-        items = [
-            MealOrderItemDisplay.from_orm_with_meal(item)
+    if order:
+        order_location_id = order.location_id
+        guest_name = order.guest_name
+        items_display = [
+            restaurant_schemas.MealOrderItemDisplay.from_orm(item)
             for item in order.items
         ]
 
-    return RestaurantSaleDisplay(
+    # 3️⃣ Calculate amount paid & balance
+    amount_paid = sum(
+        (payment.amount_paid or 0)
+        for payment in sale.payments
+        if not payment.is_void
+    )
+    balance = (sale.total_amount or 0) - amount_paid
+
+    # 4️⃣ Return the structured sale
+    return restaurant_schemas.RestaurantSaleDisplay(
         id=sale.id,
         order_id=sale.order_id,
+        guest_name=guest_name,
+        location_id=order_location_id,
         served_by=sale.served_by,
         total_amount=sale.total_amount,
+        amount_paid=amount_paid,
+        balance=balance,
         status=sale.status,
         served_at=sale.served_at,
         created_at=sale.created_at,
-        items=items
+        items=items_display
     )
 
 
@@ -699,8 +1067,7 @@ def delete_sale(
 
 
 
-
-@router.post("/sales/from-order/{order_id}", response_model=RestaurantSaleDisplay)
+@router.post("/sales/from-order/{order_id}", response_model=restaurant_schemas.RestaurantSaleDisplay)
 def create_sale_from_order(
     order_id: int,
     served_by: str,
@@ -708,51 +1075,152 @@ def create_sale_from_order(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
-    order = db.query(MealOrder).filter(MealOrder.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found.")
+    try:
+        # -------------------------
+        # 1) fetch & validate order
+        # -------------------------
+        order = db.query(restaurant_models.MealOrder).filter(restaurant_models.MealOrder.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found.")
+        if order.status != "open":
+            raise HTTPException(status_code=400, detail="Order is already closed.")
 
-    if order.status != "open":
-        raise HTTPException(
-            status_code=400,
-            detail="Order is already closed and cannot be used to generate a sale."
+        # -------------------------
+        # 2) compute totals & create sale
+        # -------------------------
+        total = sum((item.total_price or 0) for item in order.items)
+
+        sale = restaurant_models.RestaurantSale(
+            order_id=order.id,
+            location_id=location_id,
+            guest_name=order.guest_name,
+            served_by=served_by,
+            total_amount=total,
+            status="unpaid",
+            served_at=datetime.utcnow()
+        )
+        db.add(sale)
+        db.flush()  # get sale.id without committing
+
+        # -----------------------------------------
+        # 3) create a StoreIssue recorded as to "kitchen"
+        #    (so kitchen-balance-stock will see it)
+        # -----------------------------------------
+        store_issue = store_models.StoreIssue(
+            issue_to="kitchen",                    # <--- important: mark as kitchen
+            kitchen_id=order.location_id,          # tie issue to kitchen/location where order came from
+            issued_by_id=current_user.id,
+            issue_date=datetime.utcnow()
+        )
+        db.add(store_issue)
+        db.flush()  # get store_issue.id
+
+        # -----------------------------------------
+        # 4) deduct stock (FIFO) using store_qty_used
+        #    and record StoreIssueItem rows
+        # -----------------------------------------
+        for item in order.items:
+            # Find the store item
+            store_item = db.query(store_models.StoreItem).filter(store_models.StoreItem.id == item.store_item_id).first()
+            if not store_item:
+                # nothing to deduct
+                continue
+
+            # Use store_qty_used (actual units consumed from stock). Fallback to quantity if not set.
+            qty_to_deduct = float(item.store_qty_used or item.quantity or 0)
+            if qty_to_deduct <= 0:
+                continue
+
+            # Get positive-stock entries (FIFO). Lock them for update.
+            stock_entries = (
+                db.query(store_models.StoreStockEntry)
+                .filter(
+                    store_models.StoreStockEntry.item_id == store_item.id,
+                    store_models.StoreStockEntry.quantity > 0
+                )
+                .order_by(store_models.StoreStockEntry.id)  # FIFO by id (or purchase_date if you prefer)
+                .with_for_update()
+                .all()
+            )
+
+            # Deduct from entries until qty_to_deduct is zero or we run out of stock_entries
+            remaining = qty_to_deduct
+            for entry in stock_entries:
+                if remaining <= 0:
+                    break
+
+                # how much we can take from this entry
+                available = float(entry.quantity or 0)
+                if available <= 0:
+                    continue
+
+                if available >= remaining:
+                    issued_qty = remaining
+                    entry.quantity = available - remaining
+                    remaining = 0
+                else:
+                    issued_qty = available
+                    entry.quantity = 0
+                    remaining = remaining - available
+
+                # record the issued item
+                store_issue_item = store_models.StoreIssueItem(
+                    issue_id=store_issue.id,
+                    item_id=store_item.id,
+                    quantity=issued_qty
+                )
+                db.add(store_issue_item)
+
+            # OPTIONAL: if remaining > 0 here, you ran out of stock.
+            # You can choose to raise, log, or allow partial fulfilment.
+            if remaining > 0:
+                # For now, we allow partial deduction and continue,
+                # but you might want to raise an HTTPException instead.
+                # raise HTTPException(status_code=400, detail=f"Insufficient stock for item {store_item.name}")
+                pass
+
+        # -------------------------
+        # 5) close the order, commit
+        # -------------------------
+        order.status = "closed"
+        db.commit()
+
+        # refresh sale to get related data (payments etc.)
+        db.refresh(sale)
+
+        # -------------------------
+        # 6) prepare response
+        # -------------------------
+        items = [
+            restaurant_schemas.MealOrderItemDisplay.from_orm(item)
+            for item in order.items
+        ]
+
+        amount_paid = sum(payment.amount for payment in sale.payments) if sale.payments else 0
+        balance = (sale.total_amount or 0) - amount_paid
+
+        return restaurant_schemas.RestaurantSaleDisplay(
+            id=sale.id,
+            order_id=sale.order_id,
+            location_id=sale.location_id,
+            guest_name=sale.guest_name,
+            served_by=sale.served_by,
+            total_amount=sale.total_amount,
+            amount_paid=amount_paid,
+            balance=balance,
+            status=sale.status,
+            served_at=sale.served_at,
+            created_at=sale.created_at,
+            items=items
         )
 
-    total = sum(item.meal.price * item.quantity for item in order.items if item.meal)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Could not create sale from order: {str(e)}")
 
-    sale = RestaurantSale(
-        order_id=order.id,
-        location_id=location_id,   # ✅ only use the request param
-        guest_name=order.guest_name,
-        served_by=served_by,
-        total_amount=total,
-        status="unpaid",
-        served_at=datetime.utcnow()
-    )
-    db.add(sale)
-
-    order.status = "closed"
-    db.commit()
-    db.refresh(sale)
-
-    items = [MealOrderItemDisplay.from_orm_with_meal(item) for item in order.items]
-    amount_paid = sum(payment.amount for payment in sale.payments)
-    balance = total - amount_paid
-
-    return RestaurantSaleDisplay(
-        id=sale.id,
-        order_id=sale.order_id,
-        location_id=sale.location_id,
-        guest_name=sale.guest_name,
-        served_by=sale.served_by,
-        total_amount=sale.total_amount,
-        amount_paid=amount_paid,
-        balance=balance,
-        status=sale.status,
-        served_at=sale.served_at,
-        created_at=sale.created_at,
-        items=items
-    )
 
 
 @router.get("/open")
@@ -762,37 +1230,55 @@ def list_open_meal_orders(
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
     """
-    Return open meal orders. If location_id is provided, restrict to that location.
-    Returns an object with total_entries, total_amount and orders (empty array if none).
-    """
-    query = db.query(MealOrder).filter(MealOrder.status == "open")
-    if location_id is not None:
-        query = query.filter(MealOrder.location_id == location_id)
+    Return open meal orders.
 
-    orders = query.order_by(MealOrder.id.asc()).all()
+    If location_id is provided, restrict to that location.
+    Returns an object with total_entries, total_amount and orders.
+    """
+    query = db.query(restaurant_models.MealOrder).filter(
+        restaurant_models.MealOrder.status == "open"
+    )
+
+    if location_id is not None:
+        query = query.filter(restaurant_models.MealOrder.location_id == location_id)
+
+    orders = query.order_by(restaurant_models.MealOrder.id.asc()).all()
 
     result = []
     total_amount = 0.0
 
     for order in orders:
         order_items = []
+
         for item in order.items:
-            meal = db.query(Meal).filter(Meal.id == item.meal_id).first()
-            item_total = (meal.price * item.quantity) if meal else 0
+
+            # meal_id support (optional)
+            meal = None
+            if item.meal_id:
+                meal = db.query(restaurant_models.Meal).filter(
+                    restaurant_models.Meal.id == item.meal_id
+                ).first()
+
+            # Price now comes from store item
+            item_total = item.total_price or 0
             total_amount += item_total
 
             order_items.append(
-                MealOrderItemDisplay(
+                restaurant_schemas.MealOrderItemDisplay(
+                    id=item.id,
                     meal_id=item.meal_id,
                     meal_name=meal.name if meal else None,
+                    store_item_id=item.store_item_id,
+                    item_name=item.item_name,
                     quantity=item.quantity,
-                    price_per_unit=meal.price if meal else None,
+                    price_per_unit=item.price_per_unit,
                     total_price=item_total,
+                    store_qty_used=item.store_qty_used,
                 )
             )
 
         result.append(
-            MealOrderDisplay(
+            restaurant_schemas.MealOrderDisplay(
                 id=order.id,
                 location_id=order.location_id,
                 order_type=order.order_type,
@@ -811,116 +1297,29 @@ def list_open_meal_orders(
     }
 
 
-@router.get("/{order_id}", response_model=MealOrderDisplay)
-def get_meal_order(order_id: int, 
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
-):
-    order = db.query(MealOrder).filter(MealOrder.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Meal order not found")
-
-    order_items = []
-    for item in order.items:
-        meal = db.query(Meal).filter(Meal.id == item.meal_id).first()
-        order_items.append(MealOrderItemDisplay(
-            meal_id=item.meal_id,
-            meal_name=meal.name if meal else None,
-            quantity=item.quantity,
-            price_per_unit=meal.price if meal else None,
-            total_price=(meal.price * item.quantity) if meal else None,
-        ))
-
-    return MealOrderDisplay(
-        id=order.id,
-        location_id=order.location_id,
-        order_type=order.order_type,
-        room_number=order.room_number,
-        guest_name=order.guest_name,
-        status=order.status,
-        created_at=order.created_at,
-        items=order_items
-    )
 
 
-
-
-
-@router.put("/{order_id}", response_model=MealOrderDisplay)
-def update_meal_order(
+@router.delete("/meal-orders/{order_id}", response_model=dict)
+def delete_meal_order(
     order_id: int,
-    order_data: MealOrderCreate,
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
-):
-    order = db.query(MealOrder).filter(MealOrder.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Meal order not found")
-
-    if order.status.lower() == "closed":
-        raise HTTPException(status_code=400, detail="Closed orders cannot be edited")
-
-    # ✅ Update core fields
-    order.guest_name = order_data.guest_name
-    order.order_type = order_data.order_type
-    order.room_number = order_data.room_number
-    order.location_id = order_data.location_id
-
-    existing_items = {item.meal_id: item for item in order.items}
-
-    for new_item in order_data.items:
-        if new_item.meal_id in existing_items:
-            # Update quantity if exists
-            existing_items[new_item.meal_id].quantity = new_item.quantity
-        else:
-            # Add new item if not in existing ones
-            db_item = MealOrderItem(
-                meal_id=new_item.meal_id,
-                quantity=new_item.quantity,
-                order_id=order.id,
-                created_at=datetime.utcnow()
-            )
-            db.add(db_item)
-
-    db.commit()
-    db.refresh(order)
-
-    # Build enriched item list
-    order_items = []
-    for item in order.items:
-        meal = db.query(Meal).filter(Meal.id == item.meal_id).first()
-        order_items.append(MealOrderItemDisplay(
-            meal_id=item.meal_id,
-            meal_name=meal.name if meal else None,
-            quantity=item.quantity,
-            price_per_unit=meal.price if meal else None,
-            total_price=(meal.price * item.quantity) if meal else None,
-        ))
-
-    return MealOrderDisplay(
-        id=order.id,
-        location_id=order.location_id,
-        order_type=order.order_type,
-        room_number=order.room_number,
-        guest_name=order.guest_name,
-        status=order.status,
-        created_at=order.created_at,
-        items=order_items
-    )
-
-
-@router.delete("/{order_id}")
-def delete_meal_order(order_id: int, 
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
+    # 1️⃣ Fetch the order
     order = db.query(MealOrder).filter(MealOrder.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Meal order not found")
 
+    # 2️⃣ Prevent deletion if order is not open
+    if order.status != "open":
+        return {"detail": "Meal order cannot be deleted because it has been converted to a sale"}
+
+    # 3️⃣ Delete the order (items will cascade)
     db.delete(order)
     db.commit()
+
     return {"detail": "Meal order deleted successfully"}
+
 
 
 

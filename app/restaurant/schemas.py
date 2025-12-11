@@ -45,6 +45,10 @@ class MealCreate(BaseModel):
     category_id: int
     location_id: int
 
+    # 🔥 NEW FIELD
+    store_item_id: Optional[int] = None
+
+
 
 class MealDisplay(BaseModel):
     id: int
@@ -55,50 +59,49 @@ class MealDisplay(BaseModel):
     category_id: int
     location_id: int
 
+    # 🔥 NEW FIELD
+    store_item_id: Optional[int]
+
     class Config:
         from_attributes = True
 
 
 #Order
 class MealOrderItemCreate(BaseModel):
-    meal_id: int
+    store_item_id: int  # previously meal_id
     quantity: int
-
+    price_per_unit: float   # 👈 NEW
 
 class MealOrderCreate(BaseModel):
-    location_id: Optional[int] = None  # Optional if not selected
-    order_type: str  # e.g., "Room" or "POS"
-    room_number: Optional[str] = None  # only if order_type == "Room"
-    guest_name:str
+    location_id: Optional[int] = None
+    order_type: str  # "Room" or "POS"
+    room_number: Optional[str] = None
+    guest_name: str
     items: List[MealOrderItemCreate]
-    status: Optional[str] = "open"  # default to pending
-
-
+    status: Optional[str] = "open"
+    
     class Config:
         from_attributes = True
 
 
 
-
 class MealOrderItemDisplay(BaseModel):
-    meal_id: int
-    meal_name: Optional[str] = None
+    store_item_id: int
+    item_name: str
     quantity: int
-    price_per_unit: Optional[float] = None
-    total_price: Optional[float] = None
+    price_per_unit: float
+    total_price: float
 
-    @classmethod
-    def from_orm_with_meal(cls, item):
-        return cls(
-            meal_id=item.meal_id,
-            meal_name=item.meal.name if item.meal else None,
+    @staticmethod
+    def from_orm(item):
+        return MealOrderItemDisplay(
+            store_item_id=item.store_item_id,
+            item_name=item.item_name,
             quantity=item.quantity,
-            price_per_unit=item.meal.price if item.meal else None,
-            total_price=(item.quantity * item.meal.price) if item.meal else None
+            price_per_unit=item.price_per_unit,
+            total_price=item.total_price,
         )
 
-    class Config:
-        from_attributes = True  # Pydantic v2 (equivalent to orm_mode=True)
 
 
 class MealOrderDisplay(BaseModel):
@@ -133,3 +136,11 @@ class RestaurantSaleDisplay(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
     
+
+class RestaurantMealItem(BaseModel):
+    id: int
+    name: str
+    price: float
+
+    class Config:
+        from_attributes = True
