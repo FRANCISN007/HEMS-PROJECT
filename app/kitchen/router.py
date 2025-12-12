@@ -12,10 +12,14 @@ from app.kitchen import models as kitchen_models
 from app.kitchen import schemas as kitchen_schemas
 
 
+
 router = APIRouter()
 
 
 
+# ----------------------------
+# Create a new kitchen
+# ----------------------------
 @router.post("/", response_model=KitchenDisplaySimple)
 def create_kitchen(
     data: KitchenCreate,
@@ -23,75 +27,72 @@ def create_kitchen(
 ):
     """
     Create a new kitchen.
-    NOTE: We no longer take initial stock here because
-    KitchenInventory and KitchenStock are separate systems
-    and are updated via issuing items from Store → Kitchen.
+    Note: Initial stock is handled separately via Store → Kitchen.
     """
-
-    # ---------------------------------------------
-    # 1. Ensure kitchen name does not already exist
-    # ---------------------------------------------
-    existing = db.query(Kitchen).filter(Kitchen.name == data.name).first()
+    # Ensure kitchen name is unique
+    existing = db.query(kitchen_models.Kitchen).filter(
+        kitchen_models.Kitchen.name == data.name
+    ).first()
     if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Kitchen '{data.name}' already exists."
-        )
+        raise HTTPException(400, detail=f"Kitchen '{data.name}' already exists.")
 
-    # ---------------------------------------------
-    # 2. Create the new kitchen
-    # ---------------------------------------------
-    kitchen = Kitchen(name=data.name)
+    # Create kitchen
+    kitchen = kitchen_models.Kitchen(name=data.name)
     db.add(kitchen)
     db.commit()
     db.refresh(kitchen)
-
     return kitchen
 
 
+# ----------------------------
+# List all kitchens (full info)
+# ----------------------------
 @router.get("/", response_model=List[KitchenDisplaySimple])
-def list_kitchens(db: Session = Depends(get_db)):
+def list_kitchens_full(db: Session = Depends(get_db)):
     """
-    List all kitchens.
-    """
-    kitchens = db.query(Kitchen).all()
-    return kitchens
-
-
-@router.get("/simple", response_model=List[kitchen_schemas.KitchenDisplaySimple])
-def list_kitchens(db: Session = Depends(get_db)):
-    """
-    Return a simple list of all kitchens for dropdowns.
+    List all kitchens with full information.
     """
     kitchens = db.query(kitchen_models.Kitchen).order_by(kitchen_models.Kitchen.id.asc()).all()
     return kitchens
 
+
+# ----------------------------
+# List kitchens for dropdowns (simple)
+# ----------------------------
+@router.get("/simple", response_model=List[KitchenDisplaySimple])
+def list_kitchens_simple(db: Session = Depends(get_db)):
+    """
+    Return a simplified list of kitchens (id + name) for dropdowns.
+    """
+    kitchens = db.query(kitchen_models.Kitchen).order_by(kitchen_models.Kitchen.id.asc()).all()
+    return kitchens
+
+
+# ----------------------------
+# Update kitchen name
+# ----------------------------
 @router.put("/{kitchen_id}", response_model=KitchenDisplaySimple)
 def update_kitchen(
     kitchen_id: int,
-    data: KitchenCreate,  # We only allow updating name
+    data: KitchenCreate,  # Only allow updating the name
     db: Session = Depends(get_db)
 ):
     """
     Update the name of an existing kitchen.
     """
-    kitchen = db.query(Kitchen).filter(Kitchen.id == kitchen_id).first()
+    kitchen = db.query(kitchen_models.Kitchen).filter(
+        kitchen_models.Kitchen.id == kitchen_id
+    ).first()
     if not kitchen:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Kitchen with ID {kitchen_id} not found."
-        )
+        raise HTTPException(404, detail=f"Kitchen with ID {kitchen_id} not found.")
 
-    # Check if the new name already exists for another kitchen
-    existing = db.query(Kitchen).filter(
-        Kitchen.name == data.name,
-        Kitchen.id != kitchen_id
+    # Check if new name is already used by another kitchen
+    existing = db.query(kitchen_models.Kitchen).filter(
+        kitchen_models.Kitchen.name == data.name,
+        kitchen_models.Kitchen.id != kitchen_id
     ).first()
     if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Another kitchen with name '{data.name}' already exists."
-        )
+        raise HTTPException(400, detail=f"Another kitchen with name '{data.name}' already exists.")
 
     kitchen.name = data.name
     db.commit()
@@ -99,8 +100,6 @@ def update_kitchen(
     return kitchen
 
 
-
-from app.kitchen.models import Kitchen, KitchenInventory, KitchenStock
 
 @router.delete("/{kitchen_id}", response_model=dict)
 def delete_kitchen(kitchen_id: int, db: Session = Depends(get_db)):

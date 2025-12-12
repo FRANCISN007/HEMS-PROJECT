@@ -10,12 +10,14 @@ from pydantic.config import ConfigDict  # this is the correct import in v2
 
 class RestaurantLocationCreate(BaseModel):
     name: str
+
     active: bool = True
 
 
 class RestaurantLocationDisplay(BaseModel):
     id: int
     name: str
+
     active: bool
 
     class Config:
@@ -68,22 +70,18 @@ class MealDisplay(BaseModel):
 
 #Order
 class MealOrderItemCreate(BaseModel):
-    store_item_id: int  # previously meal_id
+    store_item_id: int
     quantity: int
-    price_per_unit: float   # 👈 NEW
+    price_per_unit: float
 
 class MealOrderCreate(BaseModel):
     location_id: Optional[int] = None
-    order_type: str  # "Room" or "POS"
+    kitchen_id: int   # selected at order time
+    order_type: str
     room_number: Optional[str] = None
     guest_name: str
     items: List[MealOrderItemCreate]
     status: Optional[str] = "open"
-    
-    class Config:
-        from_attributes = True
-
-
 
 class MealOrderItemDisplay(BaseModel):
     store_item_id: int
@@ -102,17 +100,16 @@ class MealOrderItemDisplay(BaseModel):
             total_price=item.total_price,
         )
 
-
-
 class MealOrderDisplay(BaseModel):
     id: int
     location_id: Optional[int] = None
+    kitchen_id: int
     order_type: str
     room_number: Optional[str] = None
-    guest_name: str  # ✅ Add this
+    guest_name: str
     status: Optional[str] = None
     created_at: datetime
-    items: List[MealOrderItemDisplay]  # already present
+    items: List[MealOrderItemDisplay]
 
     class Config:
         from_attributes = True

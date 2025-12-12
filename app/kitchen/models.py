@@ -15,6 +15,15 @@ class Kitchen(Base):
     stocks = relationship("KitchenStock", back_populates="kitchen")  # <-- add this
 
 
+     # NEW RELATIONSHIPS
+
+
+
+    
+
+    
+
+
 class KitchenInventory(Base):
     __tablename__ = "kitchen_inventories"
 

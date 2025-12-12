@@ -1,22 +1,17 @@
 // src/api/config.js
+
 const getBaseUrl = () => {
   let envUrl = "";
 
-  // ✅ Try Vite first (no crash if import.meta is undefined)
-  try {
-    envUrl = import.meta?.env?.VITE_API_BASE_URL || "";
-  } catch {
-    envUrl = "";
+  // ✅ CRA environment variable (this is the only supported one)
+  if (typeof process !== "undefined") {
+    envUrl = process.env.REACT_APP_API_BASE_URL || "";
   }
 
-  // ✅ Then try Create React App / Webpack
-  if (!envUrl && typeof process !== "undefined") {
-    envUrl = process.env?.REACT_APP_API_BASE_URL || "";
-  }
-
-  // ✅ If nothing found, detect from window hostname
+  // ✅ Fallback: auto-detect based on hostname
   if (!envUrl || envUrl.trim() === "") {
     const hostname = window.location.hostname;
+
     if (hostname && hostname !== "localhost") {
       envUrl = `${window.location.protocol}//${hostname}:8000`;
     } else {

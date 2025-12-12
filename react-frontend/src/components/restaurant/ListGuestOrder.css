@@ -142,12 +142,17 @@
 /* ===== Compact Edit Modal Only ===== */
 .edit-modal-content {
   background: #fff;
-  padding: 8px;         /* less padding */
-  border-radius: 10px;
-  width: 400px;          /* narrower */
-  max-width: 150%;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  width: 450px;
+  max-width: 95%;
+  max-height: 85vh;    /* prevents overflow */
+  padding: 15px;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;    /* prevents outer scroll */
 }
+
 
 .edit-modal-content h3 {
   margin-bottom: 8px;
@@ -411,3 +416,24 @@
 .add-item-btn:hover {
   background-color: #1d4ed8;
 }
+
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  justify-content: center; 
+  align-items: center; 
+  z-index: 9999;
+}
+
+.edit-modal-scroll {
+  overflow-y: auto;
+  max-height: 70vh;     /* scroll area */
+  padding-right: 8px;   /* space for scrollbar */
+}
+

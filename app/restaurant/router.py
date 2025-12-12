@@ -37,8 +37,12 @@ from sqlalchemy.orm import joinedload
 router = APIRouter()
 
 # Create a new restaurant location
+# ----------------------------
+# Create a restaurant location
+# ----------------------------
 @router.post("/locations", response_model=restaurant_schemas.RestaurantLocationDisplay)
-def create_location(location: restaurant_schemas.RestaurantLocationCreate, 
+def create_location(
+    location: restaurant_schemas.RestaurantLocationCreate,
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
@@ -49,20 +53,26 @@ def create_location(location: restaurant_schemas.RestaurantLocationCreate,
     return db_location
 
 
-# Get all restaurant locations in ascending order of ID
+# ----------------------------
+# List all restaurant locations
+# ----------------------------
 @router.get("/locations", response_model=list[restaurant_schemas.RestaurantLocationDisplay])
 def list_locations(
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
-    return db.query(restaurant_models.RestaurantLocation).order_by(restaurant_models.RestaurantLocation.id.asc()).all()
+    return db.query(restaurant_models.RestaurantLocation).order_by(
+        restaurant_models.RestaurantLocation.id.asc()
+    ).all()
 
 
+# ----------------------------
 # Update restaurant location
+# ----------------------------
 @router.put("/locations/{location_id}", response_model=restaurant_schemas.RestaurantLocationDisplay)
 def update_location(
     location_id: int,
-    location_update: restaurant_schemas.RestaurantLocationCreate,  # reuse create schema since it's same fields
+    location_update: restaurant_schemas.RestaurantLocationCreate,
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
@@ -242,121 +252,81 @@ def create_meal_order(
     db: Session = Depends(get_db),
     current_user=Depends(role_required(["restaurant"]))
 ):
-    # 1️⃣ Load kitchen items
-    kitchen_items = (
-        db.query(store_models.StoreItem)
-        .filter(
-            func.lower(store_models.StoreItem.item_type).in_([
-                "kitchen",
-                "kitchen items",
-                "meal",
-                "food",
-            ])
-        )
-        .all()
-    )
-    if not kitchen_items:
-        raise HTTPException(404, "No kitchen items found in store")
+    # Validate location
+    location = db.query(restaurant_models.RestaurantLocation).filter(
+        restaurant_models.RestaurantLocation.id == order.location_id
+    ).first()
+    if not location:
+        raise HTTPException(404, "Restaurant location not found.")
 
+    # Validate kitchen
+    kitchen = db.query(store_models.Kitchen).filter(
+        store_models.Kitchen.id == order.kitchen_id
+    ).first()
+    if not kitchen:
+        raise HTTPException(404, "Selected kitchen not found.")
+
+    kitchen_items = db.query(store_models.StoreItem).filter(
+        func.lower(store_models.StoreItem.item_type).in_(["kitchen", "meal", "food"])
+    ).all()
     kitchen_map = {item.id: item for item in kitchen_items}
 
-    # 2️⃣ Validate each order item & check stock before proceeding with the creation
+    # Validate quantities & stock
     for it in order.items:
-        # ❌ Reject if quantity is 0 or negative
         if it.quantity <= 0:
-            raise HTTPException(
-                400,
-                f"Invalid quantity for '{it.store_item_id}'. Quantity must be greater than 0."
-            )
-
+            raise HTTPException(400, f"Invalid quantity for item {it.store_item_id}. Must be > 0.")
         if it.store_item_id not in kitchen_map:
-            raise HTTPException(404, f"Store item {it.store_item_id} not found or not a kitchen item")
+            raise HTTPException(404, f"Item {it.store_item_id} is not a valid kitchen item.")
 
-        store_item = kitchen_map[it.store_item_id]
-
-        # Get available FIFO stock
-        stock_entries = (
-            db.query(store_models.StoreStockEntry)
-            .filter(
-                store_models.StoreStockEntry.item_id == store_item.id,
-                store_models.StoreStockEntry.quantity > 0
-            )
-            .order_by(store_models.StoreStockEntry.id)  # FIFO
-            .all()
-        )
-
-        if not stock_entries:
+        inventory = db.query(kitchen_models.KitchenInventory).filter(
+            kitchen_models.KitchenInventory.kitchen_id == order.kitchen_id,
+            kitchen_models.KitchenInventory.item_id == it.store_item_id
+        ).first()
+        available_qty = inventory.quantity if inventory else 0
+        if available_qty < it.quantity:
             raise HTTPException(
                 400,
-                f"'{store_item.name}' has not been issued to the kitchen yet."
+                f"Not enough '{kitchen_map[it.store_item_id].name}' in kitchen inventory. "
+                f"Requested: {it.quantity}, Available: {available_qty}"
             )
 
-        total_available = sum(e.quantity for e in stock_entries)
-        # ❌ Reject if stock is less than requested
-        if total_available < it.quantity:
-            raise HTTPException(
-                400,
-                f"Not enough kitchen stock for '{store_item.name}'. Requested: {it.quantity}, Available: {total_available}"
-            )
-
-    # 3️⃣ Create Meal Order (only if all items passed the stock check)
+    # Create MealOrder
     db_order = restaurant_models.MealOrder(
         order_type=order.order_type,
         guest_name=order.guest_name,
         room_number=order.room_number,
         location_id=order.location_id,
-        created_at=datetime.utcnow(),
+        kitchen_id=order.kitchen_id,
         status=order.status or "open",
         created_by=current_user.id,
+        created_at=datetime.utcnow(),
     )
     db.add(db_order)
     db.commit()
     db.refresh(db_order)
 
-    # 4️⃣ Deduct stock & create order items
+    # Deduct stock & create items
     for it in order.items:
         store_item = kitchen_map[it.store_item_id]
         qty_needed = it.quantity
 
-        # Deduct from FIFO stock entries
-        stock_entries = (
-            db.query(store_models.StoreStockEntry)
-            .filter(
-                store_models.StoreStockEntry.item_id == store_item.id,
-                store_models.StoreStockEntry.quantity > 0
-            )
-            .order_by(store_models.StoreStockEntry.id)  # FIFO
-            .all()
-        )
+        inventory = db.query(kitchen_models.KitchenInventory).filter(
+            kitchen_models.KitchenInventory.kitchen_id == order.kitchen_id,
+            kitchen_models.KitchenInventory.item_id == store_item.id
+        ).first()
+        inventory.quantity -= qty_needed
+        db.add(inventory)
 
-        for entry in stock_entries:
-            if qty_needed <= 0:
-                break
-            deduct_qty = min(entry.quantity, qty_needed)
-            entry.quantity -= deduct_qty
-            qty_needed -= deduct_qty
-            db.add(entry)  # update entry
-
-        # Determine price
-        if it.price_per_unit and it.price_per_unit > 0:
-            price_per_unit = it.price_per_unit
-        else:
-            menu_entry = (
-                db.query(kitchen_models.KitchenMenu)
-                .filter(kitchen_models.KitchenMenu.item_id == store_item.id)
-                .order_by(kitchen_models.KitchenMenu.id.desc())
-                .first()
-            )
-            price_per_unit = menu_entry.selling_price if menu_entry else store_item.unit_price
+        price_per_unit = it.price_per_unit if it.price_per_unit > 0 else store_item.unit_price
 
         db_item = restaurant_models.MealOrderItem(
             order_id=db_order.id,
             store_item_id=store_item.id,
-            quantity=it.quantity,
-            store_qty_used=it.quantity,
+            quantity=qty_needed,
+            store_qty_used=qty_needed,
             item_name=store_item.name,
             price_per_unit=price_per_unit,
-            total_price=price_per_unit * it.quantity,
+            total_price=price_per_unit * qty_needed,
         )
         db.add(db_item)
 
@@ -367,20 +337,26 @@ def create_meal_order(
 
 
 
+
+
 @router.get("/meal-orders", response_model=List[restaurant_schemas.MealOrderDisplay])
 def list_meal_orders(
     status: Optional[str] = Query(None),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     location_id: Optional[int] = Query(None),
+    kitchen_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
-    # 1️⃣ Base query
     query = db.query(restaurant_models.MealOrder)
 
+    # --- Apply Filters ---
     if location_id:
         query = query.filter(restaurant_models.MealOrder.location_id == location_id)
+
+    if kitchen_id:
+        query = query.filter(restaurant_models.MealOrder.kitchen_id == kitchen_id)
 
     if status:
         query = query.filter(restaurant_models.MealOrder.status == status)
@@ -395,16 +371,10 @@ def list_meal_orders(
 
     orders = query.order_by(restaurant_models.MealOrder.created_at.desc()).all()
 
-    # 2️⃣ Preload kitchen items to filter
-    kitchen_items = db.query(store_models.StoreItem).filter(
-        func.lower(store_models.StoreItem.item_type) == "kitchen"
-    ).all()
-    kitchen_item_ids = {item.id for item in kitchen_items}
-
-    # 3️⃣ Build response
+    # --- Build Response ---
     response = []
     for order in orders:
-        kitchen_order_items = [
+        items_display = [
             restaurant_schemas.MealOrderItemDisplay(
                 store_item_id=item.store_item_id,
                 item_name=item.item_name,
@@ -413,23 +383,21 @@ def list_meal_orders(
                 total_price=item.total_price,
             )
             for item in order.items
-            if item.store_item_id in kitchen_item_ids
         ]
 
-        # Skip orders with no kitchen items
-        if not kitchen_order_items:
-            continue
-
-        response.append(restaurant_schemas.MealOrderDisplay(
-            id=order.id,
-            location_id=order.location_id,
-            order_type=order.order_type,
-            room_number=order.room_number,
-            guest_name=order.guest_name,
-            status=order.status,
-            created_at=order.created_at,
-            items=kitchen_order_items
-        ))
+        response.append(
+            restaurant_schemas.MealOrderDisplay(
+                id=order.id,
+                location_id=order.location_id,
+                kitchen_id=order.kitchen_id,     # ★ NEW FIELD
+                order_type=order.order_type,
+                room_number=order.room_number,
+                guest_name=order.guest_name,
+                status=order.status,
+                created_at=order.created_at,
+                items=items_display,
+            )
+        )
 
     return response
 
@@ -441,16 +409,14 @@ def update_meal_order(
     order_id: int,
     data: restaurant_schemas.MealOrderCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(
-        role_required(["restaurant"])
-    ),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"])),
 ):
-    # 1️⃣ Fetch the existing order
-    order = (
-        db.query(restaurant_models.MealOrder)
-        .filter(restaurant_models.MealOrder.id == order_id)
-        .first()
-    )
+    # --------------------------------------------------
+    # 0️⃣ FETCH ORDER
+    # --------------------------------------------------
+    order = db.query(restaurant_models.MealOrder).filter(
+        restaurant_models.MealOrder.id == order_id
+    ).first()
 
     if not order:
         raise HTTPException(404, "Meal order not found")
@@ -458,126 +424,106 @@ def update_meal_order(
     if order.status == "closed":
         raise HTTPException(400, "Closed orders cannot be edited")
 
+    # If you want orders to allow changing kitchens:
+    kitchen_id = data.kitchen_id if data.kitchen_id else order.kitchen_id
+
+    # Ensure kitchen exists
+    kitchen = db.query(store_models.Kitchen).filter(
+        store_models.Kitchen.id == kitchen_id
+    ).first()
+    if not kitchen:
+        raise HTTPException(404, "Selected kitchen not found.")
+
     try:
-        # --- 2️⃣ RESTORE STOCK FOR OLD ITEMS ---
-        # (Before validation of new request)
+        # --------------------------------------------------
+        # 1️⃣ RESTORE STOCK FOR OLD ITEMS
+        # --------------------------------------------------
         for old_item in order.items:
-            stock_entries = (
-                db.query(store_models.StoreStockEntry)
-                .filter(store_models.StoreStockEntry.item_id == old_item.store_item_id)
-                .order_by(store_models.StoreStockEntry.id.desc())
-                .with_for_update()
-                .all()
-            )
+            inventory = db.query(kitchen_models.KitchenInventory).filter(
+                kitchen_models.KitchenInventory.kitchen_id == order.kitchen_id,
+                kitchen_models.KitchenInventory.item_id == old_item.store_item_id
+            ).first()
 
-            qty_to_restore = old_item.store_qty_used
-
-            for entry in stock_entries:
-                entry.quantity += qty_to_restore
-                break
+            if inventory:
+                inventory.quantity += old_item.store_qty_used
+                db.add(inventory)
 
         db.flush()
 
-        # --- 3️⃣ VALIDATE STOCK BEFORE APPLYING NEW ORDER ITEMS ---
+        # --------------------------------------------------
+        # 2️⃣ VALIDATE NEW ITEMS AGAINST NEW KITCHEN STOCK
+        # --------------------------------------------------
         for item in data.items:
-            # Kitchen item check
-            store_item = (
-                db.query(store_models.StoreItem)
-                .filter(
-                    store_models.StoreItem.id == item.store_item_id,
-                    func.lower(store_models.StoreItem.item_type).in_(
-                        ["kitchen", "kitchen items", "meal", "food"]
-                    ),
+            store_item = db.query(store_models.StoreItem).filter(
+                store_models.StoreItem.id == item.store_item_id,
+                func.lower(store_models.StoreItem.item_type).in_(
+                    ["kitchen", "kitchen items", "meal", "food"]
                 )
-                .first()
-            )
+            ).first()
 
             if not store_item:
-                raise HTTPException(
-                    400, f"Store item {item.store_item_id} not found or not kitchen-type"
-                )
+                raise HTTPException(400, f"Item {item.store_item_id} is not a kitchen item.")
 
-            # Check kitchen stock balance
-            stock_entries = (
-                db.query(store_models.StoreStockEntry)
-                .filter(
-                    store_models.StoreStockEntry.item_id == store_item.id,
-                    store_models.StoreStockEntry.quantity > 0,
-                )
-                .order_by(store_models.StoreStockEntry.id)  # FIFO
-                .with_for_update()
-                .all()
-            )
+            inventory = db.query(kitchen_models.KitchenInventory).filter(
+                kitchen_models.KitchenInventory.kitchen_id == kitchen_id,
+                kitchen_models.KitchenInventory.item_id == store_item.id
+            ).first()
 
-            total_stock = sum(e.quantity for e in stock_entries)
+            available_qty = inventory.quantity if inventory else 0
 
-            if total_stock < item.quantity:
+            if available_qty < item.quantity:
                 raise HTTPException(
                     400,
-                    f"Insufficient stock for {store_item.name} "
-                    f"(available: {total_stock}, needed: {item.quantity})",
+                    f"Not enough '{store_item.name}'. "
+                    f"Available: {available_qty}, Needed: {item.quantity}"
                 )
 
-        # --- 4️⃣ CLEAR OLD ORDER ITEMS ---
+        # --------------------------------------------------
+        # 3️⃣ DELETE OLD ITEMS
+        # --------------------------------------------------
         db.query(restaurant_models.MealOrderItem).filter(
             restaurant_models.MealOrderItem.order_id == order.id
         ).delete()
+
         db.flush()
 
-        # --- 5️⃣ UPDATE MAIN ORDER FIELDS ---
+        # --------------------------------------------------
+        # 4️⃣ UPDATE MAIN ORDER FIELDS
+        # --------------------------------------------------
         order.order_type = data.order_type
         order.room_number = data.room_number
         order.guest_name = data.guest_name
         order.location_id = data.location_id
+        order.kitchen_id = kitchen_id  # 🔥 kitchen now tied to order
 
-        # --- 6️⃣ CREATE NEW ITEMS & DEDUCT STOCK ---
+        # --------------------------------------------------
+        # 5️⃣ INSERT NEW ITEMS + DEDUCT STOCK
+        # --------------------------------------------------
         for item in data.items:
             store_item = db.query(store_models.StoreItem).filter(
                 store_models.StoreItem.id == item.store_item_id
             ).first()
 
-            # GET STOCK ENTRIES FOR DEDUCTION
-            stock_entries = (
-                db.query(store_models.StoreStockEntry)
-                .filter(
-                    store_models.StoreStockEntry.item_id == store_item.id,
-                    store_models.StoreStockEntry.quantity > 0,
-                )
-                .order_by(store_models.StoreStockEntry.id)  # FIFO
-                .with_for_update()
-                .all()
-            )
+            inventory = db.query(kitchen_models.KitchenInventory).filter(
+                kitchen_models.KitchenInventory.kitchen_id == kitchen_id,
+                kitchen_models.KitchenInventory.item_id == store_item.id
+            ).first()
 
-            # PRICE
-            price_per_unit = (
-                item.price_per_unit
-                if item.price_per_unit is not None
-                else store_item.unit_price
-            )
+            inventory.quantity -= item.quantity
+            db.add(inventory)
 
-            total_price = price_per_unit * item.quantity
+            price_per_unit = item.price_per_unit or store_item.unit_price
 
-            # ADD NEW ORDER ITEM
-            new_item = restaurant_models.MealOrderItem(
+            db_item = restaurant_models.MealOrderItem(
                 order_id=order.id,
                 store_item_id=store_item.id,
                 item_name=store_item.name,
                 quantity=item.quantity,
-                price_per_unit=price_per_unit,
-                total_price=total_price,
                 store_qty_used=item.quantity,
+                price_per_unit=price_per_unit,
+                total_price=price_per_unit * item.quantity
             )
-            db.add(new_item)
-
-            # STOCK DEDUCTION FIFO
-            qty_to_deduct = item.quantity
-            for entry in stock_entries:
-                if entry.quantity >= qty_to_deduct:
-                    entry.quantity -= qty_to_deduct
-                    break
-                else:
-                    qty_to_deduct -= entry.quantity
-                    entry.quantity = 0
+            db.add(db_item)
 
         db.commit()
         db.refresh(order)
@@ -586,7 +532,9 @@ def update_meal_order(
         db.rollback()
         raise HTTPException(500, f"Could not update meal order: {str(e)}")
 
-    # --- 7️⃣ RETURN RESPONSE ---
+    # --------------------------------------------------
+    # 6️⃣ BUILD RESPONSE
+    # --------------------------------------------------
     items_display = [
         restaurant_schemas.MealOrderItemDisplay(
             store_item_id=i.store_item_id,
@@ -601,6 +549,7 @@ def update_meal_order(
     return restaurant_schemas.MealOrderDisplay(
         id=order.id,
         location_id=order.location_id,
+        kitchen_id=order.kitchen_id,
         order_type=order.order_type,
         room_number=order.room_number,
         guest_name=order.guest_name,

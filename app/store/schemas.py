@@ -111,6 +111,8 @@ class StoreStockEntryCreate(BaseModel):
     unit_price: float
     vendor_id: int
     purchase_date: datetime
+    
+
 
     @classmethod
     def as_form(
@@ -122,6 +124,7 @@ class StoreStockEntryCreate(BaseModel):
         unit_price: float = Form(...),
         vendor_id: int = Form(...),
         purchase_date: datetime = Form(...),
+        
     ):
         return cls(
             item_id=item_id,
@@ -131,6 +134,7 @@ class StoreStockEntryCreate(BaseModel):
             unit_price=unit_price,
             vendor_id=vendor_id,
             purchase_date=purchase_date,
+            
         )
 
 
@@ -166,6 +170,7 @@ class StoreStockEntryDisplay(BaseModel):
     created_by: Optional[str]
     created_at: datetime
     attachment_url: Optional[str]
+    kitchen_id: Optional[int] = None  # 👈 NEW
 
     # ✅ Show full vendor and item info
     item: Optional["StoreItemOut"]

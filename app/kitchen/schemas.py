@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import List, Optional
 from pydantic.config import ConfigDict  # this is the correct import in v2
@@ -10,8 +10,7 @@ class KitchenItemMinimalDisplay(BaseModel):
     id: int
     name: Optional[str] = None  # optional, can be None if name not available
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ------------------------------
@@ -27,8 +26,7 @@ class KitchenDisplaySimple(BaseModel):
     id: int
     name: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ------------------------------
@@ -39,9 +37,7 @@ class KitchenIssueItemDisplay(BaseModel):
     item: KitchenItemMinimalDisplay
     quantity: float
 
-    class Config:
-        from_attributes = True
-
+    model_config = ConfigDict(from_attributes=True)
 
 # ------------------------------
 # KITCHEN INVENTORY VIEW
@@ -53,9 +49,7 @@ class KitchenInventoryDisplay(BaseModel):
     quantity: float
     last_updated: datetime
 
-    class Config:
-        from_attributes = True
-
+    model_config = ConfigDict(from_attributes=True)
 
 # ------------------------------
 # KITCHEN STOCK REPORT
@@ -67,8 +61,7 @@ class KitchenStockDisplay(BaseModel):
     total_issued: float
     total_used: float
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ------------------------------
@@ -87,17 +80,17 @@ class IssueToKitchenItemDisplay(BaseModel):
     item: KitchenItemMinimalDisplay
     quantity: float
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
 
 class IssueToKitchenDisplay(BaseModel):
     id: int
     kitchen: KitchenDisplaySimple
     issue_items: List[IssueToKitchenItemDisplay]
-    issue_date: datetime
+    issue_date: datetime = Field(default_factory=datetime.utcnow)
 
-    class Config:
-        from_attributes = True
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class KitchenStockBalance(BaseModel):
@@ -106,8 +99,9 @@ class KitchenStockBalance(BaseModel):
     item_id: int
     item_name: str
     category_name: Optional[str] = None
-    item_type: Optional[str]   # <--- ADD THIS
+    item_type: Optional[str] = None
     unit: Optional[str] = None
+
     total_issued: float = 0        # what store issued to kitchen
     total_used: float = 0          # what restaurant sold (store_qty_used)
     total_adjusted: float = 0      # if you later add kitchen adjustments
@@ -115,8 +109,7 @@ class KitchenStockBalance(BaseModel):
     last_unit_price: Optional[float] = None
     balance_total_amount: Optional[float] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 
@@ -137,5 +130,4 @@ class KitchenMenuDisplay(BaseModel):
 class KitchenMenuUpdate(BaseModel):
     selling_price: float
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

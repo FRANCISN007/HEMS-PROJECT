@@ -8,6 +8,7 @@ const currencyNGN = (value) =>
 
 const GuestOrderCreate = () => {
   const [locations, setLocations] = useState([]);
+  const [kitchens, setKitchens] = useState([]);     // 🔥 NEW
   const [items, setItems] = useState([]);
   const [message, setMessage] = useState("");
 
@@ -33,11 +34,12 @@ const GuestOrderCreate = () => {
 
   const [order, setOrder] = useState({
     location_id: "",
+    kitchen_id: "",           // 🔥 NEW
     order_type: "room_service",
     room_number: "",
     guest_name: "",
     status: "open",
-    items: [], // [{ store_item_id, quantity, price_per_unit }]
+    items: [],
   });
 
   const [newItem, setNewItem] = useState({
@@ -46,21 +48,25 @@ const GuestOrderCreate = () => {
     price_per_unit: "",
   });
 
+  // Auto-clear messages
   useEffect(() => {
     if (!message) return;
     const t = setTimeout(() => setMessage(""), 3000);
     return () => clearTimeout(t);
   }, [message]);
 
-  // Fetch dropdown values
+  // Fetch dropdowns
   useEffect(() => {
     const api = axiosWithAuth();
+
     Promise.all([
       api.get("/restaurant/locations"),
+      api.get("/kitchen/simple"),     // 🔥 NEW
       api.get("/restaurant/items/simple"),
     ])
-      .then(([locRes, itemRes]) => {
+      .then(([locRes, kitRes, itemRes]) => {
         setLocations(locRes.data || []);
+        setKitchens(kitRes.data || []);      // 🔥 NEW
         setItems([...itemRes.data].sort((a, b) => a.id - b.id));
       })
       .catch(() => setMessage("❌ Failed to load dropdown data"));
@@ -94,14 +100,13 @@ const GuestOrderCreate = () => {
   const submitOrder = async (e) => {
     e.preventDefault();
 
-    // Check for missing or invalid location and items
     if (!order.location_id) {
       setMessage("❌ Please select a location.");
       return;
     }
 
-    if (order.items.length === 0) {
-      setMessage("❌ Please add at least one item.");
+    if (!order.kitchen_id) {                               // 🔥 NEW VALIDATION
+      setMessage("❌ Please select a kitchen.");
       return;
     }
 
@@ -110,9 +115,15 @@ const GuestOrderCreate = () => {
       return;
     }
 
+    if (order.items.length === 0) {
+      setMessage("❌ Please add at least one item.");
+      return;
+    }
+
     const payload = {
       ...order,
       location_id: Number(order.location_id),
+      kitchen_id: Number(order.kitchen_id),               // 🔥 NEW
       items: order.items.map((i) => ({
         store_item_id: Number(i.store_item_id),
         quantity: Number(i.quantity),
@@ -121,11 +132,13 @@ const GuestOrderCreate = () => {
     };
 
     try {
-      // Send the order to the backend
       await axiosWithAuth().post("/restaurant/meal-orders", payload);
       setMessage("✅ Guest order created successfully!");
+
+      // Reset form
       setOrder({
         location_id: "",
+        kitchen_id: "",      // 🔥 NEW
         order_type: "room_service",
         room_number: "",
         guest_name: "",
@@ -133,13 +146,11 @@ const GuestOrderCreate = () => {
         items: [],
       });
     } catch (err) {
-      // If the backend returns an error (e.g., stock is insufficient), display it
       setMessage(err?.response?.data?.detail || "❌ Failed to create order.");
     }
   };
 
-
-  // Table preview
+  // Build item table
   const rows = order.items.map((it) => {
     const storeItem = items.find((m) => Number(m.id) === Number(it.store_item_id));
     const unit = it.price_per_unit || storeItem?.price || 0;
@@ -162,16 +173,30 @@ const GuestOrderCreate = () => {
       </div>
 
       <form className="guestorder-form" onSubmit={submitOrder}>
+
         {/* Location */}
         <select
           value={order.location_id}
           onChange={(e) => setOrder({ ...order, location_id: e.target.value })}
-          required
         >
           <option value="">-- Select Location --</option>
           {locations.map((loc) => (
             <option key={loc.id} value={loc.id}>
               {loc.name}
+            </option>
+          ))}
+        </select>
+
+        {/* 🔥 NEW KITCHEN DROPDOWN */}
+        <select
+          value={order.kitchen_id}
+          onChange={(e) => setOrder({ ...order, kitchen_id: e.target.value })}
+          required
+        >
+          <option value="">-- Select Kitchen --</option>
+          {kitchens.map((k) => (
+            <option key={k.id} value={k.id}>
+              {k.name}
             </option>
           ))}
         </select>
@@ -202,7 +227,7 @@ const GuestOrderCreate = () => {
           onChange={(e) => setOrder({ ...order, room_number: e.target.value })}
         />
 
-        {/* Add Item */}
+        {/* Add Item Section */}
         <div className="guestorder-item-form">
           <select
             value={newItem.store_item_id}
@@ -223,7 +248,6 @@ const GuestOrderCreate = () => {
             onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
           />
 
-          {/* NEW PRICE INPUT */}
           <input
             type="number"
             min="0"
@@ -257,7 +281,11 @@ const GuestOrderCreate = () => {
                   <td>{currencyNGN(r.unitPrice)}</td>
                   <td>{currencyNGN(r.lineTotal)}</td>
                   <td>
-                    <button type="button" className="delete action-btn" onClick={() => removeItem(i)}>
+                    <button
+                      type="button"
+                      className="delete action-btn"
+                      onClick={() => removeItem(i)}
+                    >
                       ❌
                     </button>
                   </td>

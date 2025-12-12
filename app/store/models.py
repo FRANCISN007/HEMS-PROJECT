@@ -6,6 +6,7 @@ from app.database import Base
 #from app.vendor import Vendor  # ✅ adjust the path as needed
 import os
 from app.bar.models import Bar  # assuming this exists
+from app.kitchen.models import Kitchen
 
 
 # ----------------------------
@@ -44,6 +45,8 @@ class StoreItem(Base):
     
     meal_order_items = relationship("MealOrderItem", back_populates="store_item")
 
+    
+
 # ----------------------------
 # 3. Store Stock Entry (Purchase)
 # ----------------------------
@@ -55,27 +58,21 @@ class StoreStockEntry(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     item_id = Column(Integer, ForeignKey("store_items.id"))
-    item_name= Column(String, nullable=False)  # Track who created the purchase
+    item_name = Column(String, nullable=False)  
     quantity = Column(Integer)
-    invoice_number = Column(String(255), nullable=True)  # <-- Corrected
     original_quantity = Column(Integer, nullable=False)
+    invoice_number = Column(String(255), nullable=True)
     unit_price = Column(Float, nullable=True)
     total_amount = Column(Float)
     vendor_id = Column(Integer, ForeignKey("vendors.id"))
     purchase_date = Column(DateTime, default=datetime.utcnow)
-    #created_by_id = Column(Integer, ForeignKey("users.id"))  
-    created_by = Column(String, nullable=False)  # Track who created the purchase
+    created_by = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
-    attachment = Column(String, nullable=True)  # <-- New: file path
+    attachment = Column(String, nullable=True)
 
     # Relationships
     item = relationship("StoreItem")
     vendor = relationship("Vendor", back_populates="purchases")
-    #created_by_user = relationship("User", lazy="joined")  
-
-    #@property
-    #def created_by(self):
-        #return self.created_by_user.username if self.created_by_user else None
 
     @property
     def attachment_url(self):

@@ -60,3 +60,140 @@ complimentary:
 
 if you go thru our previous chat we have dealing on restaurant endpoint, now we have to move to list payment, we will the same folder src/components/restaurant ListRestaurantPayment.jsx and css, you will use the import function, import axiosWithAuth from "../../utils/axiosWithAuth"; 
 will have the action button. edit, void, print, i will send you the backend list payment and update 
+
+
+rm -r node_modules
+rm package-lock.json
+npm install
+
+
+# 1️⃣ Delete old node_modules and lock file
+Remove-Item -Recurse -Force node_modules
+Remove-Item -Force package-lock.json
+
+# 2️⃣ Replace package.json with a correct CRA setup
+Set-Content package.json '{
+  "name": "react-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-scripts": "^5.0.1",
+    "axios": "^1.10.0",
+    "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
+    "react-icons": "^5.5.0",
+    "react-router-dom": "^7.6.2",
+    "recharts": "^3.0.2",
+    "web-vitals": "^5.0.2",
+    "xlsx": "^0.18.5"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}'
+
+# 3️⃣ Reinstall all dependencies
+npm install
+
+# 4️⃣ Build the project
+npm run build
+
+
+# ⚡ Reset and rebuild React frontend
+Remove-Item -Recurse -Force node_modules, build; Remove-Item -Force package-lock.json; npm install; npm run build
+
+
+# ⚡ Full React Frontend Reset & Clean Build
+
+# Navigate to your project folder first
+cd "C:\Users\KLOUNGE\Documents\HEMS-PROJECT\react-frontend"
+
+# 1️⃣ Remove node_modules and build folder
+Remove-Item -Recurse -Force node_modules, build
+
+# 2️⃣ Remove package-lock.json
+Remove-Item -Force package-lock.json
+
+# 3️⃣ Remove any ESLint config files if they exist
+$eslintFiles = @(".eslintrc", ".eslintrc.js", ".eslintrc.json", ".eslintrc.yaml", ".eslintrc.yml")
+foreach ($file in $eslintFiles) {
+    if (Test-Path $file) { Remove-Item -Force $file }
+}
+
+# 4️⃣ Reinstall dependencies fresh
+npm install
+
+# 5️⃣ Run the build
+npm run build
+
+
+
+{
+  "name": "react-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^14.4.3",
+    "axios": "^1.13.2",
+    "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-icons": "^4.10.1",
+    "react-router-dom": "^6.16.0",
+    "react-scripts": "5.0.1",
+    "recharts": "^3.5.1",
+    "web-vitals": "^2.1.4",
+    "xlsx": "^0.18.5"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ],
+    "rules": {
+      "react-hooks/rules-of-hooks": "off",
+      "react-hooks/exhaustive-deps": "off",
+      "no-restricted-globals": "off",
+      "react/jsx-no-undef": "off",
+      "no-undef": "off"
+    }
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

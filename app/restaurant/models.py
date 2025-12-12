@@ -46,6 +46,7 @@ class Meal(Base):
 
 
 
+
 class MealOrder(Base):
     __tablename__ = "meal_orders"
 
@@ -54,13 +55,14 @@ class MealOrder(Base):
     guest_name = Column(String, nullable=False)
     room_number = Column(String, nullable=True)
     location_id = Column(Integer, ForeignKey("restaurant_locations.id"))
+    kitchen_id = Column(Integer, ForeignKey("kitchens.id"), nullable=False)  # kitchen for this order
     created_at = Column(DateTime, default=datetime.utcnow)
     status = Column(String, default="open")
     created_by = Column(Integer, ForeignKey("users.id"))
 
     location = relationship("RestaurantLocation")
+    kitchen = relationship("Kitchen")
 
-    # ONLY ONE RELATIONSHIP FOR ITEMS
     items = relationship(
         "MealOrderItem",
         back_populates="order",
@@ -68,7 +70,6 @@ class MealOrder(Base):
     )
 
     sale = relationship("RestaurantSale", back_populates="order", uselist=False)
-
 
 
 

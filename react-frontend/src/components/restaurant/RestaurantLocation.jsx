@@ -9,26 +9,21 @@ const RestaurantLocation = ({ onClose }) => {
   const [editLocation, setEditLocation] = useState({ name: "", active: true });
   const [message, setMessage] = useState("");
 
+  // User role check
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
-
-  if (Array.isArray(storedUser.roles)) {
-    roles = storedUser.roles;
-  } else if (typeof storedUser.role === "string") {
-    roles = [storedUser.role];
-  }
-
+  if (Array.isArray(storedUser.roles)) roles = storedUser.roles;
+  else if (typeof storedUser.role === "string") roles = [storedUser.role];
   roles = roles.map((r) => r.toLowerCase());
 
-
   if (!(roles.includes("admin") || roles.includes("restaurant"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to create restaurant location.</p>
-    </div>
-  );
-}
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to create restaurant location.</p>
+      </div>
+    );
+  }
 
   useEffect(() => {
     fetchLocations();
@@ -41,10 +36,11 @@ const RestaurantLocation = ({ onClose }) => {
     }
   }, [message]);
 
+  // Fetch locations from backend
   const fetchLocations = async () => {
     try {
       const res = await axiosWithAuth().get("/restaurant/locations");
-      setLocations(res.data);
+      setLocations(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("❌ Failed to fetch locations:", err);
     }
@@ -100,9 +96,7 @@ const RestaurantLocation = ({ onClose }) => {
           type="text"
           placeholder="Location Name"
           value={newLocation.name}
-          onChange={(e) =>
-            setNewLocation({ ...newLocation, name: e.target.value })
-          }
+          onChange={(e) => setNewLocation({ ...newLocation, name: e.target.value })}
           required
         />
         <label>
@@ -110,9 +104,7 @@ const RestaurantLocation = ({ onClose }) => {
           <input
             type="checkbox"
             checked={newLocation.active}
-            onChange={(e) =>
-              setNewLocation({ ...newLocation, active: e.target.checked })
-            }
+            onChange={(e) => setNewLocation({ ...newLocation, active: e.target.checked })}
           />
         </label>
         <button type="submit">➕ Add Location</button>
@@ -129,83 +121,62 @@ const RestaurantLocation = ({ onClose }) => {
           </tr>
         </thead>
         <tbody>
-          {locations.map((loc, index) => (
-            <tr
-              key={loc.id}
-              className={index % 2 === 0 ? "even-row" : "odd-row"}
-            >
-              <td>{loc.id}</td>
-              <td>
-                {editId === loc.id ? (
-                  <input
-                    value={editLocation.name}
-                    onChange={(e) =>
-                      setEditLocation({ ...editLocation, name: e.target.value })
-                    }
-                  />
-                ) : (
-                  loc.name
-                )}
-              </td>
-              <td>
-                {editId === loc.id ? (
-                  <input
-                    type="checkbox"
-                    checked={editLocation.active}
-                    onChange={(e) =>
-                      setEditLocation({
-                        ...editLocation,
-                        active: e.target.checked,
-                      })
-                    }
-                  />
-                ) : loc.active ? (
-                  "✅ Active"
-                ) : (
-                  "❌ Inactive"
-                )}
-              </td>
-              <td>
-                {editId === loc.id ? (
-                  <>
-                    <button
-                      className="action-btn save"
-                      onClick={() => handleUpdate(loc.id)}
-                    >
-                      💾 Save
-                    </button>
-                    <button
-                      className="action-btn cancel"
-                      onClick={() => setEditId(null)}
-                    >
-                      ❌ Cancel
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      className="action-btn update"
-                      onClick={() => {
-                        setEditId(loc.id);
-                        setEditLocation({
-                          name: loc.name,
-                          active: loc.active,
-                        });
-                      }}
-                    >
-                      ✏️ Edit
-                    </button>
-                    <button
-                      className="action-btn delete"
-                      onClick={() => handleDelete(loc.id)}
-                    >
-                      🗑️ Delete
-                    </button>
-                  </>
-                )}
-              </td>
-            </tr>
-          ))}
+          {Array.isArray(locations) &&
+            locations.map((loc, index) => (
+              <tr key={loc.id} className={index % 2 === 0 ? "even-row" : "odd-row"}>
+                <td>{loc.id}</td>
+                <td>
+                  {editId === loc.id ? (
+                    <input
+                      value={editLocation.name}
+                      onChange={(e) => setEditLocation({ ...editLocation, name: e.target.value })}
+                    />
+                  ) : (
+                    loc.name
+                  )}
+                </td>
+                <td>
+                  {editId === loc.id ? (
+                    <input
+                      type="checkbox"
+                      checked={editLocation.active}
+                      onChange={(e) => setEditLocation({ ...editLocation, active: e.target.checked })}
+                    />
+                  ) : loc.active ? (
+                    "✅ Active"
+                  ) : (
+                    "❌ Inactive"
+                  )}
+                </td>
+                <td>
+                  {editId === loc.id ? (
+                    <>
+                      <button className="action-btn save" onClick={() => handleUpdate(loc.id)}>
+                        💾 Save
+                      </button>
+                      <button className="action-btn cancel" onClick={() => setEditId(null)}>
+                        ❌ Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="action-btn update"
+                        onClick={() => {
+                          setEditId(loc.id);
+                          setEditLocation({ name: loc.name, active: loc.active });
+                        }}
+                      >
+                        ✏️ Edit
+                      </button>
+                      <button className="action-btn delete" onClick={() => handleDelete(loc.id)}>
+                        🗑️ Delete
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
         </tbody>
       </table>
 

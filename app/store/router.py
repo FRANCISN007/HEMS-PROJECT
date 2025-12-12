@@ -1826,22 +1826,23 @@ def get_kitchen_stock_balance(
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     try:
-        # Convert kitchen_id to int if passed as string
+        # Convert kitchen_id to int if required
         if kitchen_id:
             try:
                 kitchen_id = int(kitchen_id)
             except ValueError:
-                raise HTTPException(status_code=400, detail="kitchen_id must be an integer")
+                raise HTTPException(400, "kitchen_id must be an integer")
 
-        # 1) FETCH ISSUED ITEMS (Store → Kitchen)
+        # ============================================
+        # 1️⃣ TOTAL ISSUED TO KITCHEN (Store → Kitchen)
+        # ============================================
         issued_query = (
             db.query(
                 store_models.StoreIssueItem.item_id,
-                store_models.StoreIssue.kitchen_id.label("kitchen_id"),
-                func.sum(store_models.StoreIssueItem.quantity).label("total_issued"),
+                store_models.StoreIssue.kitchen_id,
+                func.sum(store_models.StoreIssueItem.quantity).label("total_issued")
             )
             .join(store_models.StoreIssue)
-            .join(store_models.StoreItem)
             .filter(store_models.StoreIssue.issue_to == "kitchen")
         )
 
@@ -1860,25 +1861,29 @@ def get_kitchen_stock_balance(
             for row in issued_query.all()
         }
 
-        # 2) FETCH USED ITEMS (Restaurant Sales → item consumption)
+        # ============================================
+        # 2️⃣ TOTAL USED BY KITCHEN (Meal Orders)
+        # ============================================
         used_query = (
             db.query(
                 restaurant_models.MealOrderItem.store_item_id.label("item_id"),
-                restaurant_models.MealOrder.location_id.label("kitchen_id"),
-                func.sum(restaurant_models.MealOrderItem.store_qty_used).label("total_used"),
+                restaurant_models.MealOrder.kitchen_id.label("kitchen_id"),
+                func.sum(restaurant_models.MealOrderItem.store_qty_used).label("total_used")
             )
-            .join(restaurant_models.MealOrder)
-            .join(store_models.StoreItem, store_models.StoreItem.id == restaurant_models.MealOrderItem.store_item_id)
+            .join(
+                restaurant_models.MealOrder,
+                restaurant_models.MealOrder.id == restaurant_models.MealOrderItem.order_id
+            )
         )
 
         if item_id:
             used_query = used_query.filter(restaurant_models.MealOrderItem.store_item_id == item_id)
         if kitchen_id:
-            used_query = used_query.filter(restaurant_models.MealOrder.location_id == kitchen_id)
+            used_query = used_query.filter(restaurant_models.MealOrder.kitchen_id == kitchen_id)
 
         used_query = used_query.group_by(
             restaurant_models.MealOrderItem.store_item_id,
-            restaurant_models.MealOrder.location_id
+            restaurant_models.MealOrder.kitchen_id
         )
 
         used_data = {
@@ -1886,7 +1891,10 @@ def get_kitchen_stock_balance(
             for row in used_query.all()
         }
 
-        # 3) MERGE BOTH (Issued + Used)
+        # ============================================
+        # 3️⃣ MERGE + CALCULATE BALANCE
+        # ============================================
+
         all_keys = set(issued_data.keys()) | set(used_data.keys())
         results = []
 
@@ -1895,13 +1903,13 @@ def get_kitchen_stock_balance(
             total_used = used_data.get((i_id, k_id), 0)
             balance = total_issued - total_used
 
-            # Fetch item and kitchen details
             item = db.query(store_models.StoreItem).filter_by(id=i_id).first()
             kitchen = db.query(kitchen_models.Kitchen).filter_by(id=k_id).first()
+
             if not item:
                 continue
 
-            # Last unit price
+            # Fetch latest unit price
             latest_entry = (
                 db.query(store_models.StoreStockEntry)
                 .filter(store_models.StoreStockEntry.item_id == i_id)
@@ -1933,12 +1941,17 @@ def get_kitchen_stock_balance(
                 )
             )
 
-        # Sort alphabetically
-        results.sort(key=lambda x: (x.item_name.lower(), x.kitchen_name.lower()))
+        # Sort for UI
+        results.sort(key=lambda x: (x.kitchen_name.lower(), x.item_name.lower()))
+
         return results
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve kitchen stock balance: {str(e)}")
+        raise HTTPException(
+            500,
+            f"Failed to retrieve kitchen stock balance: {str(e)}"
+        )
+
 
 # ----------------------------
 # STORE BALANCE REPORT
