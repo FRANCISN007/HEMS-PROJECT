@@ -86,3 +86,23 @@
   color: #777;
   font-style: italic;
 }
+
+
+.create-sale-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.order-card.high-value {
+  border-left: 5px solid #e63946;
+  background: #fff6f6;
+}
+
+.badge {
+  background: #e63946;
+  color: #fff;
+  padding: 2px 6px;
+  font-size: 12px;
+  border-radius: 4px;
+  margin-left: 8px;
+}

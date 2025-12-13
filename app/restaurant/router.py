@@ -1020,7 +1020,6 @@ def delete_sale(
 def create_sale_from_order(
     order_id: int,
     served_by: str,
-    location_id: int,
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
 ):
@@ -1028,20 +1027,30 @@ def create_sale_from_order(
         # -------------------------
         # 1) fetch & validate order
         # -------------------------
-        order = db.query(restaurant_models.MealOrder).filter(restaurant_models.MealOrder.id == order_id).first()
+        order = (
+            db.query(restaurant_models.MealOrder)
+            .filter(restaurant_models.MealOrder.id == order_id)
+            .first()
+        )
+
         if not order:
             raise HTTPException(status_code=404, detail="Order not found.")
+
         if order.status != "open":
             raise HTTPException(status_code=400, detail="Order is already closed.")
+
+        if not order.kitchen_id:
+            raise HTTPException(status_code=400, detail="Order is not linked to a kitchen.")
 
         # -------------------------
         # 2) compute totals & create sale
         # -------------------------
-        total = sum((item.total_price or 0) for item in order.items)
+        total = sum(float(item.total_price or 0) for item in order.items)
 
         sale = restaurant_models.RestaurantSale(
             order_id=order.id,
-            location_id=location_id,
+            location_id=order.location_id,
+            #kitchen_id=order.kitchen_id,
             guest_name=order.guest_name,
             served_by=served_by,
             total_amount=total,
@@ -1049,56 +1058,57 @@ def create_sale_from_order(
             served_at=datetime.utcnow()
         )
         db.add(sale)
-        db.flush()  # get sale.id without committing
+        db.flush()  # get sale.id
 
         # -----------------------------------------
-        # 3) create a StoreIssue recorded as to "kitchen"
-        #    (so kitchen-balance-stock will see it)
+        # 3) create StoreIssue → KITCHEN
         # -----------------------------------------
         store_issue = store_models.StoreIssue(
-            issue_to="kitchen",                    # <--- important: mark as kitchen
-            kitchen_id=order.location_id,          # tie issue to kitchen/location where order came from
+            issue_to="kitchen",
+            kitchen_id=order.kitchen_id,   # ✅ CORRECT
             issued_by_id=current_user.id,
             issue_date=datetime.utcnow()
         )
         db.add(store_issue)
-        db.flush()  # get store_issue.id
+        db.flush()
 
         # -----------------------------------------
-        # 4) deduct stock (FIFO) using store_qty_used
-        #    and record StoreIssueItem rows
+        # 4) deduct stock (FIFO)
         # -----------------------------------------
         for item in order.items:
-            # Find the store item
-            store_item = db.query(store_models.StoreItem).filter(store_models.StoreItem.id == item.store_item_id).first()
+            store_item = (
+                db.query(store_models.StoreItem)
+                .filter(store_models.StoreItem.id == item.store_item_id)
+                .first()
+            )
+
             if not store_item:
-                # nothing to deduct
                 continue
 
-            # Use store_qty_used (actual units consumed from stock). Fallback to quantity if not set.
             qty_to_deduct = float(item.store_qty_used or item.quantity or 0)
             if qty_to_deduct <= 0:
                 continue
 
-            # Get positive-stock entries (FIFO). Lock them for update.
             stock_entries = (
                 db.query(store_models.StoreStockEntry)
                 .filter(
                     store_models.StoreStockEntry.item_id == store_item.id,
                     store_models.StoreStockEntry.quantity > 0
                 )
-                .order_by(store_models.StoreStockEntry.id)  # FIFO by id (or purchase_date if you prefer)
+                .order_by(
+                    store_models.StoreStockEntry.purchase_date.asc(),
+                    store_models.StoreStockEntry.id.asc()
+                )
                 .with_for_update()
                 .all()
             )
 
-            # Deduct from entries until qty_to_deduct is zero or we run out of stock_entries
             remaining = qty_to_deduct
+
             for entry in stock_entries:
                 if remaining <= 0:
                     break
 
-                # how much we can take from this entry
                 available = float(entry.quantity or 0)
                 if available <= 0:
                     continue
@@ -1110,42 +1120,37 @@ def create_sale_from_order(
                 else:
                     issued_qty = available
                     entry.quantity = 0
-                    remaining = remaining - available
+                    remaining -= available
 
-                # record the issued item
-                store_issue_item = store_models.StoreIssueItem(
-                    issue_id=store_issue.id,
-                    item_id=store_item.id,
-                    quantity=issued_qty
+                db.add(
+                    store_models.StoreIssueItem(
+                        issue_id=store_issue.id,
+                        item_id=store_item.id,
+                        quantity=issued_qty
+                    )
                 )
-                db.add(store_issue_item)
 
-            # OPTIONAL: if remaining > 0 here, you ran out of stock.
-            # You can choose to raise, log, or allow partial fulfilment.
+            # optional insufficient stock handling
             if remaining > 0:
-                # For now, we allow partial deduction and continue,
-                # but you might want to raise an HTTPException instead.
-                # raise HTTPException(status_code=400, detail=f"Insufficient stock for item {store_item.name}")
                 pass
 
         # -------------------------
-        # 5) close the order, commit
+        # 5) close order
         # -------------------------
         order.status = "closed"
         db.commit()
 
-        # refresh sale to get related data (payments etc.)
         db.refresh(sale)
 
         # -------------------------
-        # 6) prepare response
+        # 6) response
         # -------------------------
         items = [
             restaurant_schemas.MealOrderItemDisplay.from_orm(item)
             for item in order.items
         ]
 
-        amount_paid = sum(payment.amount for payment in sale.payments) if sale.payments else 0
+        amount_paid = sum(p.amount for p in sale.payments) if sale.payments else 0
         balance = (sale.total_amount or 0) - amount_paid
 
         return restaurant_schemas.RestaurantSaleDisplay(
@@ -1168,8 +1173,10 @@ def create_sale_from_order(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Could not create sale from order: {str(e)}")
-
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not create sale from order: {str(e)}"
+        )
 
 
 @router.get("/open")
@@ -1184,6 +1191,7 @@ def list_open_meal_orders(
     If location_id is provided, restrict to that location.
     Returns an object with total_entries, total_amount and orders.
     """
+
     query = db.query(restaurant_models.MealOrder).filter(
         restaurant_models.MealOrder.status == "open"
     )
@@ -1204,12 +1212,14 @@ def list_open_meal_orders(
             # meal_id support (optional)
             meal = None
             if item.meal_id:
-                meal = db.query(restaurant_models.Meal).filter(
-                    restaurant_models.Meal.id == item.meal_id
-                ).first()
+                meal = (
+                    db.query(restaurant_models.Meal)
+                    .filter(restaurant_models.Meal.id == item.meal_id)
+                    .first()
+                )
 
             # Price now comes from store item
-            item_total = item.total_price or 0
+            item_total = float(item.total_price or 0)
             total_amount += item_total
 
             order_items.append(
@@ -1229,7 +1239,15 @@ def list_open_meal_orders(
         result.append(
             restaurant_schemas.MealOrderDisplay(
                 id=order.id,
+
+                # ✅ REQUIRED BY NEW SCHEMA
                 location_id=order.location_id,
+                kitchen_id=order.kitchen_id,
+
+                # ✅ OPTIONAL (but very useful for frontend)
+                location_name=order.location.name if order.location else None,
+                kitchen_name=order.kitchen.name if order.kitchen else None,
+
                 order_type=order.order_type,
                 room_number=order.room_number,
                 guest_name=order.guest_name,
@@ -1244,7 +1262,6 @@ def list_open_meal_orders(
         "total_amount": total_amount,
         "orders": result,
     }
-
 
 
 
