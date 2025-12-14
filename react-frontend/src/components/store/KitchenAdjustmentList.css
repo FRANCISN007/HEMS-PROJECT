@@ -23,10 +23,11 @@
 .list-adjustment-container th,
 .list-adjustment-container td {
   padding: 4px 6px;
-  border-radius: 8px;
-  border: 1px solid #ccc3c3; /* grid lines */
+  border: 1px solid #ccc3c3;
   text-align: left;
+  border-radius: 0; /* IMPORTANT */
 }
+
 
 .list-adjustment-container th {
   background: #f0f2f5;
@@ -35,19 +36,18 @@
   color: #555;
 }
 
-/* Even & Odd Row Colors */
-.list-adjustment-container tr:nth-child(even) {
-  background-color: #f9f9f9;
+.list-adjustment-container th,
+.list-adjustment-container td {
+  border: 1px solid #e0e0e0;
 }
 
-.list-adjustment-container tr:nth-child(odd) {
-  background-color: #ffffff;
-}
+
 
 /* Row Hover */
-.list-adjustment-container tr:hover {
-  background: #f1f7ff;
+.list-adjustment-container tbody tr:hover {
+  background-color: #eef4ff;
 }
+
 
 /* Buttons */
 .list-adjustment-container button {

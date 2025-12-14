@@ -18,13 +18,15 @@
   border-collapse: collapse;
 }
 
+/* REMOVE border-radius from cells */
 .stock-balance-container th,
 .stock-balance-container td {
   padding: 4px;
   border: 1px solid #ccc;
-  border-radius: px;
   text-align: left;
 }
+
+
 
 .stock-balance-container th {
   background: #f4f4f4;

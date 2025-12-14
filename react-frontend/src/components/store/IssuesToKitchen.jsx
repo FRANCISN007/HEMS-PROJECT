@@ -63,7 +63,7 @@ const IssueToKitchen = () => {
   const fetchItems = async (kitchenId) => {
     try {
       const res = await axiosWithAuth().get(
-        `/kitchen/inventory/simple?kitchen_id=${kitchenId}`
+        `/store/store/kitchen-items?kitchen_id=${kitchenId}`
       );
       setItems(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
