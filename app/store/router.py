@@ -1502,7 +1502,7 @@ def update_adjustment(
     adjustment_id: int,
     data: StoreInventoryAdjustmentCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     # AuthZ
     #if current_user.role != "admin":

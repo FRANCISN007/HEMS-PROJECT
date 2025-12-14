@@ -53,18 +53,13 @@ const KitchenIssueList = () => {
   }
 
   // =====================
-  // Initial Dates
+  // Initial Dates (TODAY ONLY)
   // =====================
   useEffect(() => {
-    const now = new Date();
-    const first = new Date(now.getFullYear(), now.getMonth(), 1)
-      .toISOString()
-      .split("T")[0];
-    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-      .toISOString()
-      .split("T")[0];
-    setStartDate(first);
-    setEndDate(last);
+    const today = new Date().toISOString().split("T")[0];
+
+    setStartDate(today);
+    setEndDate(today);
   }, []);
 
   // =====================

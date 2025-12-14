@@ -113,7 +113,10 @@ def update_kitchen(
 
 
 @router.delete("/{kitchen_id}", response_model=dict)
-def delete_kitchen(kitchen_id: int, db: Session = Depends(get_db)):
+def delete_kitchen(kitchen_id: int, db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))               
+    ):
+    
     """
     Delete a kitchen by ID.
     Block deletion if there is existing inventory or stock.
@@ -256,7 +259,7 @@ def list_kitchen_inventory_adjustments(
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["kitchen", "admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "admin"]))
 ):
     query = db.query(kitchen_models.KitchenInventoryAdjustment)
 
@@ -301,7 +304,7 @@ def update_kitchen_adjustment(
     adjustment_id: int,
     data: kitchen_schemas.KitchenInventoryAdjustmentCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     # 1️⃣ Fetch existing adjustment
     adjustment = (
