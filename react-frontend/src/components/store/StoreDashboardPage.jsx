@@ -106,7 +106,10 @@ const StoreDashboardPage = () => {
       name: "👨‍🍳 Manage Kitchen",
       submenu: [
         { label: "➕ Create Kitchen", path: "kitchen/create" },
-        { label: "📃 Issue to Kitchen", path: "kitchen/list" },
+        { label: "📃 Issue to Kitchen", path: "kitchen/lssue" },
+        { label: "📃 List Issue", path: "kitchenissue/list" },
+        { label: "🔧 Adjust Stock", path: "kitchenadjustment/create" },
+        { label: "🔧 List Adjustment", path: "kitchenadjustment/list" },
         
       ],
     },

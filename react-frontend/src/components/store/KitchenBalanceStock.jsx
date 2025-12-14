@@ -20,6 +20,7 @@ const KitchenBalanceStock = () => {
   } else if (typeof storedUser.role === "string") {
     roles = [storedUser.role];
   }
+
   roles = roles.map((r) => r.toLowerCase());
 
   if (!(roles.includes("admin") || roles.includes("store"))) {
@@ -61,8 +62,8 @@ const KitchenBalanceStock = () => {
       setLoading(true);
       const axios = axiosWithAuth();
 
-      let url = `/store/kitchen-balance-stock?`;
-      if (kitchenId) url += `kitchen_id=${kitchenId}`;
+      let url = `/store/kitchen-balance-stock`;
+      if (kitchenId) url += `?kitchen_id=${kitchenId}`;
 
       const res = await axios.get(url);
       setBalances(res.data || []);
@@ -77,13 +78,16 @@ const KitchenBalanceStock = () => {
 
   const handleKitchenChange = (e) => setSelectedKitchen(e.target.value);
 
+  // -----------------------------
+  // TOTALS (backend-driven)
+  // -----------------------------
   const totalStockAmount = balances.reduce(
-    (sum, item) => sum + (item.balance_total_amount || 0),
+    (sum, row) => sum + (row.balance_total_amount || 0),
     0
   );
 
   const totalStockBalance = balances.reduce(
-    (sum, item) => sum + (item.balance || 0),
+    (sum, row) => sum + (row.balance || 0),
     0
   );
 
@@ -96,16 +100,12 @@ const KitchenBalanceStock = () => {
 
         <div className="filter-frame">
           <div className="filter-group">
-            <label htmlFor="kitchenFilter">Kitchen:</label>
-            <select
-              id="kitchenFilter"
-              value={selectedKitchen}
-              onChange={handleKitchenChange}
-            >
+            <label>Kitchen:</label>
+            <select value={selectedKitchen} onChange={handleKitchenChange}>
               <option value="">All Kitchens</option>
-              {kitchens.map((kitchen) => (
-                <option key={kitchen.id} value={kitchen.id}>
-                  {kitchen.name}
+              {kitchens.map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.name}
                 </option>
               ))}
             </select>
@@ -134,35 +134,39 @@ const KitchenBalanceStock = () => {
             <th>Unit</th>
             <th>Category</th>
             <th>Item Type</th>
-            <th>Total Issued</th>
+            <th>Total Received</th>
             <th>Qty Sold</th>
+            <th>Adjusted</th>
             <th>Balance</th>
             <th>Unit Price</th>
             <th>Balance Value</th>
           </tr>
         </thead>
         <tbody>
-          {balances.map((item, index) => (
+          {balances.map((row, index) => (
             <tr
-              key={`${item.item_id}-${item.kitchen_id}`}
+              key={`${row.kitchen_id}-${row.item_id}`}
               className={index % 2 === 0 ? "even-row" : "odd-row"}
             >
-              <td>{item.kitchen_name}</td>
-              <td>{item.item_name}</td>
-              <td>{item.unit}</td>
-              <td>{item.category_name}</td>
-              <td>{item.item_type}</td>
-              <td>{item.total_issued}</td>
-              <td>{item.total_used}</td>
-              <td>{item.balance}</td>
+              <td>{row.kitchen_name}</td>
+              <td>{row.item_name}</td>
+              <td>{row.unit}</td>
+              <td>{row.category_name}</td>
+              <td>{row.item_type}</td>
+              <td>{row.total_issued}</td>
+              <td>{row.total_used}</td>
+              <td>{row.total_adjusted}</td>
               <td>
-                {item.last_unit_price
-                  ? `₦${item.last_unit_price.toLocaleString()}`
+                <strong>{row.balance}</strong>
+              </td>
+              <td>
+                {row.last_unit_price
+                  ? `₦${row.last_unit_price.toLocaleString()}`
                   : "-"}
               </td>
               <td>
-                {item.balance_total_amount
-                  ? `₦${item.balance_total_amount.toLocaleString()}`
+                {row.balance_total_amount
+                  ? `₦${row.balance_total_amount.toLocaleString()}`
                   : "-"}
               </td>
             </tr>

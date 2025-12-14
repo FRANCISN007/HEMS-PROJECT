@@ -33,6 +33,7 @@ class KitchenInventory(Base):
     quantity = Column(Integer, default=0)
 
     kitchen = relationship("Kitchen", back_populates="inventories")
+    item = relationship("StoreItem")  # <-- Add this
 
 
 
@@ -58,6 +59,27 @@ class KitchenStock(Base):
     __table_args__ = (
         UniqueConstraint("kitchen_id", "item_id", name="uq_kitchen_stock"),
     )
+
+
+class KitchenInventoryAdjustment(Base):
+    __tablename__ = "kitchen_inventory_adjustments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    kitchen_id = Column(Integer, ForeignKey("kitchens.id"), nullable=False)
+    item_id = Column(Integer, ForeignKey("store_items.id"), nullable=False)
+    quantity_adjusted = Column(Float, nullable=False)
+    reason = Column(String, nullable=True)
+    adjusted_by = Column(String, nullable=False)
+    adjusted_at = Column(DateTime, default=datetime.utcnow)
+
+    kitchen = relationship("Kitchen")
+    item = relationship("StoreItem")
+
+
+
+
+
+
 
 class KitchenMenu(Base):
     __tablename__ = "kitchen_menu"

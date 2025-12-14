@@ -1,0 +1,248 @@
+.list-adjustment-container {
+  padding: 20px;
+  background: #e8eaec;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.list-adjustment-container h2 {
+  margin-bottom: 15px;
+  font-size: 1.5rem;
+  color: #333;
+  font-weight: 600;
+}
+
+.list-adjustment-container table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.list-adjustment-container th,
+.list-adjustment-container td {
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid #ccc3c3; /* grid lines */
+  text-align: left;
+}
+
+.list-adjustment-container th {
+  background: #f0f2f5;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #555;
+}
+
+/* Even & Odd Row Colors */
+.list-adjustment-container tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.list-adjustment-container tr:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+/* Row Hover */
+.list-adjustment-container tr:hover {
+  background: #f1f7ff;
+}
+
+/* Buttons */
+.list-adjustment-container button {
+  border: none;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.list-adjustment-container button:first-child {
+  background: #4cafef;
+  color: white;
+}
+
+.list-adjustment-container button:first-child:hover {
+  background: #3b94d9;
+}
+
+.list-adjustment-container button:last-child {
+  background: #f44336;
+  color: white;
+}
+
+.list-adjustment-container button:last-child:hover {
+  background: #d32f2f;
+}
+
+/* Modal Overlay */
+.edit-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+/* Modal Content */
+.edit-modal-content {
+  background: #fff;
+  padding: 25px;
+  border-radius: 8px;
+  width: 500px;
+  max-width: 90%;
+  box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+  animation: fadeIn 0.3s ease;
+}
+
+/* Modal Overlay */
+.edit-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  backdrop-filter: blur(2px);
+}
+
+/* Modal Content */
+.edit-modal-content {
+  background: #ffffff;
+  padding: 25px 30px;
+  border-radius: 12px;
+  width: 480px;
+  max-width: 90%;
+  max-height: 85vh;               /* Prevents overflow */
+  overflow-y: auto;               /* Enables scrolling if content exceeds height */
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  animation: fadeIn 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.edit-modal-content h3 {
+  margin-bottom: 10px;
+  color: #222;
+  font-weight: 600;
+  text-align: center;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 8px;
+}
+
+.edit-modal-content label {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  color: #555;
+  font-weight: 500;
+}
+
+.edit-modal-content select,
+.edit-modal-content input,
+.edit-modal-content textarea {
+  width: 100%;
+  padding: 8px 10px;
+  margin-top: 5px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.edit-modal-content select:focus,
+.edit-modal-content input:focus,
+.edit-modal-content textarea:focus {
+  border-color: #4cafef;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(76, 175, 239, 0.25);
+}
+
+.edit-modal-content textarea {
+  resize: vertical;
+  min-height: 80px;       /* gives good starting height */
+  max-height: 200px;      /* prevents overlap on small screens */
+  line-height: 1.4;
+}
+
+/* Modal Buttons */
+.edit-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.edit-buttons button {
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.edit-buttons button:first-child {
+  background: #4caf50;
+  color: white;
+}
+
+.edit-buttons button:first-child:hover {
+  background: #43a047;
+}
+
+.edit-buttons button:last-child {
+  background: #9e9e9e;
+  color: white;
+}
+
+.edit-buttons button:last-child:hover {
+  background: #757575;
+}
+
+/* Fade-in Animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
+.filter-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.filter-section label {
+  font-size: 0.9rem;
+  color: #444;
+}
+
+.filter-section input[type="date"] {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.filter-section button {
+  padding: 6px 12px;
+  background: #4cafef;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.filter-section button:hover {
+  background: #3b94d9;
+}

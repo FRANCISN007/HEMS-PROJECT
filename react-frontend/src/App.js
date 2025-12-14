@@ -50,7 +50,6 @@ import IssueItems from "./components/store/IssueItems";
 import ListIssues from "./components/store/ListIssues";
 
 import CreateKitchen from "./components/store/CreateKitchen";
-import IssuesToKitchen from "./components/store/IssuesToKitchen";
 
 import StockAdjustment from "./components/store/StockAdjustment";
 import ListAdjustment from "./components/store/ListAdjustment";
@@ -84,6 +83,15 @@ import ListRestaurantSales from "./components/restaurant/ListRestaurantSales";
 import RestaurantPayment from "./components/restaurant/RestaurantPayment";
 import ListRestaurantPayment from "./components/restaurant/ListRestaurantPayment";
 import KitchenBalanceStock from "./components/store/KitchenBalanceStock";
+
+import KitchenStockAdjust from "./components/store/KitchenStockAdjust";
+import KitchenAdjustmentList from "./components/store/KitchenAdjustmentList";
+
+import IssuesToKitchen from "./components/store/IssuesToKitchen";
+import KitchenIssueList from "./components/store/KitchenIssueList";
+
+
+
 
 import SalesSummary from "./components/restaurant/SalesSummary";
 
@@ -135,8 +143,11 @@ const App = () => {
           <Route path="barstock-balance" element={<BarBalanceStock />} />
           <Route path="kitchenstock" element={<KitchenBalanceStock />} />
           <Route path="kitchen/create" element={<CreateKitchen />} />
-          <Route path="kitchen/list" element={<IssuesToKitchen />} />
-
+          <Route path="kitchenadjustment/create" element={<KitchenStockAdjust />} />
+          <Route path="kitchenadjustment/list" element={<KitchenAdjustmentList />} />
+          <Route path="kitchen/lssue" element={<IssuesToKitchen />} />
+          <Route path="kitchenissue/list" element={<KitchenIssueList />} />
+        
         </Route>
 
 

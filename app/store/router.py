@@ -1892,21 +1892,48 @@ def get_kitchen_stock_balance(
         }
 
         # ============================================
-        # 3️⃣ MERGE + CALCULATE BALANCE
+        # 3️⃣ TOTAL ADJUSTED (Kitchen Inventory Adjustments)
         # ============================================
+        adjusted_query = (
+            db.query(
+                kitchen_models.KitchenInventoryAdjustment.item_id,
+                kitchen_models.KitchenInventoryAdjustment.kitchen_id,
+                func.sum(kitchen_models.KitchenInventoryAdjustment.quantity_adjusted).label("total_adjusted")
+            )
+        )
 
-        all_keys = set(issued_data.keys()) | set(used_data.keys())
+        if item_id:
+            adjusted_query = adjusted_query.filter(kitchen_models.KitchenInventoryAdjustment.item_id == item_id)
+        if kitchen_id:
+            adjusted_query = adjusted_query.filter(kitchen_models.KitchenInventoryAdjustment.kitchen_id == kitchen_id)
+
+        adjusted_query = adjusted_query.group_by(
+            kitchen_models.KitchenInventoryAdjustment.item_id,
+            kitchen_models.KitchenInventoryAdjustment.kitchen_id
+        )
+
+        adjusted_data = {
+            (row.item_id, row.kitchen_id): float(row.total_adjusted or 0)
+            for row in adjusted_query.all()
+        }
+
+        # ============================================
+        # 4️⃣ MERGE + CALCULATE BALANCE
+        # ============================================
+        all_keys = set(issued_data.keys()) | set(used_data.keys()) | set(adjusted_data.keys())
         results = []
 
         for (i_id, k_id) in all_keys:
             total_issued = issued_data.get((i_id, k_id), 0)
             total_used = used_data.get((i_id, k_id), 0)
-            balance = total_issued - total_used
+            total_adjusted = adjusted_data.get((i_id, k_id), 0)
+
+            balance = total_issued - total_used - total_adjusted
 
             item = db.query(store_models.StoreItem).filter_by(id=i_id).first()
             kitchen = db.query(kitchen_models.Kitchen).filter_by(id=k_id).first()
 
-            if not item:
+            if not item or not kitchen:
                 continue
 
             # Fetch latest unit price
@@ -1926,7 +1953,7 @@ def get_kitchen_stock_balance(
             results.append(
                 kitchen_schemas.KitchenStockBalance(
                     kitchen_id=k_id,
-                    kitchen_name=kitchen.name if kitchen else "Unknown",
+                    kitchen_name=kitchen.name,
                     item_id=i_id,
                     item_name=item.name,
                     category_name=item.category.name if item.category else None,
@@ -1934,7 +1961,7 @@ def get_kitchen_stock_balance(
                     item_type=item.item_type,
                     total_issued=total_issued,
                     total_used=total_used,
-                    total_adjusted=0,
+                    total_adjusted=total_adjusted,
                     balance=balance,
                     last_unit_price=unit_price,
                     balance_total_amount=balance_total_amount
@@ -1943,7 +1970,6 @@ def get_kitchen_stock_balance(
 
         # Sort for UI
         results.sort(key=lambda x: (x.kitchen_name.lower(), x.item_name.lower()))
-
         return results
 
     except Exception as e:
@@ -1951,7 +1977,6 @@ def get_kitchen_stock_balance(
             500,
             f"Failed to retrieve kitchen stock balance: {str(e)}"
         )
-
 
 # ----------------------------
 # STORE BALANCE REPORT

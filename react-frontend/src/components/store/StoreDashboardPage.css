@@ -40,7 +40,7 @@
   text-align: left;
   padding: 10px 12px; /* reduced from 12px 15px */
   margin-bottom: 8px; /* reduced space between buttons */
-  font-size: 0.95rem;
+  font-size: 0.8rem;
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.3s ease, color 0.3s ease;
@@ -153,7 +153,7 @@
   padding: 6px 12px; /* Reduced vertical and horizontal padding */
   width: 100%;
   cursor: pointer;
-  font-size: 0.85rem; /* Slightly smaller text */
+  font-size: 0.6rem; /* Slightly smaller text */
   color: #111827;
   transition: background-color 0.3s, color 0.3s;
   line-height: 1.2; /* tighter line height */

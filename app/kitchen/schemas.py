@@ -104,12 +104,52 @@ class KitchenStockBalance(BaseModel):
 
     total_issued: float = 0        # what store issued to kitchen
     total_used: float = 0          # what restaurant sold (store_qty_used)
-    total_adjusted: float = 0      # if you later add kitchen adjustments
+    total_adjusted: float = 0      # adjustments made via KitchenInventoryAdjustment
     balance: float = 0             # issued - used - adjusted
     last_unit_price: Optional[float] = None
     balance_total_amount: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
+    # ------------------------------
+# KITCHEN INVENTORY ADJUSTMENTS
+# ------------------------------
+class KitchenInventoryAdjustmentCreate(BaseModel):
+    kitchen_id: int
+    item_id: int
+    quantity_adjusted: float
+    reason: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class KitchenInventoryAdjustmentDisplay(BaseModel):
+    id: int
+    kitchen_id: int
+    item: KitchenItemMinimalDisplay
+    quantity_adjusted: float
+    reason: Optional[str] = None
+    adjusted_by: str
+    adjusted_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class KitchenInventorySimple(BaseModel):
+    id: int
+    name: str
+    unit: Optional[str]
+    quantity: float
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# kitchen_schemas.py
+
+class KitchenInventoryAdjustmentUpdate(BaseModel):
+    quantity_adjusted: float
+    reason: Optional[str] = None
+
+
 
 
 
@@ -131,3 +171,5 @@ class KitchenMenuUpdate(BaseModel):
     selling_price: float
 
     model_config = ConfigDict(from_attributes=True)
+
+
