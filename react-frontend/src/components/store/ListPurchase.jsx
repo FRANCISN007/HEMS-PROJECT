@@ -17,6 +17,8 @@ const ListPurchase = () => {
   const [editingPurchase, setEditingPurchase] = useState(null);
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [message, setMessage] = useState("");
+  const [itemId, setItemId] = useState("");
+
 
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
@@ -66,19 +68,23 @@ const ListPurchase = () => {
     })();
   }, []);
 
-  const fetchPurchases = async (start, end) => {
-    const sDate = typeof start === "string" ? start : startDate;
-    const eDate = typeof end === "string" ? end : endDate;
-
+  const fetchPurchases = async (
+    start,
+    end,
+    vendor = vendorId,
+    item = itemId,
+    invoice = invoiceNumber
+  ) => {
     setLoading(true);
     setError("");
     try {
       const axios = axiosWithAuth();
       const params = {};
-      if (sDate) params.start_date = sDate;
-      if (eDate) params.end_date = eDate;
-      if (invoiceNumber) params.invoice_number = invoiceNumber;
-      if (vendorId) params.vendor_id = vendorId;
+      if (start) params.start_date = start;
+      if (end) params.end_date = end;
+      if (vendor) params.vendor_id = vendor;
+      if (item) params.item_id = item;
+      if (invoice) params.invoice_number = invoice;
 
       const res = await axios.get("/store/purchases", { params });
       const { purchases, total_entries, total_purchase } = res.data;
@@ -91,6 +97,7 @@ const ListPurchase = () => {
       setLoading(false);
     }
   };
+
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this purchase?")) return;
@@ -173,9 +180,24 @@ const ListPurchase = () => {
           placeholder="Invoice number"
         />
 
+        {/* Item filter */}
+        <select
+          value={itemId}
+          onChange={(e) => setItemId(e.target.value ? parseInt(e.target.value) : "")}
+          className="item-filter"
+        >
+          <option value="">Select Item</option>
+          {items.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+
+        {/* Vendor filter */}
         <select
           value={vendorId}
-          onChange={(e) => setVendorId(e.target.value)}
+          onChange={(e) => setVendorId(e.target.value ? parseInt(e.target.value) : "")}
           className="vendor-filter"
         >
           <option value="">Select Vendor</option>
@@ -186,8 +208,13 @@ const ListPurchase = () => {
           ))}
         </select>
 
-        <button onClick={() => fetchPurchases(startDate, endDate)}>Search</button>
+        <button
+          onClick={() => fetchPurchases(startDate, endDate, vendorId, itemId, invoiceNumber)}
+        >
+          Search
+        </button>
       </div>
+
 
       {/* Summary */}
       <div className="summary">

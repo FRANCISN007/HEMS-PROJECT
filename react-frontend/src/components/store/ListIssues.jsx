@@ -7,7 +7,7 @@ const ListIssues = () => {
   const [bars, setBars] = useState([]);
   const [items, setItems] = useState([]);
   const [message, setMessage] = useState("");
-  const [barName, setBarName] = useState("");
+  const [selectedBarId, setSelectedBarId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [editingIssue, setEditingIssue] = useState(null);
@@ -68,23 +68,31 @@ const ListIssues = () => {
     })();
   }, []);
 
-  const fetchIssues = async (sDate, eDate) => {
+  const fetchIssues = async (
+    barId = selectedBarId,
+    sDate = startDate,
+    eDate = endDate
+  ) => {
     try {
       const params = {};
-      if (barName) params.bar_name = barName;
+
+      if (barId) params.bar_id = barId;
       if (sDate) params.start_date = sDate;
       if (eDate) params.end_date = eDate;
+
       const res = await axiosWithAuth().get("/store/bar", { params });
+
       setIssues(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Error fetching issues", err);
     }
   };
 
+
   useEffect(() => {
-    fetchIssues(startDate, endDate);
-    // eslint-disable-next-line
-  }, [startDate, endDate]);
+    fetchIssues();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBarId, startDate, endDate]);
 
   const handleEditClick = (issue) => {
     const issue_items = (issue.issue_items || []).map((it) => ({
@@ -191,7 +199,7 @@ const ListIssues = () => {
       setEditingIssue(null);
       setFormData({ issue_to: "bar", issued_to_id: "", issue_date: getToday(), issue_items: [] });
       setOriginalIssueCounts({});
-      fetchIssues(startDate, endDate);
+      fetchIssues();
     } catch (err) {
       console.error("Update failed", err.response?.data || err.message);
       const detail = err.response?.data?.detail || err.response?.data || err.message || "Update failed";
@@ -205,7 +213,7 @@ const ListIssues = () => {
       await axiosWithAuth().delete(`/store/bar-issues/${id}`);
 
       showMessage("✅ Issue deleted successfully.");
-      fetchIssues(startDate, endDate);
+      fetchIssues();
     } catch (err) {
       console.error("Delete failed", err);
       showMessage("❌ Failed to delete issue.");
@@ -221,15 +229,40 @@ const ListIssues = () => {
       <h2>📦 List of Issued Items</h2>
 
       <div className="filters">
-        <select value={barName} onChange={(e) => setBarName(e.target.value)}>
-          <option value="">-- Filter by Bar --</option>
-          {bars.map((bar) => <option key={bar.id} value={bar.name}>{bar.name}</option>)}
+        <select
+          value={selectedBarId}
+          onChange={(e) => setSelectedBarId(e.target.value)}
+        >
+          <option value="">-- All Bars --</option>
+          {bars.map((bar) => (
+            <option key={bar.id} value={bar.id}>
+              {bar.name}
+            </option>
+          ))}
         </select>
+
 
         <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-        <button onClick={() => fetchIssues(startDate, endDate)}>🔍 Filter</button>
-        <button onClick={() => { const now = new Date(); const first = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]; const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]; setBarName(""); setStartDate(first); setEndDate(last); fetchIssues(first, last); }}>♻️ Reset</button>
+        <button
+          onClick={() => {
+            const now = new Date();
+            const first = new Date(now.getFullYear(), now.getMonth(), 1)
+              .toISOString()
+              .split("T")[0];
+            const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+              .toISOString()
+              .split("T")[0];
+
+            setSelectedBarId("");
+            setStartDate(first);
+            setEndDate(last);
+          }}
+        >
+          ♻️ Reset
+        </button>
+
+        
       </div>
 
       {message && <p className="issue-message">{message}</p>}

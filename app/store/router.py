@@ -395,13 +395,15 @@ async def receive_inventory(
 
 
 
+# ✅ Add item_id query parameter
 @router.get("/purchases")
 def list_purchases(
     start_date: date = Query(None),
     end_date: date = Query(None),
     invoice_number: str = Query(None),
-    vendor_name: str = Query(None),  # ✅ NEW: filter by vendor name
-    vendor_id: int = Query(None),    # ✅ Optional: also allow vendor_id
+    vendor_name: str = Query(None),
+    vendor_id: int = Query(None),
+    item_id: int = Query(None),  # <-- NEW: filter by item
     request: Request = None,  
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
@@ -411,7 +413,7 @@ def list_purchases(
         selectinload(store_models.StoreStockEntry.item),
     )
 
-    # 🔎 Apply filters
+    # Date filters
     if start_date and end_date:
         query = query.filter(
             store_models.StoreStockEntry.purchase_date >= start_date,
@@ -422,23 +424,26 @@ def list_purchases(
     elif end_date:
         query = query.filter(store_models.StoreStockEntry.purchase_date <= end_date)
 
+    # Invoice filter
     if invoice_number:
         query = query.filter(store_models.StoreStockEntry.invoice_number.ilike(f"%{invoice_number}%"))
 
-    # ✅ Filter by vendor ID
+    # Vendor filters
     if vendor_id:
         query = query.filter(store_models.StoreStockEntry.vendor_id == vendor_id)
-
-    # ✅ Filter by vendor name (case-insensitive)
     if vendor_name:
         query = query.join(store_models.StoreStockEntry.vendor).filter(
             vendor_models.Vendor.business_name.ilike(f"%{vendor_name}%")
         )
 
-    # ✅ Sort latest first
+    # ✅ Item filter
+    if item_id:
+        query = query.filter(store_models.StoreStockEntry.item_id == item_id)
+
+    # Latest first
     purchases = query.order_by(store_models.StoreStockEntry.created_at.desc()).all()
 
-    # 🧮 Prepare results
+    # Prepare results
     results, total_amount = [], 0
     for purchase in purchases:
         attachment_url = None
@@ -470,7 +475,6 @@ def list_purchases(
         "total_purchase": total_amount,
         "purchases": results
     }
-
 
 from fastapi import HTTPException, UploadFile, File, Form
 from datetime import datetime
@@ -1097,52 +1101,102 @@ def issue_to_bar(
 
 @router.get("/bar", response_model=List[store_schemas.IssueDisplay])
 def list_issues_to_bar(
+    bar_id: Optional[int] = Query(None, description="Filter by bar"),
+    start_date: Optional[date] = Query(None, description="Start issue date"),
+    end_date: Optional[date] = Query(None, description="End issue date"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["store", "admin"])
+    )
 ):
-    issues = db.query(store_models.StoreIssue).filter_by(issue_to="bar").order_by(
-        store_models.StoreIssue.issue_date.desc()
-    ).all()
+    try:
+        # --------------------------------------------------
+        # BASE QUERY
+        # --------------------------------------------------
+        query = (
+            db.query(store_models.StoreIssue)
+            .filter(store_models.StoreIssue.issue_to == "bar")
+        )
 
-    result: List[store_schemas.IssueDisplay] = []
+        if bar_id:
+            query = query.filter(store_models.StoreIssue.bar_id == bar_id)
 
-    for issue in issues:
-        issue_items_display: List[store_schemas.IssueItemDisplay] = []
+        if start_date:
+            query = query.filter(store_models.StoreIssue.issue_date >= start_date)
 
-        for issue_item in issue.issue_items:  # ✅ fixed
-            item_obj = db.query(store_models.StoreItem).filter_by(id=issue_item.item_id).first()
-            display_item = store_schemas.IssueItemDisplay(
-                id=issue_item.id,
-                item=store_schemas.StoreItemDisplay(
-                    id=item_obj.id,
-                    name=item_obj.name,
-                    unit=item_obj.unit,
-                    category=store_schemas.StoreCategoryDisplay(
-                        id=item_obj.category.id,
-                        name=item_obj.category.name,
-                        category_name=getattr(item_obj.category, "name", None),
-                        created_at=item_obj.category.created_at if item_obj.category else datetime.utcnow()
-                    ) if item_obj.category else None,
-                    unit_price=item_obj.unit_price,
-                    created_at=item_obj.created_at
-                ),
-                quantity=issue_item.quantity
+        if end_date:
+            query = query.filter(store_models.StoreIssue.issue_date <= end_date)
+
+        issues = query.order_by(
+            store_models.StoreIssue.issue_date.desc()
+        ).all()
+
+        result: List[store_schemas.IssueDisplay] = []
+
+        # --------------------------------------------------
+        # BUILD RESPONSE
+        # --------------------------------------------------
+        for issue in issues:
+            issue_items_display: List[store_schemas.IssueItemDisplay] = []
+
+            for issue_item in issue.issue_items:
+                item_obj = (
+                    db.query(store_models.StoreItem)
+                    .filter_by(id=issue_item.item_id)
+                    .first()
+                )
+
+                if not item_obj:
+                    continue
+
+                display_item = store_schemas.IssueItemDisplay(
+                    id=issue_item.id,
+                    item=store_schemas.StoreItemDisplay(
+                        id=item_obj.id,
+                        name=item_obj.name,
+                        unit=item_obj.unit,
+                        category=(
+                            store_schemas.StoreCategoryDisplay(
+                                id=item_obj.category.id,
+                                name=item_obj.category.name,
+                                category_name=item_obj.category.name,
+                                created_at=item_obj.category.created_at
+                            )
+                            if item_obj.category
+                            else None
+                        ),
+                        unit_price=item_obj.unit_price,
+                        created_at=item_obj.created_at
+                    ),
+                    quantity=issue_item.quantity
+                )
+
+                issue_items_display.append(display_item)
+
+            bar_obj = (
+                db.query(store_models.Bar)
+                .filter_by(id=issue.bar_id)
+                .first()
             )
-            issue_items_display.append(display_item)
 
-        bar_obj = db.query(store_models.Bar).filter_by(id=issue.bar_id).first()
+            result.append(
+                store_schemas.IssueDisplay(
+                    id=issue.id,
+                    issue_to="bar",
+                    issued_to_id=issue.bar_id,
+                    issued_to=bar_obj,
+                    issue_date=issue.issue_date,
+                    issue_items=issue_items_display
+                )
+            )
 
-        result.append(store_schemas.IssueDisplay(
-            id=issue.id,
-            issue_to="bar",
-            issued_to_id=issue.bar_id,
-            issued_to=bar_obj,
-            issue_date=issue.issue_date,
-            issue_items=issue_items_display
-        ))
+        return result
 
-    return result
-
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve bar issues: {str(e)}"
+        )
 
 @router.get("/stock/{item_id}")
 def get_item_stock(item_id: int, db: Session = Depends(get_db)):
@@ -1367,8 +1421,12 @@ def delete_bar_issue(
                 bar_inventory.quantity = 0
 
     # 3️⃣ Delete all issue items and issue
-    db.query(store_models.StoreIssueItem).filter_by(issue_id=issue.id).delete()
+    # 3️⃣ Delete all issue items and issue safely
+    for item in issue.issue_items:
+        db.delete(item)
+
     db.delete(issue)
+
 
     db.commit()
 

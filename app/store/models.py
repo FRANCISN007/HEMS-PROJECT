@@ -96,8 +96,10 @@ class StoreIssue(Base):
     issue_items = relationship(
         "StoreIssueItem",
         back_populates="issue",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
+        passive_deletes=True
     )
+
 
     bar = relationship("Bar", back_populates="issues")
     kitchen = relationship("Kitchen", back_populates="issues")
@@ -110,16 +112,20 @@ class StoreIssueItem(Base):
     __tablename__ = "store_issue_items"
 
     id = Column(Integer, primary_key=True, index=True)
-    issue_id = Column(Integer, ForeignKey("store_issues.id"), nullable=False)
+    
+    # Only one issue_id column, with CASCADE
+    issue_id = Column(
+        Integer,
+        ForeignKey("store_issues.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
     item_id = Column(Integer, ForeignKey("store_items.id"), nullable=False)
     quantity = Column(Integer, nullable=False)
-    
 
-
+    # Relationships
     issue = relationship("StoreIssue", back_populates="issue_items")
-
     item = relationship("StoreItem", back_populates="issue_items")
-
 
 
 
