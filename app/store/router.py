@@ -807,7 +807,6 @@ def list_kitchen_issues(
 
 
 
-
 @router.put("/kitchen/{issue_id}", response_model=IssueToKitchenDisplay)
 def update_kitchen_issue(
     issue_id: int,
@@ -906,6 +905,7 @@ def update_kitchen_issue(
         issue_items=issue_items_display,
         issue_date=issue.issue_date
     )
+
 
 
 @router.get("/store/kitchen-items", response_model=List[StoreItemDisplay])
@@ -1818,10 +1818,14 @@ def get_bar_stock_balance(
 
 
 
+
+
 @router.get("/kitchen-balance-stock", response_model=List[kitchen_schemas.KitchenStockBalance])
 def get_kitchen_stock_balance(
     item_id: Optional[int] = Query(None),
     kitchen_id: Optional[int] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
@@ -1850,6 +1854,10 @@ def get_kitchen_stock_balance(
             issued_query = issued_query.filter(store_models.StoreIssueItem.item_id == item_id)
         if kitchen_id:
             issued_query = issued_query.filter(store_models.StoreIssue.kitchen_id == kitchen_id)
+        if start_date:
+            issued_query = issued_query.filter(store_models.StoreIssue.issue_date >= start_date)
+        if end_date:
+            issued_query = issued_query.filter(store_models.StoreIssue.issue_date <= end_date)
 
         issued_query = issued_query.group_by(
             store_models.StoreIssueItem.item_id,
@@ -1880,6 +1888,10 @@ def get_kitchen_stock_balance(
             used_query = used_query.filter(restaurant_models.MealOrderItem.store_item_id == item_id)
         if kitchen_id:
             used_query = used_query.filter(restaurant_models.MealOrder.kitchen_id == kitchen_id)
+        if start_date:
+            used_query = used_query.filter(restaurant_models.MealOrder.created_at >= start_date)
+        if end_date:
+            used_query = used_query.filter(restaurant_models.MealOrder.created_at <= end_date)
 
         used_query = used_query.group_by(
             restaurant_models.MealOrderItem.store_item_id,
@@ -1906,6 +1918,10 @@ def get_kitchen_stock_balance(
             adjusted_query = adjusted_query.filter(kitchen_models.KitchenInventoryAdjustment.item_id == item_id)
         if kitchen_id:
             adjusted_query = adjusted_query.filter(kitchen_models.KitchenInventoryAdjustment.kitchen_id == kitchen_id)
+        if start_date:
+            adjusted_query = adjusted_query.filter(kitchen_models.KitchenInventoryAdjustment.adjusted_at >= start_date)
+        if end_date:
+            adjusted_query = adjusted_query.filter(kitchen_models.KitchenInventoryAdjustment.adjusted_at <= end_date)
 
         adjusted_query = adjusted_query.group_by(
             kitchen_models.KitchenInventoryAdjustment.item_id,
@@ -1977,9 +1993,6 @@ def get_kitchen_stock_balance(
             500,
             f"Failed to retrieve kitchen stock balance: {str(e)}"
         )
-
-# ----------------------------
-# STORE BALANCE REPORT
 # ----------------------------
 
 

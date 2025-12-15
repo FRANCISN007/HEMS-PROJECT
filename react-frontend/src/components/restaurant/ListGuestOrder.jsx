@@ -362,6 +362,7 @@ const ListGuestOrder = () => {
           <tr>
             <th>ID</th>
             <th>Guest</th>
+            <th>Date</th>
             <th>Room</th>
             <th>Type</th>
             <th>Status</th>
@@ -386,6 +387,7 @@ const ListGuestOrder = () => {
                 <tr key={order.id}>
                   <td>{order.id}</td>
                   <td>{order.guest_name}</td>
+                  <td>{order.created_at}</td>
                   <td>{order.room_number}</td>
                   <td>{order.order_type}</td>
                   <td>{order.status}</td>

@@ -6,6 +6,8 @@ const KitchenBalanceStock = () => {
   const [balances, setBalances] = useState([]);
   const [kitchens, setKitchens] = useState([]);
   const [selectedKitchen, setSelectedKitchen] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
@@ -14,15 +16,12 @@ const KitchenBalanceStock = () => {
   // -----------------------------
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
-
   if (Array.isArray(storedUser.roles)) {
     roles = storedUser.roles;
   } else if (typeof storedUser.role === "string") {
     roles = [storedUser.role];
   }
-
   roles = roles.map((r) => r.toLowerCase());
-
   if (!(roles.includes("admin") || roles.includes("store"))) {
     return (
       <div className="unauthorized">
@@ -54,16 +53,18 @@ const KitchenBalanceStock = () => {
   // Load Stock Balances
   // -----------------------------
   useEffect(() => {
-    fetchStockBalances(selectedKitchen);
-  }, [selectedKitchen]);
+    fetchStockBalances(selectedKitchen, startDate, endDate);
+  }, [selectedKitchen, startDate, endDate]);
 
-  const fetchStockBalances = async (kitchenId = "") => {
+  const fetchStockBalances = async (kitchenId = "", start = "", end = "") => {
     try {
       setLoading(true);
       const axios = axiosWithAuth();
 
-      let url = `/store/kitchen-balance-stock`;
-      if (kitchenId) url += `?kitchen_id=${kitchenId}`;
+      let url = `/store/kitchen-balance-stock?`;
+      if (kitchenId) url += `kitchen_id=${kitchenId}&`;
+      if (start) url += `start_date=${start}&`;
+      if (end) url += `end_date=${end}&`;
 
       const res = await axios.get(url);
       setBalances(res.data || []);
@@ -110,16 +111,32 @@ const KitchenBalanceStock = () => {
               ))}
             </select>
           </div>
+
+          {/* DATE FILTERS */}
+          <div className="filter-group">
+            <label>Start Date:</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+          <div className="filter-group">
+            <label>End Date:</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
         </div>
 
         <div className="total-stock">
           <div>
-            Total Stock Value:{" "}
-            <strong>₦{totalStockAmount.toLocaleString()}</strong>
+            Total Stock Value: <strong>₦{totalStockAmount.toLocaleString()}</strong>
           </div>
           <div>
-            Stock Balance (Quantity):{" "}
-            <strong>{totalStockBalance.toLocaleString()}</strong>
+            Stock Balance (Quantity): <strong>{totalStockBalance.toLocaleString()}</strong>
           </div>
         </div>
       </div>
@@ -160,14 +177,10 @@ const KitchenBalanceStock = () => {
                 <strong>{row.balance}</strong>
               </td>
               <td>
-                {row.last_unit_price
-                  ? `₦${row.last_unit_price.toLocaleString()}`
-                  : "-"}
+                {row.last_unit_price ? `₦${row.last_unit_price.toLocaleString()}` : "-"}
               </td>
               <td>
-                {row.balance_total_amount
-                  ? `₦${row.balance_total_amount.toLocaleString()}`
-                  : "-"}
+                {row.balance_total_amount ? `₦${row.balance_total_amount.toLocaleString()}` : "-"}
               </td>
             </tr>
           ))}
