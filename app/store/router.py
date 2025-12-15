@@ -1636,12 +1636,14 @@ def delete_adjustment(
 def get_bar_stock_balance(
     item_id: Optional[int] = Query(None, description="Filter by specific item"),
     bar_id: Optional[int] = Query(None, description="Filter by bar"),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     try:
         # =============================================================
-        # 1) ISSUED ITEMS (StoreIssue → Bar)
+        # 1️⃣ ISSUED ITEMS (Store → Bar)
         # =============================================================
         issued_query = (
             db.query(
@@ -1651,13 +1653,17 @@ def get_bar_stock_balance(
             )
             .join(store_models.StoreIssue)
             .join(store_models.StoreItem)
+            .filter(store_models.StoreIssue.issue_to == "bar")
         )
 
         if item_id:
             issued_query = issued_query.filter(store_models.StoreItem.id == item_id)
-
         if bar_id:
             issued_query = issued_query.filter(store_models.StoreIssue.bar_id == bar_id)
+        if start_date:
+            issued_query = issued_query.filter(store_models.StoreIssue.issue_date >= start_date)
+        if end_date:
+            issued_query = issued_query.filter(store_models.StoreIssue.issue_date <= end_date)
 
         issued_query = issued_query.group_by(
             store_models.StoreIssueItem.item_id,
@@ -1665,12 +1671,12 @@ def get_bar_stock_balance(
         )
 
         issued_data = {
-            (row.item_id, row.bar_id): {"total_received": float(row.total_received or 0)}
+            (row.item_id, row.bar_id): float(row.total_received or 0)
             for row in issued_query.all()
         }
 
         # =============================================================
-        # 2) SOLD ITEMS (BarSales)
+        # 2️⃣ SOLD ITEMS (Bar Sales)
         # =============================================================
         sold_query = (
             db.query(
@@ -1687,6 +1693,10 @@ def get_bar_stock_balance(
             sold_query = sold_query.filter(store_models.StoreItem.id == item_id)
         if bar_id:
             sold_query = sold_query.filter(bar_models.BarSale.bar_id == bar_id)
+        if start_date:
+            sold_query = sold_query.filter(bar_models.BarSale.sale_date >= start_date)
+        if end_date:
+            sold_query = sold_query.filter(bar_models.BarSale.sale_date <= end_date)
 
         sold_query = sold_query.group_by(
             bar_models.BarInventory.item_id,
@@ -1699,22 +1709,27 @@ def get_bar_stock_balance(
         }
 
         # =============================================================
-        # 3) ADJUSTED ITEMS (BarInventoryAdjustment)
+        # 3️⃣ ADJUSTED ITEMS (Bar Inventory Adjustments)
         # =============================================================
         adjusted_query = (
             db.query(
                 bar_models.BarInventoryAdjustment.item_id,
                 bar_models.BarInventoryAdjustment.bar_id,
                 func.sum(bar_models.BarInventoryAdjustment.quantity_adjusted)
-                    .label("total_adjusted"),
+                .label("total_adjusted"),
             )
-            .join(store_models.StoreItem, bar_models.BarInventoryAdjustment.item_id == store_models.StoreItem.id)
+            .join(store_models.StoreItem,
+                  bar_models.BarInventoryAdjustment.item_id == store_models.StoreItem.id)
         )
 
         if item_id:
             adjusted_query = adjusted_query.filter(bar_models.BarInventoryAdjustment.item_id == item_id)
         if bar_id:
             adjusted_query = adjusted_query.filter(bar_models.BarInventoryAdjustment.bar_id == bar_id)
+        if start_date:
+            adjusted_query = adjusted_query.filter(bar_models.BarInventoryAdjustment.adjusted_at >= start_date)
+        if end_date:
+            adjusted_query = adjusted_query.filter(bar_models.BarInventoryAdjustment.adjusted_at <= end_date)
 
         adjusted_query = adjusted_query.group_by(
             bar_models.BarInventoryAdjustment.item_id,
@@ -1727,94 +1742,68 @@ def get_bar_stock_balance(
         }
 
         # =============================================================
-        # 4) Merge all keys (items that appeared anywhere)
+        # 4️⃣ MERGE + CALCULATE BALANCE
         # =============================================================
         all_keys = set(issued_data.keys()) | set(sold_data.keys()) | set(adjusted_data.keys())
         results = []
 
         for (i_id, b_id) in all_keys:
 
-            # Skip invalid bar_id
             if b_id is None:
                 continue
 
-            issued = issued_data.get((i_id, b_id), {"total_received": 0})["total_received"]
+            issued = issued_data.get((i_id, b_id), 0)
             sold = sold_data.get((i_id, b_id), 0)
             adjusted = adjusted_data.get((i_id, b_id), 0)
 
             balance = issued - sold - adjusted
 
-            # Get item
-            item = db.query(store_models.StoreItem).filter(store_models.StoreItem.id == i_id).first()
-            if not item:
+            item = db.query(store_models.StoreItem).filter_by(id=i_id).first()
+            if not item or item.item_type != "bar":
                 continue
 
-            # ----------------------------
-            # Exclude kitchen category
-            # ----------------------------
-            if item.item_type != "bar":
-                continue
+            bar = db.query(bar_models.Bar).filter_by(id=b_id).first()
 
-            # Get bar
-            bar = db.query(bar_models.Bar).filter(bar_models.Bar.id == b_id).first()
-
-            # Price lookups
+            # Latest price
             latest_entry = (
                 db.query(store_models.StoreStockEntry)
-                .filter(
-                    store_models.StoreStockEntry.item_id == i_id,
-                    store_models.StoreStockEntry.unit_price.isnot(None)
+                .filter(store_models.StoreStockEntry.item_id == i_id)
+                .order_by(
+                    store_models.StoreStockEntry.purchase_date.desc(),
+                    store_models.StoreStockEntry.id.desc()
                 )
-                .order_by(store_models.StoreStockEntry.purchase_date.desc(), store_models.StoreStockEntry.id.desc())
                 .first()
             )
 
-            if not latest_entry:
-                latest_entry = (
-                    db.query(store_models.StoreStockEntry)
-                    .filter(store_models.StoreStockEntry.item_id == i_id)
-                    .order_by(store_models.StoreStockEntry.purchase_date.desc(), store_models.StoreStockEntry.id.desc())
-                    .first()
+            unit_price = float(latest_entry.unit_price) if latest_entry and latest_entry.unit_price else None
+            balance_total_amount = round(balance * unit_price, 2) if unit_price else None
+
+            results.append(
+                bar_schemas.BarStockBalance(
+                    bar_id=b_id,
+                    bar_name=bar.name if bar else "Unknown",
+                    item_id=i_id,
+                    item_name=item.name,
+                    category_name=item.category.name if item.category else "Uncategorized",
+                    item_type=item.item_type,
+                    unit=item.unit,
+                    total_received=issued,
+                    total_sold=sold,
+                    total_adjusted=adjusted,
+                    balance=balance,
+                    last_unit_price=unit_price,
+                    balance_total_amount=balance_total_amount,
                 )
-
-            unit_price = None
-            if latest_entry and latest_entry.unit_price is not None:
-                try:
-                    unit_price = float(latest_entry.unit_price)
-                except:
-                    unit_price = float(str(latest_entry.unit_price))
-
-            balance_total_amount = (
-                round(balance * unit_price, 2) if unit_price is not None else None
             )
 
-            # Build response row
-            results.append(bar_schemas.BarStockBalance(
-                bar_id=b_id,
-                bar_name=bar.name if bar else "Unknown",
-                item_id=i_id,
-                item_name=item.name,
-                category_name=item.category.name if item.category else "Uncategorized",
-                item_type=item.item_type,
-                unit=item.unit,
-                total_received=issued,
-                total_sold=sold,
-                total_adjusted=adjusted,
-                balance=balance,
-                last_unit_price=unit_price,
-                balance_total_amount=balance_total_amount,
-            ))
-
-        # Sort results
-        results.sort(key=lambda x: (x.item_name.lower(), x.bar_name.lower()))
-
+        results.sort(key=lambda x: (x.bar_name.lower(), x.item_name.lower()))
         return results
 
-
-
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve stock balance: {str(e)}")
-
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve bar stock balance: {str(e)}"
+        )
 
 
 

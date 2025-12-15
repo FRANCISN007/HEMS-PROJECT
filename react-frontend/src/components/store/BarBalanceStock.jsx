@@ -6,9 +6,14 @@ const BarBalanceStock = () => {
   const [balances, setBalances] = useState([]);
   const [bars, setBars] = useState([]);
   const [selectedBar, setSelectedBar] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
+  // -----------------------------
+  // ROLE CHECK
+  // -----------------------------
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
 
@@ -17,6 +22,7 @@ const BarBalanceStock = () => {
   } else if (typeof storedUser.role === "string") {
     roles = [storedUser.role];
   }
+
   roles = roles.map((r) => r.toLowerCase());
 
   if (!(roles.includes("admin") || roles.includes("store"))) {
@@ -28,15 +34,19 @@ const BarBalanceStock = () => {
     );
   }
 
-  // Load bars on mount
+  // -----------------------------
+  // LOAD BARS
+  // -----------------------------
   useEffect(() => {
     fetchBars();
   }, []);
 
-  // Load balances when bar changes
+  // -----------------------------
+  // LOAD STOCK BALANCE
+  // -----------------------------
   useEffect(() => {
-    fetchStockBalances(selectedBar);
-  }, [selectedBar]);
+    fetchStockBalances(selectedBar, startDate, endDate);
+  }, [selectedBar, startDate, endDate]);
 
   const fetchBars = async () => {
     try {
@@ -48,13 +58,15 @@ const BarBalanceStock = () => {
     }
   };
 
-  const fetchStockBalances = async (barId = "") => {
+  const fetchStockBalances = async (barId = "", start = "", end = "") => {
     try {
       setLoading(true);
       const axios = axiosWithAuth();
 
       let url = `/store/bar-balance-stock?`;
-      if (barId) url += `bar_id=${barId}`;
+      if (barId) url += `bar_id=${barId}&`;
+      if (start) url += `start_date=${start}&`;
+      if (end) url += `end_date=${end}&`;
 
       const res = await axios.get(url);
       setBalances(res.data || []);
@@ -69,6 +81,9 @@ const BarBalanceStock = () => {
 
   const handleBarChange = (e) => setSelectedBar(e.target.value);
 
+  // -----------------------------
+  // TOTALS
+  // -----------------------------
   const totalStockAmount = balances.reduce(
     (sum, item) => sum + (item.balance_total_amount || 0),
     0
@@ -87,14 +102,10 @@ const BarBalanceStock = () => {
         <h2>📊 Bar Stock Balance Report.</h2>
 
         <div className="filter-frame">
-          {/* 🔥 ONLY BAR FILTER REMAINS */}
+          {/* BAR FILTER */}
           <div className="filter-group">
-            <label htmlFor="barFilter">Bar:</label>
-            <select
-              id="barFilter"
-              value={selectedBar}
-              onChange={handleBarChange}
-            >
+            <label>Bar:</label>
+            <select value={selectedBar} onChange={handleBarChange}>
               <option value="">All Bars</option>
               {bars.map((bar) => (
                 <option key={bar.id} value={bar.id}>
@@ -102,6 +113,25 @@ const BarBalanceStock = () => {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* DATE FILTERS */}
+          <div className="filter-group">
+            <label>Start Date:</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+
+          <div className="filter-group">
+            <label>End Date:</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
           </div>
         </div>
 
@@ -169,5 +199,3 @@ const BarBalanceStock = () => {
 };
 
 export default BarBalanceStock;
-
-
