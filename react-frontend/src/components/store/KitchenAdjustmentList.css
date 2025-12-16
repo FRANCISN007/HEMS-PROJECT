@@ -16,7 +16,7 @@
   border-collapse: collapse;
   background: white;
   box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.05);
-  border-radius: 8px;
+  
   overflow: hidden;
 }
 
@@ -24,23 +24,41 @@
 .list-adjustment-container td {
   padding: 4px 6px;
   border: 1px solid #ccc3c3;
-  text-align: left;
+  text-align: center;
   border-radius: 0; /* IMPORTANT */
 }
 
 
 .list-adjustment-container th {
-  background: #f0f2f5;
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: #555;
+  background-color: #293552; /* deep dark navy */
+  color: #ffffff;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  border: 1px solid #bdbdbd; /* consistent border with data cells */
+  padding: 7px;
+  text-align: center;
 }
 
-.list-adjustment-container th,
+
+/* Data Cells — CENTRALIZED */
 .list-adjustment-container td {
-  border: 1px solid #e0e0e0;
+  padding: 6px;
+  border: 1px solid #ccc3c3;
+  text-align: center;        /* horizontal center */
+  vertical-align: middle;    /* vertical center */
+  white-space: nowrap;
 }
 
+/* Even & Odd Row Colors */
+.list-adjustment-container tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.list-adjustment-container tr:nth-child(odd) {
+  background-color: #ffffff;
+}
 
 
 /* Row Hover */

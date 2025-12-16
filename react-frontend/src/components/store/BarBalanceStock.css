@@ -20,8 +20,17 @@
 }
 
 .stock-balance-container th {
-  background: #f4f4f4;
+  background-color: #293552; /* deep dark navy */
+  color: #ffffff;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  border: 1px solid #bdbdbd; /* consistent border with data cells */
+  padding: 7px;
+  text-align: center;
 }
+
 
 .even-row {
   background-color: #f9f9f9;

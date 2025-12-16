@@ -71,7 +71,13 @@ const HomePage = () => {
         {/* ✅ hotel name is now global */}
         <div className="hotel-name-banner">{HOTEL_NAME}</div>
 
+        {/* Main Center Content */}
         <div className="home-card">
+
+          {/* Welcome text */}
+          <h1 className="heading-line1">Welcome to</h1>
+
+          {/* HEMS Text */}
           <div className="hems-text">
             <span className="hems-letter">H</span>
             <span className="hems-letter">E</span>
@@ -79,8 +85,10 @@ const HomePage = () => {
             <span className="hems-letter">S</span>
           </div>
 
-          <h1 className="heading-line1">Welcome to</h1>
-          <h2 className="heading-line2">Hotel & Event Management System</h2>
+          {/* Meaning of HEMS */}
+          <h2 className="heading-line2">
+            Hotel &amp; Event Management System
+          </h2>
 
           <button
             className="proceed-button"
@@ -89,6 +97,7 @@ const HomePage = () => {
             Proceed &gt;&gt;
           </button>
         </div>
+
 
         <footer className="home-footer">
           <div>Produced & Licensed by School of Accounting Package</div>

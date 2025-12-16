@@ -77,9 +77,17 @@
 }
 
 .adjustment-table th {
-  background-color: #f2f2f2;
-  font-weight: bold;
+  background-color: #293552; /* deep dark navy */
+  color: #ffffff;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  border: 1px solid #bdbdbd; /* consistent border with data cells */
+  padding: 7px;
+  text-align: center;
 }
+
 
 .adjustment-table .even-row {
   background-color: #fafafa;

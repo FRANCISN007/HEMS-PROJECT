@@ -101,7 +101,7 @@ const BarDashboardPage = () => {
         { label: "📃 List Adjustment", path: "/bar/adjustment/list" },
       ],
     },
-    { name: "🏪 Store Issues Control", path: "/bar/store-issues" },
+    { name: "🏪 Store Issues", path: "/bar/store-issues" },
   ];
 
   return (

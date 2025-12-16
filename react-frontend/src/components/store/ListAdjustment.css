@@ -29,10 +29,15 @@
 }
 
 .list-adjustment-container th {
-  background: #f0f2f5;
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: #555;
+  background-color: #293552; /* deep dark navy */
+  color: #ffffff;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  border: 1px solid #bdbdbd; /* consistent border with data cells */
+  padding: 7px;
+  text-align: center;
 }
 
 /* Even & Odd Row Colors */

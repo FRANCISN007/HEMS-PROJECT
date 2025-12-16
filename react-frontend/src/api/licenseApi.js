@@ -1,4 +1,3 @@
-// src/api/licenseApi.js
 import axios from "axios";
 import getBaseUrl from "./config";
 
@@ -9,6 +8,7 @@ const apiClient = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// Verify license key
 export const verifyLicense = async (licenseKey) => {
   try {
     const response = await apiClient.get(`/license/verify/${encodeURIComponent(licenseKey)}`);
@@ -18,13 +18,13 @@ export const verifyLicense = async (licenseKey) => {
   }
 };
 
+// Generate license key (requires admin password)
 export const generateLicense = async (adminPassword, licenseKey) => {
   if (!adminPassword || !licenseKey) {
     throw new Error("Admin password and license key are required.");
   }
 
   try {
-    // ✅ Send FormData (matches backend Form(...))
     const formData = new FormData();
     formData.append("license_password", adminPassword);
     formData.append("key", licenseKey);
@@ -39,6 +39,7 @@ export const generateLicense = async (adminPassword, licenseKey) => {
   }
 };
 
+// Check license status
 export const checkLicenseStatus = async () => {
   try {
     const response = await apiClient.get(`/license/check`);

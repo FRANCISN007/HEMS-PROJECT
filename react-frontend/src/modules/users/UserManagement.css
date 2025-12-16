@@ -1,4 +1,6 @@
-/* ===== User Management Container ===== */
+/* ===============================
+   User Container
+================================ */
 .user-container {
   background: #eceaea;
   padding: 1rem;
@@ -6,11 +8,10 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   font-family: Arial, sans-serif;
   max-width: 1400px;
-  height: auto;
-  overflow: hidden;
   display: flex;
-  font-size: 12px; /* 👇 smaller base font */
   flex-direction: column;
+  font-size: 12px;
+  overflow: hidden;
 }
 
 .user-container.small-frame {
@@ -20,164 +21,199 @@
   font-size: 13px;
 }
 
-/* ===== Heading ===== */
-.user-heading {
+/* ===============================
+   Heading
+================================ */
+.user-container .user-heading {
   font-size: 1.2rem;
   font-weight: 600;
   margin-bottom: 1rem;
   text-align: center;
-  width: 100%;
 }
 
-/* ===== Table ===== */
-.user-table {
+/* ===============================
+   User Table Wrapper
+================================ */
+.user-container .user-table {
+  width: 100%;
   display: grid;
-  border: 1px solid #ac9f9f;
+  border: 1px solid #bdbdbd;
   border-radius: 8px;
   overflow: hidden;
   margin-top: 15px;
   font-size: 13px;
 }
 
-/* Shared grid layout for header and rows */
-.user-table .table-header,
-.user-table .table-row {
+/* ===============================
+   Table Header
+================================ */
+.user-container .user-table-header {
   display: grid;
-  grid-template-columns: 60px 200px 1fr 350px; /* ID | Username | Roles | Actions */
+  grid-template-columns: 60px 200px 1fr 350px;
   align-items: center;
-  border-bottom: 1px solid #eee;
-}
-
-.user-table .table-header {
-  background-color: #e0e0e0;
+  background-color: #293552;
+  color: #ffffff;
   font-weight: bold;
-  font-size: 14px;
+  text-align: center;
+  border-bottom: 1px solid #bdbdbd;
 }
 
-.user-table .table-row:nth-child(even) {
-  background-color: #f9fbfd;
-}
-
-.user-table .table-row:last-child {
-  border-bottom: none;
-}
-
-.user-table .table-header > div,
-.user-table .table-row > div {
-  padding: 6px 8px;
-  box-sizing: border-box;
+.user-container .user-table-header div {
+  padding: 6px;
+  border-right: 1px solid #bdbdbd;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Make sure buttons don't shrink */
-.user-table .action-buttons {
-  display: flex;
-  gap: 4px;
-  justify-content: flex-start;
-  flex-wrap: nowrap;   /* keep on same line */
+.user-container .user-table-header div:last-child {
+  border-right: none;
 }
 
-/* ===== Buttons ===== */
-.btn {
-  padding: 3px 7px; /* 👇 smaller */
+/* ===============================
+   Table Rows
+================================ */
+.user-container .user-table-row {
+  display: grid;
+  grid-template-columns: 60px 200px 1fr 350px;
+  align-items: center;
+  text-align: center;
+  border-bottom: 1px solid #d6d6d6;
+}
+
+/* Zebra striping */
+.user-container .user-table-row:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+.user-container .user-table-row:nth-child(even) {
+  background-color: #f9fbfd;
+}
+
+.user-container .user-table-row:last-child {
+  border-bottom: none;
+}
+
+.user-container .user-table-row div {
+  padding: 6px;
+  border-right: 1px solid #d6d6d6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.user-container .user-table-row div:last-child {
+  border-right: none;
+}
+
+/* Hover */
+.user-container .user-table-row:hover {
+  background-color: #eef4ff;
+}
+
+/* ===============================
+   Action Buttons
+================================ */
+.user-container .user-action-buttons {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+}
+
+.user-container .user-btn {
+  padding: 5px 10px;
   border: none;
   border-radius: 4px;
-  font-size: 11px; /* 👇 smaller */
+  font-size: 11px;
   cursor: pointer;
-  margin-right: 0.4rem;
-  transition: background-color 0.2s ease;
+  flex-shrink: 0;
 }
 
-.btn {
-  padding: 0.4rem 0.9rem;  /* slightly wider */
-  flex-shrink: 0;          /* prevent cutting off */
-}
-
-.btn.edit {
+/* Edit */
+.user-container .user-btn-edit {
   background-color: #007bff;
   color: white;
 }
 
-.btn.edit:hover {
+.user-container .user-btn-edit:hover {
   background-color: #0069d9;
 }
 
-.btn.delete {
+/* Delete */
+.user-container .user-btn-delete {
   background-color: #dc3545;
   color: white;
 }
 
-.btn.delete:hover {
+.user-container .user-btn-delete:hover {
   background-color: #b02a37;
 }
 
-.btn.add {
+/* Add */
+.user-container .user-btn-add {
   background-color: #28a745;
   color: white;
-  padding: 0.6rem 1.2rem;
-  margin-top: 1rem;
-  width: fit-content;
+  padding: 6px 14px;
 }
 
-.btn.add:hover {
+.user-container .user-btn-add:hover {
   background-color: #218838;
 }
 
-/* ===== Add User Button Placement ===== */
-.add-user-button-container {
+/* ===============================
+   Add User Button Container
+================================ */
+.user-container .add-user-button-container {
   display: flex;
   justify-content: flex-end;
   margin-top: 1rem;
 }
 
-.add-user-button {
-  background-color: #28a745;
-  color: white;
-  padding: 0.6rem 1.2rem;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.add-user-button:hover {
-  background-color: #218838;
-}
-
-/* ===== Inline Edit Form ===== */
-.edit-form.compact-form {
+/* ===============================
+   Inline Edit Form
+================================ */
+.user-container .edit-form.compact-form {
   margin-top: 12px;
-  padding: 8px;
-  background: #f4f4f4;
+  padding: 10px;
+  background: #fafafa;
   border: 1px solid #ccc;
-  border-radius: 5px;
+  border-radius: 10px;
   font-size: 13px;
-}
-
-.edit-form h4 {
-  font-size: 14px;
-  margin-bottom: 8px;
-}
-
-.edit-form input,
-.edit-form select {
-  width: 60%;
-  padding: 4px;
-  margin-bottom: 8px;
-}
-
-/* ===== Roles Checkboxes ===== */
-.roles-checkboxes {
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 10px;
-  margin: 8px 0;
 }
 
-.roles-checkboxes label {
+.user-container .edit-form h4 {
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+/* Inputs */
+.user-container .edit-form input,
+.user-container .edit-form select {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+/* ===============================
+   Roles Checkboxes
+================================ */
+.user-container .roles-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 6px;
+}
+
+.user-container .roles-checkboxes label {
   font-size: 13px;
   background: #f9f9f9;
   padding: 4px 8px;
@@ -186,12 +222,14 @@
   cursor: pointer;
 }
 
-.roles-checkboxes input {
+.user-container .roles-checkboxes input {
   margin-right: 4px;
 }
 
-/* ===== Toast / Popup Notifications ===== */
-.popup-toast {
+/* ===============================
+   Toast Notification
+================================ */
+.user-container .popup-toast {
   position: fixed;
   top: 10px;
   right: 20px;
@@ -201,199 +239,50 @@
   border-radius: 5px;
   font-size: 13px;
   z-index: 9999;
-  animation: fadeOut 3s forwards;
+  animation: userFadeOut 3s forwards;
 }
 
-@keyframes fadeOut {
+@keyframes userFadeOut {
   0% { opacity: 1; }
   80% { opacity: 1; }
   100% { opacity: 0; }
 }
 
-.popup-inside {
-  background: #4caf50;
-  color: white;
-  padding: 6px 10px;
-  margin-bottom: 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  text-align: center;
-  animation: fadeOut 3s forwards;
-}
 
-/* ===== Modals (Delete User Confirmation) ===== */
-.delete-user-modal .modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 999;
-}
-
-.delete-user-modal .modal-content {
-  background: white;
-  padding: 24px 32px;
-  border-radius: 10px;
-  width: 340px;
-  text-align: center;
-  position: relative;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-}
-
-.delete-user-modal .modal-content h3 {
-  margin-bottom: 12px;
-  font-size: 1.2rem;
-  color: #333;
-}
-
-.delete-user-modal .modal-content p {
-  margin-bottom: 20px;
-  font-size: 0.95rem;
-}
-
-.delete-user-modal .modal-actions {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-}
-
-.delete-user-modal .modal-actions .action-btn {
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: bold;
-  cursor: pointer;
-}
-
-.delete-user-modal .modal-actions .delete {
-  background-color: #dc3545;
-  color: white;
-}
-
-.delete-user-modal .modal-actions .cancel {
-  background-color: #6c757d;
-  color: white;
-}
-
-.delete-user-modal .close-btn {
-  position: absolute;
-  top: 10px;
-  right: 14px;
-  background: transparent;
-  border: none;
-  font-size: 20px;
-  color: #888;
-  cursor: pointer;
-}
-
-.delete-user-modal .close-btn:hover {
-  color: #555;
-}
-
-/* ===== Headers / Close Buttons ===== */
+/* ===============================
+   Header Layout
+================================ */
 .user-header {
+  position: relative;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  min-height: 40px;
 }
 
-.edit-header {
+/* Center the main heading */
+.user-header .user-heading {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Right-side controls */
+.header-right {
+  margin-left: auto;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-}
-
-.close-user-button,
-.close-main-button {
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 28px;
-  height: 28px;
-  font-weight: bold;
-  font-size: 14px;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.close-main-button {
-  border-radius: 0;
-  width: auto;
-  font-size: 20px;
-  background: none;
-  color: #b00;
-  margin-left: 12px;
-}
-
-.close-main-button:hover {
-  color: #800;
-}
-
-
-
-/* Edit / Add User Form */
-.edit-form.compact-form {
-  max-width: 600px;   /* wider than before */
-  width: 100%;
-  margin: 10px auto;
-  padding: 10px;
-  background: #fafafa;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  display: flex;
-  flex-direction: column;
   gap: 10px;
 }
 
-/* Header inside form */
-.edit-form .edit-header {
-  text-align: center;
-  margin-bottom: 10px;
-}
-
-/* Role checkboxes in multiple columns */
-.roles-checkboxes {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 6px;
-}
-
-/* Input fields */
-.edit-form input[type="text"],
-.edit-form input[type="password"] {
-  width: 100%;
-  padding: 8px 10px;
-  font-size: 14px;
+/* Dropdown */
+.header-right select {
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 6px;
   border: 1px solid #ccc;
-  border-radius: 6px;
-}
-
-/* Buttons row */
-.form-buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.form-buttons button {
-  padding: 8px 14px;
-  border: none;
-  border-radius: 6px;
   cursor: pointer;
-  font-size: 14px;
-}
-
-.form-buttons button[type="submit"] {
-  background: #0077cc;
-  color: white;
-}
-
-.form-buttons button[type="button"] {
-  background: #ddd;
 }

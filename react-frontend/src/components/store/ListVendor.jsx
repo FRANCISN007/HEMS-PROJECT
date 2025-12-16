@@ -162,7 +162,7 @@ fetchVendors();
 
       {/* Vendor Table */}
       <div className="vendor-table">
-        <div className="table-header">
+        <div className="vendor-table-header">
           <div>ID</div>
           <div>Business Name</div>
           <div>Phone</div>
@@ -171,19 +171,19 @@ fetchVendors();
         </div>
 
         {vendors.length === 0 ? (
-          <div className="table-row">
+          <div className="vendor-table-row">
             <div colSpan="5">No vendors found.</div>
           </div>
         ) : (
           vendors.map((vendor) => (
-            <div className="table-row" key={vendor.id}>
+            <div className="vendor-table-row" key={vendor.id}>
               <div>{vendor.id}</div>
               <div>{vendor.business_name}</div>
               <div>{vendor.phone_number}</div>
               <div>{vendor.address}</div>
-              <div className="action-buttons">
-                <button className="btn update" onClick={() => handleUpdate(vendor)}>Update</button>
-                <button className="btn delete" onClick={() => handleDelete(vendor.id)}>Delete</button>
+              <div className="vendor-action-buttons">
+                <button className="vendor-btn vendor-btn-update" onClick={() => handleUpdate(vendor)}>Update</button>
+                <button className="vendor-btn vendor-btn-delete" onClick={() => handleDelete(vendor.id)}>Delete</button>
               </div>
             </div>
           ))

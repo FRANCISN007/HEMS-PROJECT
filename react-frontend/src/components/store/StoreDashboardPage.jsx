@@ -125,13 +125,13 @@ const StoreDashboardPage = () => {
     },
 
     {
-      name: "📊 Store Stock Balance",
+      name: "📊 Store Stock",
       path: "stock-balance",
     },
     
 
     {
-      name: "📊 Bar Stock Balance",
+      name: "📊 Bar Stock",
       path: "barstock-balance",
     },
 

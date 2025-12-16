@@ -46,7 +46,7 @@ const ListBarAdjustment = () => {
   useEffect(() => {
     const fetchItems = async () => {
       try {
-        const res = await axiosWithAuth().get("/store/items/simple");
+        const res = await axiosWithAuth().get("/store/bar-items/simple");
         setItems(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
         console.error("❌ Failed to fetch items:", err);

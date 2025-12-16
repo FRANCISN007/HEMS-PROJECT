@@ -269,30 +269,46 @@ const storedUser = JSON.parse(localStorage.getItem("user")) || {};
       {/* 👥 List users */}
       {selectedAction === "list" && (
         <div className="user-table compact">
-          <div className="table-header">
+          <div className="user-table-header">
             <div>ID</div>
             <div>Username</div>
             <div>Roles</div>
             <div>Action</div>
           </div>
+
           {users.map((user) => (
-            <div className="table-row" key={user.id}>
+            <div className="user-table-row" key={user.id}>
               <div>{user.id}</div>
               <div>{user.username}</div>
               <div>{(user.roles || []).join(", ")}</div>
-              <div className="action-buttons">
-              <button className="btn edit" onClick={() => handleEditClick(user)}>✏️ Edit Role</button>
-              <button className="btn delete" onClick={() => confirmDeleteUser(user.username)}
-                disabled={user.username === localStorage.getItem("username")}>
-                🗑️ Delete
-              </button>
-              <button className="btn reset" onClick={() => setResetUser(user)}>🔑 Reset Password</button>
-            </div>
+              <div className="user-action-buttons">
+                <button
+                  className="user-btn user-btn-edit"
+                  onClick={() => handleEditClick(user)}
+                >
+                  ✏️ Edit Role
+                </button>
 
+                <button
+                  className="user-btn user-btn-delete"
+                  onClick={() => confirmDeleteUser(user.username)}
+                  disabled={user.username === localStorage.getItem("username")}
+                >
+                  🗑️ Delete
+                </button>
+
+                <button
+                  className="user-btn user-btn-reset"
+                  onClick={() => setResetUser(user)}
+                >
+                  🔑 Reset
+                </button>
+              </div>
             </div>
           ))}
         </div>
       )}
+
 
       {/* 🗑️ Confirm delete */}
       {userToDelete && (

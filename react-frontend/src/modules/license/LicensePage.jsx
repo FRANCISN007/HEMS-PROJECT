@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { verifyLicense, generateLicense } from "../../api/licenseApi";
+import {
+  verifyLicense,
+  generateLicense,
+  checkLicenseStatus,
+} from "../../api/licenseApi";
 import "./LicensePage.css";
 
 const LicensePage = () => {
@@ -8,6 +12,7 @@ const LicensePage = () => {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [licenseStatus, setLicenseStatus] = useState(null);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -19,10 +24,28 @@ const LicensePage = () => {
       setPassword("");
       setMessage("");
       setError("");
+      loadLicenseStatus();
     }
   }, [location]);
 
-  // ✅ Verify license
+  // Load license status from backend (or fallback)
+  const loadLicenseStatus = async () => {
+    try {
+      const status = await checkLicenseStatus();
+      setLicenseStatus(status);
+      if (status.valid) {
+        setMessage(
+          `Current license valid until ${
+            status.expires_on ? new Date(status.expires_on).toLocaleDateString() : "-"
+          }`
+        );
+      }
+    } catch (err) {
+      console.error("Failed to check license status", err);
+    }
+  };
+
+  // Verify license
   const handleVerify = async () => {
     setMessage("");
     setError("");
@@ -33,7 +56,7 @@ const LicensePage = () => {
     }
 
     try {
-      const data = await verifyLicense(licenseKey); // { valid, expires_on }
+      const data = await verifyLicense(licenseKey);
 
       if (data.valid) {
         let expiryMsg = "";
@@ -49,10 +72,6 @@ const LicensePage = () => {
         setLicenseKey("");
         setPassword("");
 
-        if (typeof setIsLicenseVerified === "function") {
-          setIsLicenseVerified(true);
-        }
-
         setTimeout(() => {
           navigate("/login");
         }, 2000);
@@ -64,7 +83,7 @@ const LicensePage = () => {
     }
   };
 
-  // ✅ Generate license
+  // Generate license
   const handleGenerate = async () => {
     setMessage("");
     setError("");
@@ -76,11 +95,21 @@ const LicensePage = () => {
 
     try {
       const data = await generateLicense(password, licenseKey);
-      setMessage(
-        data.key ? `License generated: ${data.key}` : "License generated."
-      );
+
+      // Show initial success message
+      const initialMessage = data.key
+        ? `License generated: ${data.key}`
+        : "License generated.";
+      setMessage(initialMessage);
       setLicenseKey("");
       setPassword("");
+      loadLicenseStatus();
+
+      // After 5 seconds, show "enter your key now to proceed"
+      setTimeout(() => {
+        setMessage("Enter your key now to proceed");
+      }, 3000);
+
     } catch (err) {
       const status = err?.response?.status;
       const detail = err?.response?.data?.detail || "";
@@ -101,13 +130,20 @@ const LicensePage = () => {
     }
   };
 
+
   return (
     <>
-      <div className="hems-logo">H&nbsp;E&nbsp;M&nbsp; S</div>
+      <div className="hems-logo">H&nbsp;E&nbsp;M&nbsp;S</div>
       <div className="hems-subtitle">Hotel & Event Management System</div>
 
       <div className="license-container">
         <h2 className="license-title">License Management</h2>
+
+        {licenseStatus && !licenseStatus.valid && (
+          <p className="license-message error">
+            Please generate or verify a license.
+          </p>
+        )}
 
         <div className="license-form-group">
           <label className="license-label">License Key:</label>
@@ -140,7 +176,7 @@ const LicensePage = () => {
           </button>
         </div>
 
-        {/* ✅ Messages */}
+        {/* Messages */}
         {message && <p className="license-message success">{message}</p>}
         {error && <p className="license-message error">{error}</p>}
       </div>

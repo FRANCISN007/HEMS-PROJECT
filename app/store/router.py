@@ -280,6 +280,62 @@ def list_items_simple(
         raise HTTPException(status_code=500, detail="Failed to fetch items.")
 
 
+@router.get("/bar-items/simple", response_model=List[store_schemas.StoreItemOut])
+def list_bar_items_simple(db: Session = Depends(get_db)):
+    """
+    Fetch all store items specific to Bar (item_type='bar')
+    along with their latest unit price from StoreStockEntry.
+    """
+    try:
+        # Subquery to get latest stock entry per item
+        latest_entry_subquery = (
+            db.query(
+                store_models.StoreStockEntry.item_id,
+                func.max(store_models.StoreStockEntry.id).label("latest_entry_id")
+            )
+            .group_by(store_models.StoreStockEntry.item_id)
+            .subquery()
+        )
+
+        latest_entry = aliased(store_models.StoreStockEntry)
+
+        # Query all bar items with latest unit price
+        query = (
+            db.query(
+                store_models.StoreItem,
+                latest_entry.unit_price
+            )
+            .outerjoin(
+                latest_entry_subquery,
+                store_models.StoreItem.id == latest_entry_subquery.c.item_id
+            )
+            .outerjoin(
+                latest_entry,
+                latest_entry.id == latest_entry_subquery.c.latest_entry_id
+            )
+            .filter(store_models.StoreItem.item_type == "bar")  # 🔥 only bar items
+            .order_by(store_models.StoreItem.name.asc())
+        )
+
+        results = query.all()
+
+        items = [
+            store_schemas.StoreItemOut(
+                id=item.id,
+                name=item.name,
+                unit=item.unit,
+                unit_price=unit_price or 0.0,
+                category_id=item.category_id,
+                item_type=item.item_type
+            )
+            for item, unit_price in results
+        ]
+
+        return items
+
+    except Exception as e:
+        print("❌ Error in /bar/bar-items/simple:", e)
+        raise HTTPException(status_code=500, detail="Failed to fetch bar items.")
 
 @router.put("/items/{item_id}", response_model=store_schemas.StoreItemDisplay)
 def update_item(

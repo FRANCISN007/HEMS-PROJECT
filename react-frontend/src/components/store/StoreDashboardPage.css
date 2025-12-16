@@ -11,27 +11,29 @@
 
 /* Sidebar styling */
 .sidebars1 {
-  width: 140px; /* slightly narrower */
-  padding: 15px 10px; /* tighter padding */
+  width: 110px; /* slightly narrower */
+  padding: 10px 6px; /* tighter padding */
   border-radius: 0 8px 8px 0; /* slightly smaller corners */
 }
 
-/* Sidebar Title */
 .sidebar-title {
-  font-size: 1.1rem; /* smaller title */
-  margin-bottom: 15px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid #f3f5f3;
+  font-size: 0.85rem;        /* smaller title */
+  margin-bottom: 10px;
+  padding-bottom: 4px;
+  text-align: center;
 }
 
 
-
-/* Sidebar buttons - tighter layout */
 .sidebars1-button {
-  padding: 6px 10px; /* smaller vertical and horizontal padding */
-  margin-bottom: 5px; /* less gap between buttons */
-  font-size: 0.75rem; /* smaller text */
+  padding: 5px 8px;          /* tighter padding */
+  margin-bottom: 4px;
+  font-size: 0.68rem;        /* ⬅ smaller text */
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+
 
 .sidebars1-button:hover,
 .sidebars1-button.active {
