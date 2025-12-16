@@ -153,7 +153,7 @@ const ListBarAdjustment = () => {
             <tr>
               <th>Bar</th>
               <th>Item</th>
-              <th>Quantity Adjusted</th>
+              <th>Quantity</th>
               <th>Reason</th>
               <th>Adjusted By</th>
               <th>Date</th>

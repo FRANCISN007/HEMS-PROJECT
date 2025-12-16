@@ -182,7 +182,7 @@ const ListAdjustment = () => {
           <tr>
             <th>Date</th>
             <th>Item</th>
-            <th>Quantity Adjusted</th>
+            <th>Quantity</th>
             <th>Reason</th>
             <th>Actions</th>
           </tr>

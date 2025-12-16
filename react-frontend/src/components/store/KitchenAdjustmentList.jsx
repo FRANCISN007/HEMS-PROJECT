@@ -169,7 +169,7 @@ const KitchenAdjustmentList = () => {
   // -------------------------
   return (
     <div className="list-adjustment-container">
-      <h2>Kitchen Inventory Adjustments</h2>
+      <h2>Kitchen Inventory Adjustment List</h2>
       {message && <div className="message">{message}</div>}
 
       {/* Filters */}
@@ -192,7 +192,8 @@ const KitchenAdjustmentList = () => {
       </div>
 
       {/* Table */}
-      <table>
+      <table className="adjustment-table">
+
         <thead>
           <tr>
             <th>Date</th>
