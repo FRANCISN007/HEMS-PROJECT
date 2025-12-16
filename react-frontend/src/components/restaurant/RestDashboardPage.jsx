@@ -100,7 +100,7 @@ const RestDashboardPage = () => {
       ],
     },
 
-    { name: "👨‍🍳 Kitchen Stock", path: "kitchenstock" },
+    { name: "👨‍🍳 Kitchen Stock", path: "/restaurant/kitchenstock" },
 
   ];
 

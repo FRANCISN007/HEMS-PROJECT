@@ -49,9 +49,8 @@ const KitchenStock = () => {
   const fetchKitchens = async () => {
     try {
       const axios = axiosWithAuth();
-      const res = await axios.get("/restaurant/kitchens/simple");
-
-      setKitchens(Array.isArray(res.data) ? res.data : []);
+      const res = await axios.get("/kitchen/simple");
+      setKitchens(res.data || []);
     } catch (error) {
       console.error("Error fetching kitchens:", error);
       setKitchens([]);

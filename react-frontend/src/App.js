@@ -181,7 +181,7 @@ const App = () => {
           <Route path="ListRestaurantSales" element={<ListRestaurantSales />} />
           <Route path="RestaurantPayment" element={<RestaurantPayment />} />
           <Route path="ListRestaurantPayment" element={<ListRestaurantPayment />} />
-          <Route path="kitchenstock" element={<KitchenBalanceStock />} />
+          <Route path="kitchenstock" element={<KitchenStock />} />
 
           <Route path="SalesSummary" element={<SalesSummary />} />
           

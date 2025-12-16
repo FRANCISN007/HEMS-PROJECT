@@ -1753,7 +1753,7 @@ def get_bar_stock_balance(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "bar"]))
 ):
     try:
         # =============================================================
@@ -1930,7 +1930,7 @@ def get_kitchen_stock_balance(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "restaurant"]))
 ):
     try:
         # Convert kitchen_id to int if required

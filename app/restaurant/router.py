@@ -29,7 +29,7 @@ from app.restpayment.models import RestaurantSalePayment     # payment model fro
 from app.restaurant.schemas import RestaurantSaleDisplay     # Sale schema
 
 from app.restaurant.schemas import MealOrderItemDisplay
-
+from app.kitchen import schemas as kitchen_schemas
 
 from sqlalchemy.orm import joinedload
 
@@ -126,79 +126,6 @@ def toggle_location_active(location_id: int,
     return location
 
 #
-@router.post("/meal-categories", response_model=restaurant_schemas.MealCategoryDisplay)
-def create_meal_category(
-    category: restaurant_schemas.MealCategoryCreate,
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
-):
-    # Check if category name already exists
-    existing = (
-        db.query(restaurant_models.MealCategory)
-        .filter_by(name=category.name)
-        .first()
-    )
-    if existing:
-        raise HTTPException(status_code=400, detail="Meal category already exists")
-
-    # Create new meal category
-    db_category = restaurant_models.MealCategory(name=category.name)
-    db.add(db_category)
-    db.commit()
-    db.refresh(db_category)
-
-    return db_category
-
-
-
-@router.get("/meal-categories", response_model=list[restaurant_schemas.MealCategoryDisplay])
-def list_meal_categories(
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
-):
-    return db.query(restaurant_models.MealCategory).order_by(restaurant_models.MealCategory.id.asc()).all()
-
-
-# ✅ Update Meal Category
-@router.put("/meal-categories/{category_id}", response_model=restaurant_schemas.MealCategoryDisplay)
-def update_meal_category(
-    category_id: int,
-    category_update: restaurant_schemas.MealCategoryCreate,
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
-):
-    db_category = db.query(restaurant_models.MealCategory).filter_by(id=category_id).first()
-    if not db_category:
-        raise HTTPException(status_code=404, detail="Meal category not found")
-
-    # Prevent duplicate name (except for the same category)
-    existing = db.query(restaurant_models.MealCategory).filter(
-        restaurant_models.MealCategory.name == category_update.name,
-        restaurant_models.MealCategory.id != category_id
-    ).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Meal category with this name already exists")
-
-    db_category.name = category_update.name
-    db.commit()
-    db.refresh(db_category)
-    return db_category
-
-# ✅ Delete Meal Category
-@router.delete("/meal-categories/{category_id}")
-def delete_meal_category(
-    category_id: int,
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
-):
-    db_category = db.query(restaurant_models.MealCategory).filter_by(id=category_id).first()
-    if not db_category:
-        raise HTTPException(status_code=404, detail="Meal category not found")
-    
-    db.delete(db_category)
-    db.commit()
-    return {"detail": f"Meal category with id {category_id} deleted successfully"}
-
 
 # --- Meal Endpoints ---
 
@@ -580,20 +507,6 @@ def delete_meal_order(
 
     return {"detail": "Meal order deleted successfully"}
 
-
-@router.patch("/meals/{meal_id}/toggle-availability", response_model=restaurant_schemas.MealDisplay)
-def toggle_meal_availability(meal_id: int, 
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
-):
-    meal = db.query(restaurant_models.Meal).filter_by(id=meal_id).first()
-    if not meal:
-        raise HTTPException(status_code=404, detail="Meal not found")
-    
-    meal.available = not meal.available
-    db.commit()
-    db.refresh(meal)
-    return meal
 
 
 
@@ -1289,3 +1202,179 @@ def delete_meal_order(
 
 
 
+@router.get("/kitchen-balance-stock", response_model=List[kitchen_schemas.KitchenStockBalance])
+def get_kitchen_stock_balance(
+    item_id: Optional[int] = Query(None),
+    kitchen_id: Optional[int] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["restaurant"]))
+    
+    
+):
+    try:
+        # Convert kitchen_id to int if required
+        if kitchen_id:
+            try:
+                kitchen_id = int(kitchen_id)
+            except ValueError:
+                raise HTTPException(400, "kitchen_id must be an integer")
+
+        # ============================================
+        # 1️⃣ TOTAL ISSUED TO KITCHEN (Store → Kitchen)
+        # ============================================
+        issued_query = (
+            db.query(
+                store_models.StoreIssueItem.item_id,
+                store_models.StoreIssue.kitchen_id,
+                func.sum(store_models.StoreIssueItem.quantity).label("total_issued")
+            )
+            .join(store_models.StoreIssue)
+            .filter(store_models.StoreIssue.issue_to == "kitchen")
+        )
+
+        if item_id:
+            issued_query = issued_query.filter(store_models.StoreIssueItem.item_id == item_id)
+        if kitchen_id:
+            issued_query = issued_query.filter(store_models.StoreIssue.kitchen_id == kitchen_id)
+        if start_date:
+            issued_query = issued_query.filter(store_models.StoreIssue.issue_date >= start_date)
+        if end_date:
+            issued_query = issued_query.filter(store_models.StoreIssue.issue_date <= end_date)
+
+        issued_query = issued_query.group_by(
+            store_models.StoreIssueItem.item_id,
+            store_models.StoreIssue.kitchen_id
+        )
+
+        issued_data = {
+            (row.item_id, row.kitchen_id): float(row.total_issued or 0)
+            for row in issued_query.all()
+        }
+
+        # ============================================
+        # 2️⃣ TOTAL USED BY KITCHEN (Meal Orders)
+        # ============================================
+        used_query = (
+            db.query(
+                restaurant_models.MealOrderItem.store_item_id.label("item_id"),
+                restaurant_models.MealOrder.kitchen_id.label("kitchen_id"),
+                func.sum(restaurant_models.MealOrderItem.store_qty_used).label("total_used")
+            )
+            .join(
+                restaurant_models.MealOrder,
+                restaurant_models.MealOrder.id == restaurant_models.MealOrderItem.order_id
+            )
+        )
+
+        if item_id:
+            used_query = used_query.filter(restaurant_models.MealOrderItem.store_item_id == item_id)
+        if kitchen_id:
+            used_query = used_query.filter(restaurant_models.MealOrder.kitchen_id == kitchen_id)
+        if start_date:
+            used_query = used_query.filter(restaurant_models.MealOrder.created_at >= start_date)
+        if end_date:
+            used_query = used_query.filter(restaurant_models.MealOrder.created_at <= end_date)
+
+        used_query = used_query.group_by(
+            restaurant_models.MealOrderItem.store_item_id,
+            restaurant_models.MealOrder.kitchen_id
+        )
+
+        used_data = {
+            (row.item_id, row.kitchen_id): float(row.total_used or 0)
+            for row in used_query.all()
+        }
+
+        # ============================================
+        # 3️⃣ TOTAL ADJUSTED (Kitchen Inventory Adjustments)
+        # ============================================
+        adjusted_query = (
+            db.query(
+                kitchen_models.KitchenInventoryAdjustment.item_id,
+                kitchen_models.KitchenInventoryAdjustment.kitchen_id,
+                func.sum(kitchen_models.KitchenInventoryAdjustment.quantity_adjusted).label("total_adjusted")
+            )
+        )
+
+        if item_id:
+            adjusted_query = adjusted_query.filter(kitchen_models.KitchenInventoryAdjustment.item_id == item_id)
+        if kitchen_id:
+            adjusted_query = adjusted_query.filter(kitchen_models.KitchenInventoryAdjustment.kitchen_id == kitchen_id)
+        if start_date:
+            adjusted_query = adjusted_query.filter(kitchen_models.KitchenInventoryAdjustment.adjusted_at >= start_date)
+        if end_date:
+            adjusted_query = adjusted_query.filter(kitchen_models.KitchenInventoryAdjustment.adjusted_at <= end_date)
+
+        adjusted_query = adjusted_query.group_by(
+            kitchen_models.KitchenInventoryAdjustment.item_id,
+            kitchen_models.KitchenInventoryAdjustment.kitchen_id
+        )
+
+        adjusted_data = {
+            (row.item_id, row.kitchen_id): float(row.total_adjusted or 0)
+            for row in adjusted_query.all()
+        }
+
+        # ============================================
+        # 4️⃣ MERGE + CALCULATE BALANCE
+        # ============================================
+        all_keys = set(issued_data.keys()) | set(used_data.keys()) | set(adjusted_data.keys())
+        results = []
+
+        for (i_id, k_id) in all_keys:
+            total_issued = issued_data.get((i_id, k_id), 0)
+            total_used = used_data.get((i_id, k_id), 0)
+            total_adjusted = adjusted_data.get((i_id, k_id), 0)
+
+            balance = total_issued - total_used - total_adjusted
+
+            item = db.query(store_models.StoreItem).filter_by(id=i_id).first()
+            kitchen = db.query(kitchen_models.Kitchen).filter_by(id=k_id).first()
+
+            if not item or not kitchen:
+                continue
+
+            # Fetch latest unit price
+            latest_entry = (
+                db.query(store_models.StoreStockEntry)
+                .filter(store_models.StoreStockEntry.item_id == i_id)
+                .order_by(
+                    store_models.StoreStockEntry.purchase_date.desc(),
+                    store_models.StoreStockEntry.id.desc()
+                )
+                .first()
+            )
+
+            unit_price = float(latest_entry.unit_price) if latest_entry else None
+            balance_total_amount = round(balance * unit_price, 2) if unit_price else None
+
+            results.append(
+                kitchen_schemas.KitchenStockBalance(
+                    kitchen_id=k_id,
+                    kitchen_name=kitchen.name,
+                    item_id=i_id,
+                    item_name=item.name,
+                    category_name=item.category.name if item.category else None,
+                    unit=item.unit,
+                    item_type=item.item_type,
+                    total_issued=total_issued,
+                    total_used=total_used,
+                    total_adjusted=total_adjusted,
+                    balance=balance,
+                    last_unit_price=unit_price,
+                    balance_total_amount=balance_total_amount
+                )
+            )
+
+        # Sort for UI
+        results.sort(key=lambda x: (x.kitchen_name.lower(), x.item_name.lower()))
+        return results
+
+    except Exception as e:
+        raise HTTPException(
+            500,
+            f"Failed to retrieve kitchen stock balance: {str(e)}"
+        )
+# ----------------------------

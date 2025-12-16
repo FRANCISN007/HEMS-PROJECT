@@ -517,7 +517,7 @@ def create_kitchen_menu(
 @router.get("/kitchen-menu/items", response_model=List[KitchenMenuDisplay])
 def get_kitchen_menu_items(
     db: Session = Depends(get_db),
-    current_user=Depends(role_required(["store", "admin"]))
+    current_user=Depends(role_required(["store", "restaurant","admin"]))
 ):
     records = db.query(KitchenMenu).all()
 
