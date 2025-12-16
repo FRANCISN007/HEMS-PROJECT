@@ -25,7 +25,7 @@ const BarBalanceStock = () => {
 
   roles = roles.map((r) => r.toLowerCase());
 
-  if (!(roles.includes("admin") || roles.includes("store"))) {
+  if (!(roles.includes("admin") || roles.includes("bar"))) {
     return (
       <div className="unauthorized">
         <h2>🚫 Access Denied</h2>

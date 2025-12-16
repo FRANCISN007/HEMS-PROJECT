@@ -23,7 +23,7 @@ const KitchenStock = () => {
 
   roles = roles.map((r) => r.toLowerCase());
 
-  if (!(roles.includes("admin") || roles.includes("store"))) {
+  if (!(roles.includes("admin") || roles.includes("restaurant"))) {
     return (
       <div className="unauthorized">
         <h2>🚫 Access Denied</h2>
