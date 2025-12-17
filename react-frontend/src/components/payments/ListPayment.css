@@ -147,16 +147,22 @@
 
 .payment-table th,
 .payment-table td {
-  padding: 1px 3px;
-  border: 1px solid #b4bdc9;
+  padding: 8px 6px;
+  border: 1px solid #3d4146;
   text-align: left;
   white-space: nowrap;
 }
 
 .payment-table th {
-  background-color: #003366;
-  color: white;
-  font-weight: 600;
+  background-color: #293552; /* deep dark navy */
+  color: #ffffff;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  border: 1px solid #bdbdbd; /* consistent border with data cells */
+  padding: 7px;
+  text-align: center;
 }
 
 .payment-table tr:nth-child(even) {

@@ -28,7 +28,7 @@ class Payment(Base):
     created_by = Column(String, nullable=False)
 
     # ✅ Bank Foreign Key
-    bank_id = Column(Integer, ForeignKey("banks.id", ondelete="RESTRICT"), nullable=False)
+    bank_id = Column(Integer, ForeignKey("banks.id", ondelete="RESTRICT"), nullable=True)
     bank = relationship("Bank", back_populates="payments")
 
     # Booking relationship

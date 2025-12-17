@@ -132,19 +132,22 @@
   padding: 4px 2px; /* reduced from 6px 8px */
   text-align: left;
   white-space: nowrap;
-  font-size: 0.68rem; /* optional: slightly smaller text */
+  font-size: 0.75rem; /* optional: slightly smaller text */
   border-bottom: 1px solid #ddd;
 }
-
-
 .booking-table thead th {
-  background-color: #e7e1e1;
-  position: sticky;
-  top: 0;
-  z-index: 15;
+  background-color: #293552; /* deep dark navy */
+  color: #ffffff;
+  text-transform: uppercase;
+  font-size: 12px;
   font-weight: 700;
-  font-size: 0.8rem; /* optional: slightly smaller text */
+  letter-spacing: 0.4px;
+  border: 1px solid #bdbdbd; /* consistent border with data cells */
+  padding: 7px;
+  text-align: center;
 }
+
+
 
 .booking-table tbody tr:nth-child(even) {
   background-color: #f9f9f9;
@@ -327,20 +330,6 @@ button {
   background-color: #2563eb;
   transform: translateY(-1px);
 }
-
-
-.booking-table,
-.booking-table th,
-.booking-table td {
-  border: 1px solid #ccc;
-  border-collapse: collapse;
-}
-
-.booking-table th,
-.booking-table td {
-  padding: 6px;
-}
-
 
 
 
