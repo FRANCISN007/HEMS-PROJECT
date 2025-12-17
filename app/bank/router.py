@@ -44,7 +44,7 @@ def list_banks(
 @router.get("/simple", response_model=List[dict])
 def list_banks_simple(
     db: Session = Depends(get_db),
-    current_user: UserDisplaySchema = Depends(role_required(["dashboard", "admin"]))
+    #current_user: UserDisplaySchema = Depends(role_required(["dashboard", "admin"]))
 ):
     banks = db.query(models.Bank.id, models.Bank.name).all()
     return [{"id": b.id, "name": b.name} for b in banks]

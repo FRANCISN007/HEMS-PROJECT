@@ -58,49 +58,71 @@
 
 
 
-
 /* Filter container */
 .filter-frame {
   display: flex;
   align-items: center;
-  gap: 20px; /* more space between Category and Bar */
+  gap: 6px;                     /* very tight */
   background: #ffffff;
-  padding: 8px 12px;
-  border-radius: 6px;
-  box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
-  flex-wrap: wrap; /* allow wrapping on smaller screens */
+  padding: 4px 6px;             /* minimal padding */
+  border-radius: 5px;
+  box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.06);
+  flex-wrap: wrap;
 }
 
-/* Each filter group (label + select) */
+/* Each filter group */
 .filter-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;                     /* minimal spacing */
 }
 
-/* Label styling with fixed width */
+/* Labels */
 .filter-group label {
-  display: inline-block;
-  width: 70px;   /* ✅ fixed width so both align */
+  width: 60px;                  /* narrower label */
   font-weight: 500;
-  font-size: 14px;
+  font-size: 12px;              /* smaller text */
   color: #333;
   white-space: nowrap;
 }
 
-/* Select styling */
-.filter-group select {
-  flex: 1;
-  min-width: 150px;
-  padding: 5px 10px;
+/* Select + Date input */
+.filter-group select,
+.filter-group input[type="date"] {
+  min-width: 100px;             /* very compact */
+  padding: 2px 6px;             /* minimal padding */
   border-radius: 4px;
   border: 1px solid #ccc;
-  font-size: 14px;
+  font-size: 12px;
   background: #fafafa;
-  transition: border 0.2s;
+  height: 26px;                 /* toolbar height */
+  transition: border-color 0.12s, box-shadow 0.12s;
 }
 
-.filter-group select:focus {
+/* Focus state */
+.filter-group select:focus,
+.filter-group input[type="date"]:focus {
   border-color: #007bff;
+  box-shadow: 0 0 0 1px rgba(0, 123, 255, 0.15);
   outline: none;
+}
+
+/* Mobile optimization */
+@media (max-width: 768px) {
+  .filter-frame {
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .filter-group label {
+    width: auto;
+    font-size: 11px;
+  }
+
+  .filter-group select,
+  .filter-group input[type="date"] {
+    min-width: 90px;
+    height: 24px;
+    font-size: 11px;
+  }
 }

@@ -6,6 +6,8 @@ const KitchenStock = () => {
   const [balances, setBalances] = useState([]);
   const [kitchens, setKitchens] = useState([]);
   const [selectedKitchen, setSelectedKitchen] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
@@ -14,15 +16,12 @@ const KitchenStock = () => {
   // -----------------------------
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
-
   if (Array.isArray(storedUser.roles)) {
     roles = storedUser.roles;
   } else if (typeof storedUser.role === "string") {
     roles = [storedUser.role];
   }
-
   roles = roles.map((r) => r.toLowerCase());
-
   if (!(roles.includes("admin") || roles.includes("restaurant"))) {
     return (
       <div className="unauthorized">
@@ -33,19 +32,12 @@ const KitchenStock = () => {
   }
 
   // -----------------------------
-  // Load data on mount
+  // Load Kitchens
   // -----------------------------
   useEffect(() => {
     fetchKitchens();
   }, []);
 
-  useEffect(() => {
-    fetchStockBalances(selectedKitchen);
-  }, [selectedKitchen]);
-
-  // -----------------------------
-  // Fetch Kitchens
-  // -----------------------------
   const fetchKitchens = async () => {
     try {
       const axios = axiosWithAuth();
@@ -58,37 +50,28 @@ const KitchenStock = () => {
   };
 
   // -----------------------------
-  // Fetch Kitchen Stock
+  // Load Stock Balances
   // -----------------------------
-  const fetchStockBalances = async (kitchenId = "") => {
+  useEffect(() => {
+    fetchStockBalances(selectedKitchen, startDate, endDate);
+  }, [selectedKitchen, startDate, endDate]);
+
+  const fetchStockBalances = async (kitchenId = "", start = "", end = "") => {
     try {
       setLoading(true);
       const axios = axiosWithAuth();
 
       let url = `/store/kitchen-balance-stock?`;
-      if (kitchenId) url += `kitchen_id=${kitchenId}`;
+      if (kitchenId) url += `kitchen_id=${kitchenId}&`;
+      if (start) url += `start_date=${start}&`;
+      if (end) url += `end_date=${end}&`;
 
       const res = await axios.get(url);
-
-      // 🔥 PROTECT AGAINST NON-ARRAY RESPONSE
-      if (Array.isArray(res.data)) {
-        setBalances(res.data);
-      } else {
-        console.warn("Backend did NOT return array:", res.data);
-        setBalances([]);
-      }
+      setBalances(res.data || []);
     } catch (error) {
       console.error("Error fetching kitchen balances:", error);
-
-      // Handle unauthorized
-      if (error?.response?.status === 401) {
-        setMessage("⚠️ Unauthorized. Please log in again.");
-      } else {
-        setMessage("❌ Failed to load kitchen stock balances.");
-      }
+      setMessage("❌ Failed to load kitchen stock balances");
       setTimeout(() => setMessage(""), 3000);
-
-      setBalances([]);
     } finally {
       setLoading(false);
     }
@@ -135,7 +118,26 @@ const KitchenStock = () => {
               ))}
             </select>
           </div>
+
+          <div className="filter-group">
+            <label>Start Date:</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+
+          <div className="filter-group">
+            <label>End Date:</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
         </div>
+
 
         <div className="total-stock">
           <div>
