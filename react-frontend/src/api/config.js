@@ -1,25 +1,15 @@
 // src/api/config.js
 
 const getBaseUrl = () => {
-  let envUrl = "";
+  const { protocol, hostname } = window.location;
 
-  // ✅ CRA environment variable (this is the only supported one)
-  if (typeof process !== "undefined") {
-    envUrl = process.env.REACT_APP_API_BASE_URL || "";
+  // If accessed via IP or hostname on LAN
+  if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
+    return `${protocol}//${hostname}:8000`;
   }
 
-  // ✅ Fallback: auto-detect based on hostname
-  if (!envUrl || envUrl.trim() === "") {
-    const hostname = window.location.hostname;
-
-    if (hostname && hostname !== "localhost") {
-      envUrl = `${window.location.protocol}//${hostname}:8000`;
-    } else {
-      envUrl = `${window.location.protocol}//localhost:8000`;
-    }
-  }
-
-  return envUrl;
+  // Local development fallback
+  return `${protocol}//localhost:8000`;
 };
 
 export default getBaseUrl;

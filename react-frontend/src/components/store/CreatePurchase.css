@@ -155,3 +155,84 @@
   padding: 8px;
   border-radius: 6px;
 }
+
+
+.purchase-container {
+  max-width: 900px;
+  margin: 20px auto;
+  padding: 20px;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.close-btn {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.vendor-section {
+  margin-bottom: 15px;
+}
+
+.vendor-section select {
+  width: 100%;
+  padding: 8px;
+}
+
+.purchase-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.purchase-table th,
+.purchase-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: center;
+}
+
+.purchase-table select,
+.purchase-table input {
+  width: 100%;
+  padding: 6px;
+}
+
+.total-cell {
+  font-weight: bold;
+}
+
+.add-row-btn {
+  margin-top: 10px;
+  padding: 6px 12px;
+  background: #198754;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.remove-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.grand-total {
+  margin-top: 15px;
+  font-size: 18px;
+  text-align: right;
+}
+
+.message {
+  margin-bottom: 10px;
+  font-weight: bold;
+}
+

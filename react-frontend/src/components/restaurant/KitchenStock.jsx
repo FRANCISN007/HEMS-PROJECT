@@ -161,7 +161,7 @@ const KitchenStock = () => {
             <th>Unit</th>
             <th>Category</th>
             <th>Item Type</th>
-            <th>Total Issued</th>
+            <th>Total Received</th>
             <th>Qty Sold</th>
             <th>Balance</th>
             <th>Unit Price</th>

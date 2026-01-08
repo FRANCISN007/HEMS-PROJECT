@@ -138,7 +138,7 @@
   width: max-content;
   min-width: 100%;
   border-collapse: collapse;
-  font-size: 0.65rem;
+  font-size: 0.9rem;
   background-color: white;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   border-radius: 8px;
@@ -147,7 +147,7 @@
 
 .payment-table th,
 .payment-table td {
-  padding: 8px 6px;
+  padding: 8px 8px;
   border: 1px solid #3d4146;
   text-align: left;
   white-space: nowrap;
@@ -398,13 +398,13 @@
 
 /* 👇 Force smaller table font and tighter spacing */
 .list-payment-container table.payment-table {
-  font-size: 0.7rem !important;
+  font-size: 0.9rem !important;
 }
 
 .list-payment-container table.payment-table th,
 .list-payment-container table.payment-table td {
-  font-size: 0.7rem !important;
-  padding: 2px 5px !important;
+  font-size: 0.9rem !important;
+  padding: 4px 8px !important;
 }
 
 

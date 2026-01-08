@@ -33,7 +33,7 @@
 .outstanding-table th,
 .outstanding-table td {
   border: 1px solid #ccc;
-  padding: 8px 8px; /* reduced padding */
+  padding: 6px 6px; /* reduced padding */
   text-align: left;
 }
 

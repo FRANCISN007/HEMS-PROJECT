@@ -4,6 +4,10 @@ import axios from "axios";
 import HotelPhoto3 from "../assets/images/HotelPhoto3.png";
 import "./DashboardPage.css";
 import { FaHotel } from "react-icons/fa";
+import getBaseUrl from "../api/config";
+
+
+
 
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -11,7 +15,8 @@ import ExcelJS from "exceljs";
 import { FaFileExcel, FaPrint } from "react-icons/fa";
 
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
+const API_BASE_URL = getBaseUrl();
+
 
 const DashboardPage = () => {
   const navigate = useNavigate();
