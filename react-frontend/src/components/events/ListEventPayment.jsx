@@ -1,4 +1,3 @@
-// src/components/payments/ListEventPayment.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./ListEventPayment.css";
@@ -110,10 +109,15 @@ const ListEventPayment = () => {
     }
   }, [startDate, endDate]);
 
+  // -------------------------------
+  //   VIEW PAYMENT (CORRECT FIX)
+  // -------------------------------
   const handleView = (payment) => {
-    navigate(`/dashboard/events/view/${payment.event_id}`, {
-      state: { payment },
-    });
+    // ⛔ Block voided payments completely
+    if (payment.isVoided) return;
+
+    // ✅ View EXACT payment clicked
+    navigate(`/dashboard/events/payments/view/${payment.id}`);
   };
 
   // -------------------------------
@@ -200,7 +204,13 @@ const ListEventPayment = () => {
                     </td>
                     <td>{payment.created_by || "-"}</td>
                     <td>
-                      <button onClick={() => handleView(payment)}>View</button>
+                      {payment.isVoided ? (
+                        <span className="voided-status">—</span>
+                      ) : (
+                        <button onClick={() => handleView(payment)}>
+                          View
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -230,7 +240,8 @@ const ListEventPayment = () => {
             <span>💵 Cash: ₦{formatCurrency(summary.by_method?.total_cash)}</span>
             <span>💳 POS: ₦{formatCurrency(summary.by_method?.total_pos)}</span>
             <span>
-              🏦 Transfer: ₦{formatCurrency(summary.by_method?.total_transfer)}
+              🏦 Transfer: ₦
+              {formatCurrency(summary.by_method?.total_transfer)}
             </span>
           </div>
 

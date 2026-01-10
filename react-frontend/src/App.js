@@ -237,7 +237,8 @@ const App = () => {
             <Route path="payments/void" element={<VoidEventPayment />} />
             <Route path="view" element={<ViewEventForm />} />
             <Route path="update" element={<EventUpdate />} />
-            <Route path="view/:id" element={<ViewEventPayment />} />
+            <Route path="payments/view/:id" element={<ViewEventPayment />} />
+
           </Route>
 
           {/* Reservation alerts */}
