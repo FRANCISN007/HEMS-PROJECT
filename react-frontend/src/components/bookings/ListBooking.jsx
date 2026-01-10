@@ -5,7 +5,9 @@ import UpdateForm from "./UpdateForm";
 import CreatePayment from "../payments/CreatePayment";
 import { openViewForm } from "./viewFormUtils";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
+import getBaseUrl from "../../api/config";
+const API_BASE_URL = getBaseUrl();
+
 
 const ALL_COLUMNS = [
   { key: "id", label: "ID" },

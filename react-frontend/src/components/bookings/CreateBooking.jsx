@@ -3,6 +3,10 @@ import axiosWithAuth from "../../utils/axiosWithAuth"; // ✅ use auth axios
 import "./CreateBooking.css";
 import { useNavigate } from "react-router-dom";
 
+import getBaseUrl from "../../api/config";
+const API_BASE_URL = getBaseUrl();
+
+
 const CreateBooking = () => {
   const navigate = useNavigate();
 
@@ -147,7 +151,8 @@ const [formData, setFormData] = useState({
 
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_BASE_URL}/bookings/create/`,
+        `${API_BASE_URL}/bookings/create/`
+,
         {
           method: "POST",
           headers: {

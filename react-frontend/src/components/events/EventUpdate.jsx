@@ -4,7 +4,9 @@ import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./EventUpdate.css";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
+import getBaseUrl from "../../api/config";
+const API_BASE_URL = getBaseUrl();
+
 
 const EventUpdate = () => {
   const location = useLocation();

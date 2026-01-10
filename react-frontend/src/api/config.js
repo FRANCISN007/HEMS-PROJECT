@@ -1,15 +1,16 @@
-// src/api/config.js
-
 const getBaseUrl = () => {
-  const { protocol, hostname } = window.location;
+  let envUrl = "";
 
-  // If accessed via IP or hostname on LAN
-  if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
-    return `${protocol}//${hostname}:8000`;
+  if (typeof process !== "undefined") {
+    envUrl = process.env.REACT_APP_API_BASE_URL || "";
   }
 
-  // Local development fallback
-  return `${protocol}//localhost:8000`;
+  if (!envUrl || envUrl.trim() === "") {
+    const hostname = window.location.hostname;
+    envUrl = `${window.location.protocol}//${hostname}:8000`;
+  }
+
+  return envUrl;
 };
 
 export default getBaseUrl;

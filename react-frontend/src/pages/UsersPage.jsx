@@ -16,6 +16,7 @@ const UsersPage = () => {
     );
   }
 
+  
   return (
     <div className="max-w-6xl mx-auto mt-10 px-4">
       <UserManagement token={token} />

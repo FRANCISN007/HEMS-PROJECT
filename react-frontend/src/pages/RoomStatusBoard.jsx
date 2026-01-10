@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+
+import getBaseUrl from "./../api/config";
+
 import {
   BarChart,
   Bar,
@@ -12,22 +15,21 @@ import {
   Cell,
   CartesianGrid,
 } from "recharts";
+
 import "./RoomStatusBoard.css";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
-
+const API_BASE_URL = getBaseUrl();
 
 const RoomStatusBoard = () => {
   const [rooms, setRooms] = useState([]);
   const navigate = useNavigate();
 
-  const formatNaira = (amount) => {
-    return amount?.toLocaleString("en-NG", {
+  const formatNaira = (amount) =>
+    amount?.toLocaleString("en-NG", {
       style: "currency",
       currency: "NGN",
       minimumFractionDigits: 0,
     });
-  };
 
   useEffect(() => {
     const fetchRooms = async () => {
@@ -36,22 +38,26 @@ const RoomStatusBoard = () => {
 
       try {
         const res = await axios.get(`${API_BASE_URL}/rooms/`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
 
         const data = res.data;
         console.log("Fetched rooms response:", data);
 
-        // Defensive fallback
-        if (Array.isArray(data?.rooms)) {
+        // ✅ Support both array and wrapped response
+        if (Array.isArray(data)) {
+          setRooms(data);
+        } else if (Array.isArray(data?.rooms)) {
           setRooms(data.rooms);
         } else {
-          console.warn("rooms is not an array:", data?.rooms);
+          console.warn("Unexpected rooms response shape:", data);
           setRooms([]);
         }
       } catch (err) {
         console.error("Error fetching rooms:", err);
-        setRooms([]); // Set empty array on error
+        setRooms([]);
       }
     };
 
@@ -59,8 +65,8 @@ const RoomStatusBoard = () => {
   }, []);
 
   const handleRoomClick = (room) => {
-    const nonClickableStatuses = ["maintenance", "checked-in", "reserved", "complimentary"];
-    if (nonClickableStatuses.includes(room.status?.toLowerCase())) return;
+    const blocked = ["maintenance", "checked-in", "reserved", "complimentary"];
+    if (blocked.includes(room.status?.toLowerCase())) return;
 
     navigate(`/dashboard/bookings/create?room_number=${room.room_number}`);
   };
@@ -84,7 +90,6 @@ const RoomStatusBoard = () => {
     }
   };
 
-  // Guarded .reduce()
   const statusCounts = Array.isArray(rooms)
     ? rooms.reduce((acc, room) => {
         const status = room.status?.toLowerCase?.() || "unknown";
@@ -93,9 +98,11 @@ const RoomStatusBoard = () => {
       }, {})
     : {};
 
-
   const futureReservationCount = Array.isArray(rooms)
-    ? rooms.reduce((total, room) => total + (room.future_reservation_count || 0), 0)
+    ? rooms.reduce(
+        (total, room) => total + (room.future_reservation_count || 0),
+        0
+      )
     : 0;
 
   const chartData = [
@@ -108,44 +115,49 @@ const RoomStatusBoard = () => {
 
   return (
     <div style={{ maxHeight: "100vh", overflow: "hidden" }}>
-      {/* Rooms Section */}
+      {/* 🏨 Rooms */}
       <div className="section-box" style={{ maxHeight: "35vh", overflowY: "auto" }}>
         <div className="room-grid">
-          {Array.isArray(rooms) &&
-            rooms.map((room) => {
-              const isClickable = !["maintenance", "checked-in", "reserved", "complimentary"].includes(
-                room.status?.toLowerCase()
-              );
+          {rooms.map((room) => {
+            const isClickable = ![
+              "maintenance",
+              "checked-in",
+              "reserved",
+              "complimentary",
+            ].includes(room.status?.toLowerCase());
 
-              return (
-                <div
-                  key={room.id}
-                  className={`room-card ${isClickable ? "clickable" : "disabled"}`}
-                  style={{
-                    backgroundColor: getStatusColor(room.status),
-                    fontSize: "0.7rem",
-                    padding: "4px",
-                    position: "relative",
-                  }}
-                  onClick={() => handleRoomClick(room)}
-                >
-                  {room.future_reservation_count > 0 && (
-                    <div
-                      className="reservation-badge"
-                      title={`${room.future_reservation_count} reservation(s)`}
-                    >
-                      {room.future_reservation_count}
-                    </div>
-                  )}
-                  <h3 style={{ margin: "2px 0" }}>{room.room_number}</h3>
-                  <p style={{ margin: "1px 0" }}>{room.room_type}</p>
-                  <p style={{ margin: "1px 0" }}>{formatNaira(room.amount)}</p>
-                </div>
-              );
-            })}
+            return (
+              <div
+                key={room.id}
+                className={`room-card ${isClickable ? "clickable" : "disabled"}`}
+                style={{
+                  backgroundColor: getStatusColor(room.status),
+                  fontSize: "0.7rem",
+                  padding: "4px",
+                  position: "relative",
+                }}
+                onClick={() => handleRoomClick(room)}
+              >
+                {room.future_reservation_count > 0 && (
+                  <div
+                    className="reservation-badge"
+                    title={`${room.future_reservation_count} reservation(s)`}
+                  >
+                    {room.future_reservation_count}
+                  </div>
+                )}
+                <h3 style={{ margin: "2px 0" }}>{room.room_number}</h3>
+                <p style={{ margin: "1px 0" }}>{room.room_type}</p>
+                <p style={{ margin: "1px 0" }}>
+                  {formatNaira(room.amount)}
+                </p>
+              </div>
+            );
+          })}
         </div>
       </div>
 
+      {/* 📊 Summary */}
       <div className="room-summary-footer" style={{ fontSize: "0.8rem", padding: "6px" }}>
         <span>🔘 Available: {statusCounts["available"] || 0}</span>
         <span>🟢 Checked-in🧍‍♂️: {statusCounts["checked-in"] || 0}</span>
@@ -156,16 +168,16 @@ const RoomStatusBoard = () => {
 
       <hr className="room-divider" style={{ margin: "8px 0" }} />
 
-      {/* Chart Section */}
+      {/* 📈 Chart */}
       <div className="section-box chart-container" style={{ height: "31vh" }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+          <BarChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="name" />
             <YAxis allowDecimals={false} />
             <Tooltip />
             <Legend />
-            <Bar dataKey="value" isAnimationActive>
+            <Bar dataKey="value">
               {chartData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}

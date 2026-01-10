@@ -3,7 +3,9 @@ import React, { useState } from "react";
 import "./CancelEvent.css";
 import { useNavigate } from "react-router-dom";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
+import getBaseUrl from "../../api/config";
+const API_BASE_URL = getBaseUrl();
+
 
 const CancelEvent = ({ eventId, onClose }) => {
   const [reason, setReason] = useState("");

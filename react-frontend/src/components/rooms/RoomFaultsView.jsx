@@ -2,7 +2,9 @@ import React, { useEffect, useState } from "react";
 import "./RoomFaultsView.css";
 
 import { getUserRoleFromToken } from '../../api/auth';
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
+import getBaseUrl from "../../api/config";
+const API_BASE_URL = getBaseUrl();
+
 
 const RoomFaultsView = ({ room, onClose, onRefresh }) => {
   const [faults, setFaults] = useState([]);

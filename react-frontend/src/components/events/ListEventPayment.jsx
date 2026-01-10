@@ -3,9 +3,8 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./ListEventPayment.css";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_BASE_URL ||
-  `http://${window.location.hostname}:8000`;
+import getBaseUrl from "../../api/config";
+const API_BASE_URL = getBaseUrl();
 
 const ListEventPayment = () => {
   const navigate = useNavigate();
@@ -13,9 +12,10 @@ const ListEventPayment = () => {
   const [payments, setPayments] = useState([]);
   const [summary, setSummary] = useState({});
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [error, setError] = useState(null); // ✅ FIXED
 
   // -------------------------------
   //   AUTHORIZATION CHECK
@@ -44,6 +44,21 @@ const ListEventPayment = () => {
     if (!val || isNaN(Number(val))) return "0";
     return Number(val).toLocaleString();
   };
+
+  // -------------------------------
+  //   SET CURRENT MONTH ON MOUNT
+  // -------------------------------
+  useEffect(() => {
+    const now = new Date();
+
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    const formatDate = (d) => d.toISOString().split("T")[0];
+
+    setStartDate(formatDate(firstDay));
+    setEndDate(formatDate(lastDay));
+  }, []);
 
   // -------------------------------
   //   FETCH PAYMENTS
@@ -86,9 +101,14 @@ const ListEventPayment = () => {
     }
   };
 
+  // -------------------------------
+  //   AUTO FETCH WHEN DATES READY
+  // -------------------------------
   useEffect(() => {
-    fetchPayments();
-  }, []);
+    if (startDate && endDate) {
+      fetchPayments();
+    }
+  }, [startDate, endDate]);
 
   const handleView = (payment) => {
     navigate(`/dashboard/events/view/${payment.event_id}`, {

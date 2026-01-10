@@ -3,20 +3,29 @@ import { useNavigate } from "react-router-dom";
 import "./ListEvent.css";
 import CancelEvent from "./CancelEvent";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
+import getBaseUrl from "../../api/config";
+const API_BASE_URL = getBaseUrl();
 
 const ListEvent = () => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
+
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [organizer, setOrganizer] = useState("");
+
   const [error, setError] = useState(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState(null);
-  const [summary, setSummary] = useState({ total_entries: 0, total_booking_amount: 0 });
 
+  const [summary, setSummary] = useState({
+    total_entries: 0,
+    total_booking_amount: 0,
+  });
+
+  // ===============================
+  // ROLE CHECK
+  // ===============================
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
 
@@ -37,30 +46,56 @@ const ListEvent = () => {
     );
   }
 
+  // ===============================
+  // SET CURRENT MONTH ON MOUNT
+  // ===============================
+  useEffect(() => {
+    const now = new Date();
+
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    const formatDate = (date) => date.toISOString().split("T")[0];
+
+    setStartDate(formatDate(firstDay));
+    setEndDate(formatDate(lastDay));
+  }, []);
+
+  // ===============================
+  // FETCH EVENTS
+  // ===============================
   const fetchEvents = async () => {
     setLoading(true);
     setError(null);
+
     try {
       const token = localStorage.getItem("token");
+
       let url = `${API_BASE_URL}/events/`;
       const params = new URLSearchParams();
 
       if (startDate) params.append("start_date", startDate);
       if (endDate) params.append("end_date", endDate);
-      if (params.toString()) url += `?${params.toString()}`;
+
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
 
       const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       const data = await res.json();
-      const filtered = organizer
+
+      const filteredEvents = organizer
         ? (data.events || []).filter((e) =>
             e.organizer?.toLowerCase().includes(organizer.toLowerCase())
           )
         : data.events || [];
 
-      setEvents(filtered);
+      setEvents(filteredEvents);
       setSummary(data.summary || { total_entries: 0, total_booking_amount: 0 });
     } catch (err) {
       console.error("❌ Fetch failed:", err);
@@ -70,12 +105,20 @@ const ListEvent = () => {
     }
   };
 
+  // ===============================
+  // AUTO FETCH WHEN DATE CHANGES
+  // ===============================
   useEffect(() => {
-    fetchEvents();
-  }, []);
+    if (startDate && endDate) {
+      fetchEvents();
+    }
+  }, [startDate, endDate]);
 
   const navigate = useNavigate();
 
+  // ===============================
+  // UI
+  // ===============================
   return (
     <div className="list-event-container">
       <div className="list-event-header-row">
@@ -89,8 +132,19 @@ const ListEvent = () => {
             onChange={(e) => setOrganizer(e.target.value)}
             className="filter-input"
           />
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+
           <button onClick={fetchEvents} className="fetch-button">
             ↻ Refresh
           </button>
@@ -119,6 +173,7 @@ const ListEvent = () => {
               <th>Actions</th>
             </tr>
           </thead>
+
           <tbody>
             {events.length === 0 ? (
               <tr>
@@ -128,7 +183,9 @@ const ListEvent = () => {
               </tr>
             ) : (
               events.map((event) => {
-                const isCancelled = event.payment_status.toLowerCase() === "cancelled";
+                const isCancelled =
+                  event.payment_status?.toLowerCase() === "cancelled";
+
                 return (
                   <tr
                     key={event.id}
@@ -152,24 +209,30 @@ const ListEvent = () => {
                       <button
                         className="view-btn"
                         onClick={() =>
-                          navigate("/dashboard/events/view", { state: { event } })
+                          navigate("/dashboard/events/view", {
+                            state: { event },
+                          })
                         }
                       >
                         View
                       </button>
+
                       <button
                         className="update-btn"
-                        onClick={() =>
-                          navigate("/dashboard/events/update", { state: { event } })
-                        }
                         disabled={isCancelled}
                         style={{
                           backgroundColor: isCancelled ? "#ccc" : "",
                           cursor: isCancelled ? "not-allowed" : "pointer",
                         }}
+                        onClick={() =>
+                          navigate("/dashboard/events/update", {
+                            state: { event },
+                          })
+                        }
                       >
                         Update
                       </button>
+
                       <button
                         className="cancel-btn"
                         onClick={() => {

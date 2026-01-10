@@ -38,41 +38,33 @@ else:
 
 def get_preferred_ip():
     """
-    Prefer Ethernet > Wi-Fi > otherwise first active non-loopback IPv4
+    Prefer Ethernet > Wi-Fi > fallback to localhost
     """
-    ip_priority = {"ethernet": None, "wifi": None}
-    fallback_ip = None
-
     for interface, addrs in psutil.net_if_addrs().items():
         if_stats = psutil.net_if_stats().get(interface)
         if not if_stats or not if_stats.isup:
             continue
 
         for addr in addrs:
-            if addr.family == socket.AF_INET and not addr.address.startswith("169.254"):
-                name = interface.lower()
-                if "ethernet" in name and not ip_priority["ethernet"]:
-                    ip_priority["ethernet"] = addr.address
-                elif ("wi-fi" in name or "wifi" in name or "wlan" in name) and not ip_priority["wifi"]:
-                    ip_priority["wifi"] = addr.address
-                elif not fallback_ip:
-                    fallback_ip = addr.address
+            if (
+                addr.family == socket.AF_INET
+                and not addr.address.startswith("169.254")
+                and addr.address != "127.0.0.1"
+            ):
+                print(f"[INFO] Selected IP: {addr.address}")
+                return addr.address
 
-    selected_ip = ip_priority["ethernet"] or ip_priority["wifi"] or fallback_ip or "127.0.0.1"
-    print(f"[INFO] Selected IP: {selected_ip}")
-    return selected_ip
+    print("[INFO] No active LAN detected, using localhost")
+    return "127.0.0.1"
 
 def update_env_server_ip(ip_address):
-    """Update backend and frontend .env with SERVER_IP"""
+    """Update backend .env only"""
     set_key(ENV_PATH, "SERVER_IP", ip_address)
-    set_key(REACT_ENV_PATH, "REACT_APP_API_BASE_URL", f"http://{ip_address}:8000")
-
-    # Reload envs to ensure consistency
     load_dotenv(ENV_PATH, override=True)
-    load_dotenv(REACT_ENV_PATH, override=True)
 
-    print(f"[INFO] SERVER_IP set to {ip_address} in backend .env")
-    print(f"[INFO] REACT_APP_API_BASE_URL set in frontend .env")
+    print(f"[INFO] SERVER_IP set to {ip_address}")
+
+
 
 def start_backend():
     """Start FastAPI backend which serves both API and React UI"""

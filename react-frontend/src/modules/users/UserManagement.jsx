@@ -2,7 +2,12 @@ import React, { useEffect, useState } from "react";
 import "./UserManagement.css";
 import { useNavigate } from "react-router-dom";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
+import getBaseUrl from "../../api/config";
+
+const API_BASE_URL = getBaseUrl();
+
+
+
 
 const roleOptions = ["user", "admin", "dashboard", "bar", "restaurant", "store", "event"];
 

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
+import getBaseUrl from "../../api/config";
 
-import "./ListVendor.css"; // We'll just add to this file
+import "./ListVendor.css";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:8000`;
+const API_BASE_URL = getBaseUrl();
 
 const ListVendor = () => {
   const [vendors, setVendors] = useState([]);
@@ -14,6 +15,9 @@ const ListVendor = () => {
   });
   const [message, setMessage] = useState("");
 
+  // ===============================
+  // ROLE CHECK
+  // ===============================
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
 
@@ -25,50 +29,57 @@ const ListVendor = () => {
 
   roles = roles.map((r) => r.toLowerCase());
 
-
   if (!(roles.includes("admin") || roles.includes("store"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to create and list vendor.</p>
-    </div>
-  );
-}
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to create and list vendor.</p>
+      </div>
+    );
+  }
 
+  // ===============================
+  // FETCH VENDORS
+  // ===============================
   useEffect(() => {
     fetchVendors();
   }, []);
 
   const fetchVendors = async () => {
-  try {
-    const axios = axiosWithAuth();
-    const response = await axios.get(`/vendor/`);
+    try {
+      const axios = axiosWithAuth(API_BASE_URL);
+      const response = await axios.get("/vendor/");
 
-    // Ensure response is an array
-    if (Array.isArray(response.data)) {
-      setVendors(response.data);
-    } else {
-      console.error("Expected an array but got:", response.data);
-      setVendors([]); // fallback to empty array
+      if (Array.isArray(response.data)) {
+        setVendors(response.data);
+      } else {
+        console.error("Expected array, got:", response.data);
+        setVendors([]);
+      }
+    } catch (error) {
+      console.error("Error fetching vendors:", error);
+      setVendors([]);
     }
-  } catch (error) {
-    console.error("Error fetching vendors:", error);
-    setVendors([]); // avoid crashing UI
-  }
-};
+  };
 
+  // ===============================
+  // DELETE VENDOR
+  // ===============================
   const handleDelete = async (vendorId) => {
     if (!window.confirm("Are you sure you want to delete this vendor?")) return;
-    try {
-      const axios = axiosWithAuth();
-      await axios.delete(`/vendor/${vendorId}`);
 
+    try {
+      const axios = axiosWithAuth(API_BASE_URL);
+      await axios.delete(`/vendor/${vendorId}`);
       fetchVendors();
     } catch (error) {
       console.error("Error deleting vendor:", error);
     }
   };
 
+  // ===============================
+  // UPDATE VENDOR
+  // ===============================
   const handleUpdate = async (vendor) => {
     const newName = prompt("Enter new business name", vendor.business_name);
     const newPhone = prompt("Enter new phone number", vendor.phone_number);
@@ -80,56 +91,62 @@ const ListVendor = () => {
     }
 
     try {
-      const axios = axiosWithAuth();
+      const axios = axiosWithAuth(API_BASE_URL);
       await axios.put(`/vendor/${vendor.id}`, {
-
         business_name: newName,
         phone_number: newPhone,
-        address: newAddress
+        address: newAddress,
       });
+
       fetchVendors();
     } catch (error) {
       console.error("Error updating vendor:", error);
-      alert("Failed to update vendor. Check console for details.");
+      alert("Failed to update vendor.");
     }
   };
 
+  // ===============================
+  // FORM HANDLERS
+  // ===============================
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     try {
-      const axios = axiosWithAuth();
-const response = await axios.post(`/vendor/`, formData);
-setMessage(`✅ Vendor "${response.data.business_name}" created successfully.`);
-setFormData({ business_name: "", address: "", phone_number: "" });
-fetchVendors();
+      const axios = axiosWithAuth(API_BASE_URL);
+      const response = await axios.post("/vendor/", formData);
 
-      } catch (error) {
-  console.error(error);
-  if (
-    error.response &&
-    error.response.data &&
-    typeof error.response.data.detail === "string" &&
-    error.response.data.detail.includes("Vendor name already exists")
-  ) {
-    setMessage("❌ Vendor name already exists.");
-  } else {
-    setMessage("❌ Failed to create vendor.");
-  }
-}
+      setMessage(`✅ Vendor "${response.data.business_name}" created successfully.`);
+      setFormData({ business_name: "", address: "", phone_number: "" });
+      fetchVendors();
+    } catch (error) {
+      console.error(error);
 
+      if (
+        error.response?.data?.detail &&
+        typeof error.response.data.detail === "string" &&
+        error.response.data.detail.includes("Vendor name already exists")
+      ) {
+        setMessage("❌ Vendor name already exists.");
+      } else {
+        setMessage("❌ Failed to create vendor.");
+      }
+    }
 
     setTimeout(() => setMessage(""), 3000);
   };
 
+  // ===============================
+  // UI
+  // ===============================
   return (
     <div className="vendor-container">
       <h2 className="vendor-heading">Vendor List</h2>
 
-      {/* Create Form Section */}
+      {/* Create Vendor */}
       <form className="vendor-create-form" onSubmit={handleSubmit}>
         <input
           type="text"
@@ -182,8 +199,18 @@ fetchVendors();
               <div>{vendor.phone_number}</div>
               <div>{vendor.address}</div>
               <div className="vendor-action-buttons">
-                <button className="vendor-btn vendor-btn-update" onClick={() => handleUpdate(vendor)}>Update</button>
-                <button className="vendor-btn vendor-btn-delete" onClick={() => handleDelete(vendor.id)}>Delete</button>
+                <button
+                  className="vendor-btn vendor-btn-update"
+                  onClick={() => handleUpdate(vendor)}
+                >
+                  Update
+                </button>
+                <button
+                  className="vendor-btn vendor-btn-delete"
+                  onClick={() => handleDelete(vendor.id)}
+                >
+                  Delete
+                </button>
               </div>
             </div>
           ))
