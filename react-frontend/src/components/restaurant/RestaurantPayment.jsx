@@ -32,7 +32,7 @@ const RestaurantPayment = () => {
 
   const [paymentData, setPaymentData] = useState({
     amount: "",
-    payment_mode: "cash",
+    payment_mode: "", 
     paid_by: "",
     bank: "",
   });
@@ -87,12 +87,13 @@ const RestaurantPayment = () => {
     setCurrentSale(sale);
     setPaymentData({
       amount: "",
-      payment_mode: "cash",
+      payment_mode: "", // user must choose
       paid_by: sale.guest_name || "",
       bank: "",
     });
     setShowPaymentModal(true);
   };
+
 
   const closePaymentModal = () => {
     setShowPaymentModal(false);
@@ -105,8 +106,13 @@ const RestaurantPayment = () => {
       alert("⚠️ Enter a valid amount");
       return;
     }
+
+    // ✅ Default to CASH if nothing selected
+    const finalPaymentMode = paymentData.payment_mode || "CASH";
+
+    // ✅ Bank validation
     if (
-      (paymentData.payment_mode === "pos" || paymentData.payment_mode === "transfer") &&
+      (finalPaymentMode === "POS" || finalPaymentMode === "TRANSFER") &&
       !paymentData.bank
     ) {
       alert("⚠️ Select a bank for POS/Transfer payments");
@@ -118,17 +124,25 @@ const RestaurantPayment = () => {
         `/restpayment/sales/${currentSale.id}/payments`,
         {
           amount: parseFloat(paymentData.amount),
-          payment_mode: paymentData.payment_mode,
+          payment_mode: finalPaymentMode, // ✅ normalized
           paid_by: paymentData.paid_by,
-          bank: paymentData.payment_mode === "cash" ? null : paymentData.bank,
+          bank:
+            finalPaymentMode === "CASH"
+              ? null
+              : paymentData.bank,
         }
       );
+
       alert("✅ Payment recorded successfully!");
       fetchSales(selectedLocation);
       closePaymentModal();
     } catch (err) {
       console.error("Payment failed:", err.response?.data || err);
-      alert(`❌ Payment failed. ${err.response?.data?.detail || "Please try again."}`);
+      alert(
+        `❌ Payment failed. ${
+          err.response?.data?.detail || "Please try again."
+        }`
+      );
     }
   };
 
@@ -236,7 +250,7 @@ const RestaurantPayment = () => {
                   setPaymentData({
                     ...paymentData,
                     payment_mode: e.target.value,
-                    bank: e.target.value === "cash" ? "" : paymentData.bank,
+                    bank: e.target.value === "CASH" ? "" : paymentData.bank,
                   })
                 }
               >
@@ -245,6 +259,7 @@ const RestaurantPayment = () => {
                 <option value="TRANSFER">Transfer</option>
                 <option value="POS">POS</option>
               </select>
+
 
               {/* Bank Dropdown */}
               {(paymentData.payment_mode === "TRANSFER" || paymentData.payment_mode === "POS") && (
@@ -319,13 +334,14 @@ const RestaurantPayment = () => {
                 disabled={
                   !paymentData.amount ||
                   parseFloat(paymentData.amount) <= 0 ||
-                  ((paymentData.payment_mode === "pos" ||
-                    paymentData.payment_mode === "transfer") &&
+                  ((paymentData.payment_mode === "POS" ||
+                    paymentData.payment_mode === "TRANSFER") &&
                     !paymentData.bank)
                 }
               >
                 ✅ Submit
               </button>
+
               <button className="btn btn-secondary" onClick={closePaymentModal}>
                 ❌ Cancel
               </button>
