@@ -309,18 +309,42 @@ const ListIssues = () => {
             <input type="date" value={formData.issue_date} onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })} />
 
             <h4>Items</h4>
+
+          <div className="items-scroll">
             {(formData.issue_items || []).map((item, index) => (
               <div key={index} className="item-row">
-                <select value={item.item_id} onChange={(e) => handleFormChange(index, "item_id", e.target.value)}>
+                <select
+                  value={item.item_id}
+                  onChange={(e) =>
+                    handleFormChange(index, "item_id", e.target.value)
+                  }
+                >
                   <option value="">-- Select an item --</option>
-                  {items.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
+                  {items.map(it => (
+                    <option key={it.id} value={it.id}>{it.name}</option>
+                  ))}
                 </select>
 
-                <input type="number" min={1} value={item.quantity} onChange={(e) => handleFormChange(index, "quantity", e.target.value)} placeholder="Qty" />
+                <input
+                  type="number"
+                  min={1}
+                  value={item.quantity}
+                  onChange={(e) =>
+                    handleFormChange(index, "quantity", e.target.value)
+                  }
+                />
 
-                <button type="button" className="remove-line" onClick={() => removeIssueLine(index)}>❌</button>
+                <button
+                  type="button"
+                  className="remove-line"
+                  onClick={() => removeIssueLine(index)}
+                >
+                  ❌
+                </button>
               </div>
             ))}
+          </div>
+
 
             <button type="button" className="add-btn" onClick={addIssueLine}>➕ Add Item</button>
 

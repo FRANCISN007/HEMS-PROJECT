@@ -103,6 +103,11 @@
   padding: 8px 10px;
   max-width: 360px;
   width: 95%;
+
+  /* ✅ ADD THESE */
+  max-height: 85vh;
+  overflow-y: auto;
+
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
@@ -110,6 +115,14 @@
   font-size: 12px;
   z-index: 1001;
 }
+
+.items-scroll {
+  grid-column: span 2;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 
 .edit-form label {
   font-weight: 500;
