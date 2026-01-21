@@ -80,33 +80,44 @@ class BarInventoryReceipt(Base):
     created_by = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())  # ✅ Add this line
 
-# ----------------------------
-# Bar Sale
-# ----------------------------
+from datetime import datetime
+from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
+
 class BarSale(Base):
     __tablename__ = "bar_sales"
 
     id = Column(Integer, primary_key=True, index=True)
-    bar_id = Column(Integer, ForeignKey("bars.id"))
-    created_by_id = Column(Integer, ForeignKey("users.id"))
-    sale_date = Column(DateTime, default=datetime.utcnow)
+    bar_id = Column(Integer, ForeignKey("bars.id"), nullable=False)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # ✅ USER-ENTERED BUSINESS DATE
+    sale_date = Column(DateTime, nullable=False)
+
+    # ✅ SYSTEM TIMESTAMP
+    created_at = Column(DateTime, default=datetime.utcnow)
+
     total_amount = Column(Float, default=0.0)
-    status = Column(String, default="completed")  # <- Status now included
-    #voided_at = Column(DateTime, nullable=True)
+    status = Column(String, default="unpaid")
 
     bar = relationship("Bar", back_populates="sales")
     created_by_user = relationship("User", lazy="joined")
 
-    payments = relationship("BarPayment", back_populates="bar_sale", cascade="all, delete-orphan")
-    sale_items = relationship("BarSaleItem", back_populates="sale", cascade="all, delete-orphan")
-    
-    
+    payments = relationship(
+        "BarPayment",
+        back_populates="bar_sale",
+        cascade="all, delete-orphan"
+    )
+
+    sale_items = relationship(
+        "BarSaleItem",
+        back_populates="sale",
+        cascade="all, delete-orphan"
+    )
 
     @property
     def created_by(self):
         return self.created_by_user.username if self.created_by_user else None
-
-
 
 
 # ----------------------------

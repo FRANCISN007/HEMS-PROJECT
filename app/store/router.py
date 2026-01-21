@@ -154,11 +154,12 @@ def create_item(
 @router.get("/items", response_model=list[store_schemas.StoreItemDisplay])
 def list_items(
     category: Optional[str] = None,
+    search: Optional[str] = None,   # 🔍 NEW
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
     try:
-        # Subquery to get latest stock entry for each item
+        # 🔹 Subquery: latest stock entry per item
         latest_entry_subquery = (
             db.query(
                 store_models.StoreStockEntry.item_id,
@@ -173,7 +174,7 @@ def list_items(
         query = (
             db.query(
                 store_models.StoreItem,
-                latest_entry.unit_price
+                latest_entry.unit_price.label("latest_cost_price")
             )
             .outerjoin(
                 latest_entry_subquery,
@@ -185,34 +186,39 @@ def list_items(
             )
         )
 
-        # -------------------------------------------------------
-        # 🔥 category filter (unchanged) — optional, works as before
-        # -------------------------------------------------------
+        # 🔥 Optional category filter
         if category:
             query = (
                 query.join(store_models.StoreItem.category)
                 .filter(StoreCategory.name == category)
             )
 
-        results = query.order_by(store_models.StoreItem.id.asc()).all()
+        # 🔍 Optional item name search
+        if search:
+            query = query.filter(
+                store_models.StoreItem.name.ilike(f"%{search}%")
+            )
 
-        items = []
-        for item, unit_price in results:
-            items.append(store_schemas.StoreItemDisplay(
+        results = query.order_by(store_models.StoreItem.name.asc()).all()
+
+        return [
+            store_schemas.StoreItemDisplay(
                 id=item.id,
                 name=item.name,
                 unit=item.unit,
                 category=item.category,
-                unit_price=unit_price or 0.0,
+                unit_price=latest_cost_price or 0.0,
+                selling_price=item.selling_price or 0.0,
                 created_at=item.created_at,
-                item_type=item.item_type      # 🔥 NEW FIELD
-            ))
-
-        return items
+                item_type=item.item_type
+            )
+            for item, latest_cost_price in results
+        ]
 
     except Exception as e:
         print("💥 Error:", e)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 
@@ -269,6 +275,7 @@ def list_items_simple(
                 name=item.name,
                 unit=item.unit,
                 unit_price=unit_price or 0.0,
+                selling_price=item.selling_price or 0.0,  # ✅ FIX
                 category_id=item.category_id,
                 item_type=item.item_type   # 🔥 FIX
             ))
@@ -278,6 +285,71 @@ def list_items_simple(
     except Exception as e:
         print("❌ Error in /items/simple:", e)
         raise HTTPException(status_code=500, detail="Failed to fetch items.")
+
+
+@router.get("/items/simple-search", response_model=List[store_schemas.StoreItemOut])
+def list_items_simple(
+    search: Optional[str] = None,   # 🔍 NEW
+    limit: int = 50,                # 🔥 OPTIONAL SAFETY LIMIT
+    db: Session = Depends(get_db),
+):
+    try:
+        latest_entry_subquery = (
+            db.query(
+                store_models.StoreStockEntry.item_id,
+                func.max(store_models.StoreStockEntry.id).label("latest_entry_id")
+            )
+            .group_by(store_models.StoreStockEntry.item_id)
+            .subquery()
+        )
+
+        latest_entry = aliased(store_models.StoreStockEntry)
+
+        query = (
+            db.query(
+                store_models.StoreItem,
+                latest_entry.unit_price
+            )
+            .outerjoin(
+                latest_entry_subquery,
+                store_models.StoreItem.id == latest_entry_subquery.c.item_id
+            )
+            .outerjoin(
+                latest_entry,
+                latest_entry.id == latest_entry_subquery.c.latest_entry_id
+            )
+        )
+
+        # 🔍 Optional search
+        if search:
+            query = query.filter(
+                store_models.StoreItem.name.ilike(f"%{search}%")
+            )
+
+        results = (
+            query
+            .order_by(store_models.StoreItem.name.asc())
+            .limit(limit)
+            .all()
+        )
+
+        return [
+            store_schemas.StoreItemOut(
+                id=item.id,
+                name=item.name,
+                unit=item.unit,
+                unit_price=unit_price or 0.0,
+                selling_price=item.selling_price or 0.0,
+                category_id=item.category_id,
+                item_type=item.item_type
+            )
+            for item, unit_price in results
+        ]
+
+    except Exception as e:
+        print("❌ Error in /items/simple:", e)
+        raise HTTPException(status_code=500, detail="Failed to fetch items.")
+
 
 
 @router.get("/bar-items/simple", response_model=List[store_schemas.StoreItemOut])

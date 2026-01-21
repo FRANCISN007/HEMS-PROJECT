@@ -92,7 +92,7 @@ const ListGuestOrder = () => {
   // Fetch meals (simple list)
   const fetchMeals = async () => {
     try {
-      const res = await axiosWithAuth().get("/restaurant/items/simple");
+      const res = await axiosWithAuth().get("/restaurant/items/store-selling");
       setMeals(res.data || []);
     } catch (err) {
       console.error("Failed to load meals:", err);
@@ -186,7 +186,8 @@ const ListGuestOrder = () => {
         store_item_id: i.store_item_id,
         item_name: i.item_name,
         quantity: Number(i.quantity),
-        price_per_unit: Number(i.price_per_unit || i.price || 0),
+        price_per_unit: Number(i.price_per_unit ?? 0),
+
       })),
       newMealId: "",
       newQty: "",
@@ -214,7 +215,8 @@ const ListGuestOrder = () => {
     const meal = meals.find((m) => String(m.id) === String(mealId));
     if (!meal) return alert("Selected meal not found.");
     const qty = Number(formData.newQty) || 1;
-    const unitPrice = Number(meal.price || meal.unit_price || 0);
+    const unitPrice = Number(meal.selling_price || 0);
+
 
     setFormData({
       ...formData,
@@ -558,7 +560,8 @@ const ListGuestOrder = () => {
                   <option value="">-- Select Meal --</option>
                   {meals.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} ({currencyNGN(m.price || m.unit_price)})
+                      {m.name} ({currencyNGN(m.selling_price)})
+
                     </option>
                   ))}
                 </select>
@@ -593,7 +596,8 @@ const ListGuestOrder = () => {
                 <tbody>
                   {formData.items.length > 0 ? (
                     formData.items.map((item, idx) => {
-                      const unit = Number(item.price_per_unit);
+                      const unit = Number(item.price_per_unit || 0);
+
                       const qty = Number(item.quantity || 0);
 
                       return (

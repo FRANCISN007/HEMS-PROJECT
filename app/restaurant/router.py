@@ -173,6 +173,36 @@ def get_restaurant_items(db: Session = Depends(get_db)):
 
     return result
 
+
+@router.get(
+    "/items/store-selling",
+    response_model=List[restaurant_schemas.RestaurantMealStoreItem]
+)
+def get_restaurant_items_from_store(
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch kitchen-related store items directly from StoreItem
+    using their selling_price.
+    Used for Guest Meal Orders.
+    """
+
+    items = (
+        db.query(
+            store_models.StoreItem.id,
+            store_models.StoreItem.name,
+            store_models.StoreItem.selling_price,
+        )
+        .filter(
+            func.lower(store_models.StoreItem.item_type).in_(["kitchen", "meal", "food"])
+        )
+        .order_by(store_models.StoreItem.name.asc())
+        .all()
+    )
+
+    return items
+
+
 @router.post("/meal-orders", response_model=restaurant_schemas.MealOrderDisplay)
 def create_meal_order(
     order: restaurant_schemas.MealOrderCreate,
@@ -244,7 +274,12 @@ def create_meal_order(
         inventory.quantity -= qty_needed
         db.add(inventory)
 
-        price_per_unit = it.price_per_unit if it.price_per_unit > 0 else store_item.unit_price
+        # 🔥 PRICE RESOLUTION LOGIC
+        if it.price_per_unit is not None and it.price_per_unit > 0:
+            price_per_unit = it.price_per_unit
+        else:
+            price_per_unit = store_item.selling_price
+
 
         db_item = restaurant_models.MealOrderItem(
             order_id=db_order.id,
@@ -351,19 +386,17 @@ def update_meal_order(
     if order.status == "closed":
         raise HTTPException(400, "Closed orders cannot be edited")
 
-    # If you want orders to allow changing kitchens:
-    kitchen_id = data.kitchen_id if data.kitchen_id else order.kitchen_id
+    kitchen_id = data.kitchen_id or order.kitchen_id
 
-    # Ensure kitchen exists
     kitchen = db.query(store_models.Kitchen).filter(
         store_models.Kitchen.id == kitchen_id
     ).first()
     if not kitchen:
-        raise HTTPException(404, "Selected kitchen not found.")
+        raise HTTPException(404, "Selected kitchen not found")
 
     try:
         # --------------------------------------------------
-        # 1️⃣ RESTORE STOCK FOR OLD ITEMS
+        # 1️⃣ RESTORE OLD STOCK
         # --------------------------------------------------
         for old_item in order.items:
             inventory = db.query(kitchen_models.KitchenInventory).filter(
@@ -378,7 +411,7 @@ def update_meal_order(
         db.flush()
 
         # --------------------------------------------------
-        # 2️⃣ VALIDATE NEW ITEMS AGAINST NEW KITCHEN STOCK
+        # 2️⃣ VALIDATE NEW ITEMS
         # --------------------------------------------------
         for item in data.items:
             store_item = db.query(store_models.StoreItem).filter(
@@ -389,7 +422,7 @@ def update_meal_order(
             ).first()
 
             if not store_item:
-                raise HTTPException(400, f"Item {item.store_item_id} is not a kitchen item.")
+                raise HTTPException(400, f"Invalid kitchen item {item.store_item_id}")
 
             inventory = db.query(kitchen_models.KitchenInventory).filter(
                 kitchen_models.KitchenInventory.kitchen_id == kitchen_id,
@@ -397,7 +430,6 @@ def update_meal_order(
             ).first()
 
             available_qty = inventory.quantity if inventory else 0
-
             if available_qty < item.quantity:
                 raise HTTPException(
                     400,
@@ -415,16 +447,16 @@ def update_meal_order(
         db.flush()
 
         # --------------------------------------------------
-        # 4️⃣ UPDATE MAIN ORDER FIELDS
+        # 4️⃣ UPDATE ORDER FIELDS
         # --------------------------------------------------
         order.order_type = data.order_type
         order.room_number = data.room_number
         order.guest_name = data.guest_name
         order.location_id = data.location_id
-        order.kitchen_id = kitchen_id  # 🔥 kitchen now tied to order
+        order.kitchen_id = kitchen_id
 
         # --------------------------------------------------
-        # 5️⃣ INSERT NEW ITEMS + DEDUCT STOCK
+        # 5️⃣ INSERT NEW ITEMS (WITH SELLING PRICE)
         # --------------------------------------------------
         for item in data.items:
             store_item = db.query(store_models.StoreItem).filter(
@@ -439,7 +471,12 @@ def update_meal_order(
             inventory.quantity -= item.quantity
             db.add(inventory)
 
-            price_per_unit = item.price_per_unit or store_item.unit_price
+            # 🔥 PRICE LOGIC (FIXED)
+            price_per_unit = (
+                item.price_per_unit
+                if item.price_per_unit is not None
+                else store_item.selling_price
+            )
 
             db_item = restaurant_models.MealOrderItem(
                 order_id=order.id,
@@ -448,7 +485,7 @@ def update_meal_order(
                 quantity=item.quantity,
                 store_qty_used=item.quantity,
                 price_per_unit=price_per_unit,
-                total_price=price_per_unit * item.quantity
+                total_price=price_per_unit * item.quantity,
             )
             db.add(db_item)
 
@@ -460,7 +497,7 @@ def update_meal_order(
         raise HTTPException(500, f"Could not update meal order: {str(e)}")
 
     # --------------------------------------------------
-    # 6️⃣ BUILD RESPONSE
+    # 6️⃣ RESPONSE
     # --------------------------------------------------
     items_display = [
         restaurant_schemas.MealOrderItemDisplay(

@@ -3,15 +3,20 @@ import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./GuestOrderCreate.css";
 
 const currencyNGN = (value) =>
-  new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" })
-    .format(Number(value || 0));
+  new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+  }).format(Number(value || 0));
 
 const GuestOrderCreate = () => {
   const [locations, setLocations] = useState([]);
-  const [kitchens, setKitchens] = useState([]);     // 🔥 NEW
+  const [kitchens, setKitchens] = useState([]);
   const [items, setItems] = useState([]);
   const [message, setMessage] = useState("");
 
+  /* ===============================
+     ROLE CHECK
+  =============================== */
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
 
@@ -32,9 +37,12 @@ const GuestOrderCreate = () => {
     );
   }
 
+  /* ===============================
+     STATE
+  =============================== */
   const [order, setOrder] = useState({
     location_id: "",
-    kitchen_id: "",           // 🔥 NEW
+    kitchen_id: "",
     order_type: "room_service",
     room_number: "",
     guest_name: "",
@@ -48,30 +56,38 @@ const GuestOrderCreate = () => {
     price_per_unit: "",
   });
 
-  // Auto-clear messages
+  /* ===============================
+     AUTO CLEAR MESSAGE
+  =============================== */
   useEffect(() => {
     if (!message) return;
     const t = setTimeout(() => setMessage(""), 3000);
     return () => clearTimeout(t);
   }, [message]);
 
-  // Fetch dropdowns
+  /* ===============================
+     FETCH DROPDOWNS
+  =============================== */
   useEffect(() => {
     const api = axiosWithAuth();
 
     Promise.all([
       api.get("/restaurant/locations"),
-      api.get("/kitchen/simple"),     // 🔥 NEW
-      api.get("/restaurant/items/simple"),
+      api.get("/kitchen/simple"),
+      // ✅ NEW endpoint using StoreItem selling_price
+      api.get("/restaurant/items/store-selling"),
     ])
       .then(([locRes, kitRes, itemRes]) => {
         setLocations(locRes.data || []);
-        setKitchens(kitRes.data || []);      // 🔥 NEW
+        setKitchens(kitRes.data || []);
         setItems([...itemRes.data].sort((a, b) => a.id - b.id));
       })
       .catch(() => setMessage("❌ Failed to load dropdown data"));
   }, []);
 
+  /* ===============================
+     ADD ITEM
+  =============================== */
   const addItem = () => {
     if (!newItem.store_item_id || Number(newItem.quantity) <= 0) return;
 
@@ -87,7 +103,11 @@ const GuestOrderCreate = () => {
       ],
     }));
 
-    setNewItem({ store_item_id: "", quantity: 1, price_per_unit: "" });
+    setNewItem({
+      store_item_id: "",
+      quantity: 1,
+      price_per_unit: "",
+    });
   };
 
   const removeItem = (idx) => {
@@ -97,6 +117,9 @@ const GuestOrderCreate = () => {
     }));
   };
 
+  /* ===============================
+     SUBMIT ORDER
+  =============================== */
   const submitOrder = async (e) => {
     e.preventDefault();
 
@@ -105,7 +128,7 @@ const GuestOrderCreate = () => {
       return;
     }
 
-    if (!order.kitchen_id) {                               // 🔥 NEW VALIDATION
+    if (!order.kitchen_id) {
       setMessage("❌ Please select a kitchen.");
       return;
     }
@@ -123,11 +146,11 @@ const GuestOrderCreate = () => {
     const payload = {
       ...order,
       location_id: Number(order.location_id),
-      kitchen_id: Number(order.kitchen_id),               // 🔥 NEW
+      kitchen_id: Number(order.kitchen_id),
       items: order.items.map((i) => ({
         store_item_id: Number(i.store_item_id),
         quantity: Number(i.quantity),
-        price_per_unit: Number(i.price_per_unit),
+        price_per_unit: Number(i.price_per_unit) || 0,
       })),
     };
 
@@ -135,10 +158,9 @@ const GuestOrderCreate = () => {
       await axiosWithAuth().post("/restaurant/meal-orders", payload);
       setMessage("✅ Guest order created successfully!");
 
-      // Reset form
       setOrder({
         location_id: "",
-        kitchen_id: "",      // 🔥 NEW
+        kitchen_id: "",
         order_type: "room_service",
         room_number: "",
         guest_name: "",
@@ -150,22 +172,34 @@ const GuestOrderCreate = () => {
     }
   };
 
-  // Build item table
+  /* ===============================
+     BUILD TABLE
+  =============================== */
   const rows = order.items.map((it) => {
-    const storeItem = items.find((m) => Number(m.id) === Number(it.store_item_id));
-    const unit = it.price_per_unit || storeItem?.price || 0;
-    const line = Number(unit) * Number(it.quantity || 0);
+    const storeItem = items.find(
+      (m) => Number(m.id) === Number(it.store_item_id)
+    );
+
+    const unit =
+      Number(it.price_per_unit) ||
+      Number(storeItem?.selling_price) ||
+      0;
+
+    const lineTotal = unit * Number(it.quantity || 0);
 
     return {
       name: storeItem?.name || "--",
       quantity: it.quantity,
       unitPrice: unit,
-      lineTotal: line,
+      lineTotal,
     };
   });
 
   const grandTotal = rows.reduce((sum, r) => sum + r.lineTotal, 0);
 
+  /* ===============================
+     RENDER
+  =============================== */
   return (
     <div className="guestorder-container">
       <div className="guestorder-header">
@@ -173,11 +207,12 @@ const GuestOrderCreate = () => {
       </div>
 
       <form className="guestorder-form" onSubmit={submitOrder}>
-
         {/* Location */}
         <select
           value={order.location_id}
-          onChange={(e) => setOrder({ ...order, location_id: e.target.value })}
+          onChange={(e) =>
+            setOrder({ ...order, location_id: e.target.value })
+          }
         >
           <option value="">-- Select Location --</option>
           {locations.map((loc) => (
@@ -187,10 +222,12 @@ const GuestOrderCreate = () => {
           ))}
         </select>
 
-        {/* 🔥 NEW KITCHEN DROPDOWN */}
+        {/* Kitchen */}
         <select
           value={order.kitchen_id}
-          onChange={(e) => setOrder({ ...order, kitchen_id: e.target.value })}
+          onChange={(e) =>
+            setOrder({ ...order, kitchen_id: e.target.value })
+          }
           required
         >
           <option value="">-- Select Kitchen --</option>
@@ -204,7 +241,9 @@ const GuestOrderCreate = () => {
         {/* Order Type */}
         <select
           value={order.order_type}
-          onChange={(e) => setOrder({ ...order, order_type: e.target.value })}
+          onChange={(e) =>
+            setOrder({ ...order, order_type: e.target.value })
+          }
         >
           <option value="room_service">Room Service</option>
           <option value="dine_in">Dine In</option>
@@ -216,7 +255,9 @@ const GuestOrderCreate = () => {
           type="text"
           placeholder="Guest Name (optional)"
           value={order.guest_name}
-          onChange={(e) => setOrder({ ...order, guest_name: e.target.value })}
+          onChange={(e) =>
+            setOrder({ ...order, guest_name: e.target.value })
+          }
         />
 
         {/* Room Number */}
@@ -224,19 +265,30 @@ const GuestOrderCreate = () => {
           type="text"
           placeholder="Room Number (required for room service)"
           value={order.room_number}
-          onChange={(e) => setOrder({ ...order, room_number: e.target.value })}
+          onChange={(e) =>
+            setOrder({ ...order, room_number: e.target.value })
+          }
         />
 
-        {/* Add Item Section */}
+        {/* Add Item */}
         <div className="guestorder-item-form">
           <select
             value={newItem.store_item_id}
-            onChange={(e) => setNewItem({ ...newItem, store_item_id: e.target.value })}
+            onChange={(e) => {
+              const itemId = Number(e.target.value);
+              const selectedItem = items.find((i) => i.id === itemId);
+
+              setNewItem({
+                ...newItem,
+                store_item_id: itemId,
+                price_per_unit: selectedItem?.selling_price || "",
+              });
+            }}
           >
             <option value="">-- Select Item --</option>
             {items.map((item) => (
               <option key={item.id} value={item.id}>
-                {item.name} ({currencyNGN(item.price)})
+                {item.name} ({currencyNGN(item.selling_price)})
               </option>
             ))}
           </select>
@@ -245,15 +297,16 @@ const GuestOrderCreate = () => {
             type="number"
             min="1"
             value={newItem.quantity}
-            onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
+            onChange={(e) =>
+              setNewItem({ ...newItem, quantity: e.target.value })
+            }
           />
 
           <input
             type="number"
             min="0"
-            placeholder="Price (₦)"
             value={newItem.price_per_unit}
-            onChange={(e) => setNewItem({ ...newItem, price_per_unit: e.target.value })}
+            readOnly
           />
 
           <button type="button" onClick={addItem}>
@@ -291,7 +344,6 @@ const GuestOrderCreate = () => {
                   </td>
                 </tr>
               ))}
-
               <tr>
                 <td colSpan="3" style={{ textAlign: "right", fontWeight: 600 }}>
                   Total

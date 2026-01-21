@@ -1,7 +1,7 @@
 .list-item-container {
   max-width: 1000px;
   margin: auto;
-  padding: 30px;
+  padding: 10px; /* reduced padding */
   background: #f1efef;
   border-radius: 12px;
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
@@ -9,55 +9,62 @@
 }
 
 .list-item-message {
-  padding: 10px;
+  padding: 8px; /* slightly smaller */
   background-color: #f1f8e9;
   color: #2e7d32;
-  border-left: 5px solid #66bb6a;
-  margin-bottom: 15px;
+  border-left: 4px solid #66bb6a; /* thinner border */
+  margin-bottom: 12px;
   border-radius: 6px;
+  font-size: 13px;
 }
 
 .list-item-container h2,
 .list-item-container h3 {
-  margin-bottom: 10px;
+  margin-bottom: 2px; /* compact spacing */
   color: #2c3e50;
-  font-size: 22px;
+  font-size: 18px; /* smaller font */
 }
 
-
-
+.search-input {
+  width: 15%;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  font-size: 13px;
+  border-radius: 8px;
+  border: 1px solid #b4a9a9;
+}
 
 .create-item-form {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-  margin-bottom: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); /* tighter grid */
+  gap: 4px;
+  margin-bottom: 6px;
   align-items: center;
 }
 
 .create-item-form label {
   display: flex;
   flex-direction: column;
-  font-size: 13px;
+  font-size: 12px;
   color: #333;
 }
 
 .create-item-form input,
 .create-item-form select {
-  padding: 6px;
-  font-size: 13px;
-  border-radius: 8px;
+  padding: 2px;
+  font-size: 12px;
+  border-radius: 6px;
   border: 1px solid #b4a9a9;
-  margin-top: 4px;
+  margin-top: 3px;
 }
 
 .save-btn {
   background-color: #27ae60;
   color: #fff;
   border: none;
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
   cursor: pointer;
   grid-column: span 2;
   transition: background 0.3s;
@@ -70,13 +77,13 @@
 .item-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 10px;
-  font-size: 13px;
+  margin-top: 4px;
+  font-size: 12px; /* compact font */
 }
 
 .item-table th,
 .item-table td {
-  padding: 2px 4px; /* Reduced height */
+  padding: 4px 6px; /* reduced padding */
   border: 1px solid #ddd;
   text-align: center;
 }
@@ -91,14 +98,14 @@
 }
 
 .odd-row {
-  background-color: #d1c2c2;
+  background-color: #e7e0e0;
 }
 
 .edit-btn,
 .delete-btn {
-  padding: 5px 8px;
+  padding: 4px 6px; /* smaller buttons */
   margin: 2px;
-  font-size: 12px;
+  font-size: 11px;
   border-radius: 6px;
   border: none;
   cursor: pointer;
@@ -138,56 +145,51 @@
 
 .modal-content {
   background: white;
-  padding: 20px 30px;
+  padding: 15px 20px; /* smaller padding */
   border-radius: 12px;
-  max-width: 500px;
+  max-width: 450px; /* compact width */
   width: 100%;
   box-shadow: 0 0 12px rgba(0, 0, 0, 0.25);
   position: relative;
 }
 
 .modal-content h3 {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   color: #6b87a3;
+  font-size: 16px;
 }
 
 .modal-content form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .modal-content input,
 .modal-content select {
-  padding: 7px;
+  padding: 5px;
   border-radius: 6px;
   border: 1px solid #ccc;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .modal-buttons {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .cancel-btn {
   background-color: #b0bec5;
   color: white;
   border: none;
-  padding: 10px;
-  border-radius: 8px;
+  padding: 8px;
+  border-radius: 6px;
   cursor: pointer;
+  font-size: 12px;
 }
 
 .cancel-btn:hover {
   background-color: #90a4ae;
 }
-
-
-
-
-
-
-

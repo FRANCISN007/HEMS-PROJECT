@@ -72,7 +72,8 @@ class MealDisplay(BaseModel):
 class MealOrderItemCreate(BaseModel):
     store_item_id: int
     quantity: int
-    price_per_unit: float
+    price_per_unit: Optional[float] = None   # 🔥 important
+
 
 class MealOrderCreate(BaseModel):
     location_id: Optional[int] = None
@@ -138,6 +139,15 @@ class RestaurantMealItem(BaseModel):
     id: int
     name: str
     price: float
+
+    class Config:
+        from_attributes = True
+
+
+class RestaurantMealStoreItem(BaseModel):
+    id: int
+    name: str
+    selling_price: float
 
     class Config:
         from_attributes = True

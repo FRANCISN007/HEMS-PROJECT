@@ -107,6 +107,7 @@ class BarSaleItemCreate(BaseModel):
 
 class BarSaleCreate(BaseModel):
     bar_id: int
+    sale_date: datetime  # ✅ USER-PROVIDED DATE
     items: List[BarSaleItemCreate]
 
 

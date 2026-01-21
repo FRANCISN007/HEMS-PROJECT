@@ -2,9 +2,10 @@
   max-width: 900px;
   margin: auto;
   padding: 20px;
-  background: #fefefe;
+  background: #f3f0f0;
   border-radius: 10px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  font-family: "Segoe UI", sans-serif;
 }
 
 .sale-container h2 {
@@ -14,63 +15,84 @@
 
 .sale-message {
   padding: 10px;
-  background: #f1f8e9;
-  color: #2e7d32;
+  border-radius: 6px;
   margin-bottom: 15px;
-  border-radius: 5px;
+  font-size: 13px;
+}
+
+.msg-success { background: #e6f4ea; color: #2e7d32; }
+.msg-warning { background: #fff3cd; color: #856404; }
+.msg-error   { background: #f8d7da; color: #721c24; }
+
+/* Bar + Date row */
+.bar-date-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 40px; /* large gap */
+  margin-bottom: 15px;
 }
 
 .form-group {
-  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
 }
 
-.form-group select {
-  padding: 6px;
-  border-radius: 5px;
+.form-group select,
+.form-group input {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #b4a9a9;
+  font-size: 13px;
 }
 
+/* Sale Table */
 .sale-table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
+  font-size: 13px;
 }
 
 .sale-table th,
 .sale-table td {
   border: 1px solid #ddd;
-  padding: 8px;
+  padding: 6px;
   text-align: center;
 }
 
-.sale-table th {
-  background: #f4f4f4;
+.sale-table th { background: #f4f4f4; }
+
+.sale-table input,
+.sale-table select {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 12px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
 }
 
 .add-btn,
 .remove-btn,
 .submit-btn {
-  background: #3498db;
-  color: white;
   padding: 6px 12px;
-  border: none;
+  margin-top: 8px;
   border-radius: 6px;
+  border: none;
+  font-size: 13px;
   cursor: pointer;
 }
 
-.remove-btn {
-  background: #e74c3c;
+.add-btn { background: #3498db; color: white; margin-right: 10px; }
+.remove-btn { background: #e74c3c; color: white; }
+.submit-btn { background: #2ecc71; color: white; }
+
+.buttons-row {
+  display: flex;
+  gap: 10px;
 }
 
-.add-btn {
-  margin-top: 10px;
-}
-
-.totals {
-  margin-top: 15px;
+.grand-total-row td {
   font-weight: bold;
-}
-
-.submit-btn {
-  margin-top: 20px;
-  background: #2ecc71;
+  background: #f9f9f9;
 }

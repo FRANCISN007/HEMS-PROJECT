@@ -5,30 +5,49 @@ import "./ListItem.css";
 const ListItem = () => {
   const [items, setItems] = useState([]);
   const [simpleItems, setSimpleItems] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // =====================
+  // Editing states
+  // =====================
   const [editingItem, setEditingItem] = useState(null);
   const [updateName, setUpdateName] = useState("");
   const [updateUnit, setUpdateUnit] = useState("");
-  const [updateCategoryId, setUpdateCategoryId] = useState("");
   const [updateUnitPrice, setUpdateUnitPrice] = useState("");
+  const [updateSellingPrice, setUpdateSellingPrice] = useState("");
+  const [updateCategoryId, setUpdateCategoryId] = useState("");
   const [updateItemType, setUpdateItemType] = useState("");
+  const [selectedSimpleItemId, setSelectedSimpleItemId] = useState("");
 
-  const [categories, setCategories] = useState([]);
+  // =====================
+  // Creation states
+  // =====================
   const [newName, setNewName] = useState("");
   const [newUnit, setNewUnit] = useState("");
   const [newUnitPrice, setNewUnitPrice] = useState("");
+  const [newSellingPrice, setNewSellingPrice] = useState("");
   const [newCategoryId, setNewCategoryId] = useState("");
   const [newItemType, setNewItemType] = useState("");
 
-  const [selectedSimpleItemId, setSelectedSimpleItemId] = useState("");
+  // =====================
+  // Search state
+  // =====================
+  const [searchText, setSearchText] = useState("");
 
   const unitOptions = ["Carton", "Pack", "Crate", "Piece"];
   const itemTypeOptions = ["All", "bar", "kitchen", "housekeeping", "maintenance", "general"];
 
+  // =====================
+  // User roles check
+  // =====================
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
-  let roles = Array.isArray(storedUser.roles) ? storedUser.roles : storedUser.role ? [storedUser.role] : [];
+  let roles = Array.isArray(storedUser.roles)
+    ? storedUser.roles
+    : storedUser.role
+    ? [storedUser.role]
+    : [];
   roles = roles.map((r) => r.toLowerCase());
 
   if (!(roles.includes("admin") || roles.includes("store"))) {
@@ -40,22 +59,36 @@ const ListItem = () => {
     );
   }
 
+  // =====================
+  // Fetch data
+  // =====================
   useEffect(() => {
     fetchItems();
-    fetchCategories();
     fetchSimpleItems();
+    fetchCategories();
   }, []);
 
+  // Auto-clear messages
   useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => setMessage(""), 3000);
-      return () => clearTimeout(timer);
-    }
+    if (!message) return;
+    const timer = setTimeout(() => setMessage(""), 3000);
+    return () => clearTimeout(timer);
   }, [message]);
 
-  const fetchItems = async () => {
+  const safeMessage = (err, fallback = "❌ Operation failed") => {
+    if (!err?.response?.data?.detail) return fallback;
+    return typeof err.response.data.detail === "string"
+      ? err.response.data.detail
+      : JSON.stringify(err.response.data.detail);
+  };
+
+  // =====================
+  // Fetch Items with Search
+  // =====================
+  const fetchItems = async (search = "") => {
+    setLoading(true);
     try {
-      const res = await axiosWithAuth().get("/store/items");
+      const res = await axiosWithAuth().get("/store/items", { params: { search } });
       setItems(res.data);
     } catch (err) {
       setMessage("❌ Failed to load items");
@@ -64,9 +97,9 @@ const ListItem = () => {
     }
   };
 
-  const fetchSimpleItems = async () => {
+  const fetchSimpleItems = async (search = "") => {
     try {
-      const res = await axiosWithAuth().get("/store/items/simple");
+      const res = await axiosWithAuth().get("/store/items/simple-search", { params: { search } });
       setSimpleItems(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("❌ Failed to load simple items", err);
@@ -83,6 +116,19 @@ const ListItem = () => {
     }
   };
 
+  // =====================
+  // Handle Search Input
+  // =====================
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchText(value);
+    fetchItems(value);
+    fetchSimpleItems(value);
+  };
+
+  // =====================
+  // Delete Item
+  // =====================
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this item?")) return;
     try {
@@ -91,16 +137,20 @@ const ListItem = () => {
       setMessage("✅ Item deleted successfully.");
       fetchSimpleItems();
     } catch (err) {
-      setMessage(err.response?.data?.detail || "❌ Failed to delete item.");
+      setMessage(safeMessage(err, "❌ Failed to delete item."));
     }
   };
 
+  // =====================
+  // Open Edit Modal
+  // =====================
   const openEditModal = (item) => {
     setEditingItem(item);
     setUpdateName(item.name);
     setUpdateUnit(item.unit || "");
-    setUpdateCategoryId(item.category?.id || "");
     setUpdateUnitPrice(item.unit_price || "");
+    setUpdateSellingPrice(item.selling_price || "");
+    setUpdateCategoryId(item.category?.id || "");
     setUpdateItemType(item.item_type || "All");
     setSelectedSimpleItemId(item.id);
   };
@@ -111,70 +161,100 @@ const ListItem = () => {
     if (selected) {
       setUpdateName(selected.name || "");
       setUpdateUnit(selected.unit || "");
-      setUpdateUnitPrice(typeof selected.unit_price === "number" ? String(selected.unit_price) : (selected.unit_price || ""));
+      setUpdateUnitPrice(selected.unit_price || "");
+      setUpdateSellingPrice(selected.selling_price || "");
       setUpdateItemType(selected.item_type || "All");
     }
   };
 
+  // =====================
+  // Update Item
+  // =====================
   const handleUpdate = async (e) => {
     e.preventDefault();
-    const price = parseFloat(updateUnitPrice);
-    if (isNaN(price)) return setMessage("❌ Unit price must be a number.");
-    if (!updateName.trim() || !updateUnit.trim()) return setMessage("❌ Name and Unit are required.");
+    const unitPrice = parseFloat(updateUnitPrice);
+    const sellingPrice = parseFloat(updateSellingPrice);
+
+    if (isNaN(unitPrice) || isNaN(sellingPrice))
+      return setMessage("❌ Unit price and Selling price must be numbers.");
+    if (!updateName.trim() || !updateUnit.trim())
+      return setMessage("❌ Name and Unit are required.");
     const parsedCategoryId = parseInt(updateCategoryId);
-    if (!parsedCategoryId || isNaN(parsedCategoryId)) return setMessage("❌ Please select a valid category.");
+    if (!parsedCategoryId || isNaN(parsedCategoryId))
+      return setMessage("❌ Please select a valid category.");
+
     try {
-      const payload = {
+      await axiosWithAuth().put(`/store/items/${editingItem.id}`, {
         name: updateName.trim(),
         unit: updateUnit.trim(),
+        unit_price: unitPrice,
+        selling_price: sellingPrice,
         category_id: parsedCategoryId,
-        unit_price: price,
         item_type: updateItemType,
-      };
-      await axiosWithAuth().put(`/store/items/${editingItem.id}`, payload);
+      });
       setMessage("✅ Item updated successfully.");
       setEditingItem(null);
-      fetchItems();
-      fetchSimpleItems();
+      fetchItems(searchText);
+      fetchSimpleItems(searchText);
     } catch (err) {
-      setMessage(err.response?.data?.detail || "❌ Failed to update item.");
+      setMessage(safeMessage(err, "❌ Failed to update item."));
     }
   };
 
+  // =====================
+  // Create Item
+  // =====================
   const handleCreate = async (e) => {
     e.preventDefault();
-    const price = parseFloat(newUnitPrice);
+    const unitPrice = parseFloat(newUnitPrice);
+    const sellingPrice = parseFloat(newSellingPrice);
     const parsedCategoryId = parseInt(newCategoryId);
-    if (!newName.trim() || !newUnit.trim() || isNaN(price) || isNaN(parsedCategoryId)) {
+
+    if (!newName.trim() || !newUnit.trim() || isNaN(unitPrice) || isNaN(sellingPrice) || isNaN(parsedCategoryId)) {
       return setMessage("❌ All fields are required and must be valid.");
     }
+
     try {
-      const payload = {
+      await axiosWithAuth().post("/store/items", {
         name: newName.trim(),
         unit: newUnit.trim(),
+        unit_price: unitPrice,
+        selling_price: sellingPrice,
         category_id: parsedCategoryId,
-        unit_price: price,
         item_type: newItemType || "All",
-      };
-      await axiosWithAuth().post("/store/items", payload);
+      });
       setMessage("✅ Item created successfully.");
       setNewName("");
       setNewUnit("");
       setNewUnitPrice("");
+      setNewSellingPrice("");
       setNewCategoryId("");
       setNewItemType("");
-      fetchItems();
-      fetchSimpleItems();
+      fetchItems(searchText);
+      fetchSimpleItems(searchText);
     } catch (err) {
-      setMessage(err.response?.data?.detail || "❌ Failed to create item.");
+      setMessage(safeMessage(err, "❌ Failed to create item."));
     }
   };
 
+  // =====================
+  // Render
+  // =====================
   return (
     <div className="list-item-container">
       <h2>📋 Item List</h2>
       {message && <p className="list-item-message">{message}</p>}
 
+      {/* Search */}
+      <input
+        type="text"
+        placeholder="🔍 Search items..."
+        value={searchText}
+        onChange={handleSearchChange}
+        className="search-input"
+      />
+
+      {/* Create Item Form */}
       <h3>➕ Create New Item</h3>
       <form onSubmit={handleCreate} className="create-item-form">
         <label>
@@ -192,7 +272,12 @@ const ListItem = () => {
 
         <label>
           Unit Price:
-          <input type="number" step="0.01" value={newUnitPrice} onChange={(e) => setNewUnitPrice(e.target.value)} placeholder="e.g. 1000" required />
+          <input type="number" step="0.01" value={newUnitPrice} onChange={(e) => setNewUnitPrice(e.target.value)} placeholder="e.g. 800" required />
+        </label>
+
+        <label>
+          Selling Price:
+          <input type="number" step="0.01" value={newSellingPrice} onChange={(e) => setNewSellingPrice(e.target.value)} placeholder="e.g. 1000" required />
         </label>
 
         <label>
@@ -205,7 +290,7 @@ const ListItem = () => {
 
         <label>
           Item Type:
-          <select value={newItemType} onChange={(e) => setNewItemType(e.target.value)} className="item-type-dropdown">
+          <select value={newItemType} onChange={(e) => setNewItemType(e.target.value)}>
             {itemTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
           </select>
         </label>
@@ -215,6 +300,7 @@ const ListItem = () => {
 
       <hr />
 
+      {/* Item Table */}
       {loading ? (
         <p>Loading items...</p>
       ) : items.length === 0 ? (
@@ -225,21 +311,23 @@ const ListItem = () => {
             <tr>
               <th>Id</th>
               <th>Name</th>
-              <th>Category</th>
-              <th>Unit Price</th>
               <th>Unit</th>
+              <th>Cost Price</th>
+              <th>Selling Price</th>
+              <th>Category</th>
               <th>Item Type</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {items.map((item, index) => (
-              <tr key={item.id} className={index % 2 === 0 ? 'even-row' : 'odd-row'}>
+              <tr key={item.id} className={index % 2 === 0 ? "even-row" : "odd-row"}>
                 <td>{item.id}</td>
                 <td>{item.name}</td>
-                <td>{item.category?.name}</td>
-                <td>{item.unit_price}</td>
                 <td>{item.unit}</td>
+                <td>{item.unit_price}</td>
+                <td>{item.selling_price}</td>
+                <td>{item.category?.name}</td>
                 <td>{item.item_type || "All"}</td>
                 <td>
                   <button className="edit-btn" onClick={() => openEditModal(item)}>✏️ Edit</button>
@@ -251,18 +339,25 @@ const ListItem = () => {
         </table>
       )}
 
+      {/* Edit Modal */}
       {editingItem && (
         <div className="modal-backdrop">
           <div className="modal-content">
             <h3>✏️ Update Item</h3>
 
             <label>
-              Select Item (catalog):
+              Search & Select Item:
+              <input
+                type="text"
+                placeholder="🔍 Search item in catalog..."
+                onChange={(e) => fetchSimpleItems(e.target.value)}
+                className="search-input"
+              />
               <select value={selectedSimpleItemId} onChange={(e) => handleSimpleItemChange(e.target.value)}>
                 <option value="">-- Select Item --</option>
                 {simpleItems.map((it) => (
                   <option key={it.id} value={it.id}>
-                    {it.name} ({it.unit}) {it.unit_price ? `- ₦${it.unit_price}` : ""} - {it.item_type || "All"}
+                    {it.name} ({it.unit}) - ₦{it.unit_price} / ₦{it.selling_price} - {it.item_type || "All"}
                   </option>
                 ))}
               </select>
@@ -283,8 +378,13 @@ const ListItem = () => {
               </label>
 
               <label>
-                Unit Price:
+                Unit Cost Price:
                 <input type="number" step="0.01" value={updateUnitPrice} onChange={(e) => setUpdateUnitPrice(e.target.value)} required />
+              </label>
+
+              <label>
+                Selling Price:
+                <input type="number" step="0.01" value={updateSellingPrice} onChange={(e) => setUpdateSellingPrice(e.target.value)} required />
               </label>
 
               <label>
@@ -297,7 +397,7 @@ const ListItem = () => {
 
               <label>
                 Item Type:
-                <select value={updateItemType} onChange={(e) => setUpdateItemType(e.target.value)} className="item-type-dropdown">
+                <select value={updateItemType} onChange={(e) => setUpdateItemType(e.target.value)}>
                   {itemTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
                 </select>
               </label>

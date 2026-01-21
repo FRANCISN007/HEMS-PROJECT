@@ -10,7 +10,6 @@ const ListBarSales = () => {
   const [message, setMessage] = useState("");
   const [barId, setBarId] = useState("");
 
-  // User roles
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const roles = user.roles || [];
 
@@ -23,11 +22,12 @@ const ListBarSales = () => {
     );
   }
 
-  // Default date = today
+  /* ===================== DATES ===================== */
   const today = new Date().toISOString().split("T")[0];
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
 
+  /* ===================== FETCH ===================== */
   const fetchSales = async () => {
     try {
       const params = {};
@@ -43,21 +43,13 @@ const ListBarSales = () => {
   };
 
   const fetchBars = async () => {
-    try {
-      const res = await axiosWithAuth().get("/bar/bars/simple");
-      setBars(res.data || []);
-    } catch (err) {
-      console.error("Failed to fetch bars:", err);
-    }
+    const res = await axiosWithAuth().get("/bar/bars/simple");
+    setBars(res.data || []);
   };
 
   const fetchItems = async () => {
-    try {
-      const res = await axiosWithAuth().get("/store/items/simple");
-      setItems(res.data || []);
-    } catch (err) {
-      console.error("Failed to fetch items:", err);
-    }
+    const res = await axiosWithAuth().get("/store/items/simple");
+    setItems(res.data || []);
   };
 
   useEffect(() => {
@@ -73,6 +65,7 @@ const ListBarSales = () => {
     }
   }, [message]);
 
+  /* ===================== ACTIONS ===================== */
   const handleDelete = async (saleId) => {
     if (!window.confirm("Are you sure you want to delete this sale?")) return;
     try {
@@ -86,7 +79,9 @@ const ListBarSales = () => {
 
   const handleEdit = (sale) => {
     setEditingSale({
-      ...sale,
+      id: sale.id,
+      bar_id: sale.bar_id,
+      sale_date: sale.sale_date?.slice(0, 16), // datetime-local safe
       items: sale.sale_items.map((i) => ({
         item_id: i.item_id,
         quantity: i.quantity,
@@ -98,29 +93,35 @@ const ListBarSales = () => {
   const handleUpdate = async (e) => {
     e.preventDefault();
 
-    // Validate items
+    if (!editingSale.bar_id) {
+      alert("Please select a bar");
+      return;
+    }
+
+    if (!editingSale.sale_date) {
+      alert("Please select sale date");
+      return;
+    }
+
     for (let i = 0; i < editingSale.items.length; i++) {
       const item = editingSale.items[i];
-      if (!item.item_id) {
-        alert(`⚠️ Row ${i + 1}: Please select an item or remove this entry.`);
-        return;
-      }
-      if (!item.quantity || Number(item.quantity) <= 0) {
-        alert(`⚠️ Row ${i + 1}: Quantity must be greater than 0.`);
-        return;
-      }
-      if (!item.selling_price || Number(item.selling_price) <= 0) {
-        alert(`⚠️ Row ${i + 1}: Selling price must be greater than 0.`);
+      if (!item.item_id || item.quantity <= 0 || item.selling_price <= 0) {
+        alert(`⚠️ Invalid item at row ${i + 1}`);
         return;
       }
     }
 
-    // All items valid, proceed to save
     try {
       await axiosWithAuth().put(`/bar/sales/${editingSale.id}`, {
-        bar_id: editingSale.bar_id,
-        items: editingSale.items,
+        bar_id: Number(editingSale.bar_id),
+        sale_date: new Date(editingSale.sale_date).toISOString(),
+        items: editingSale.items.map((i) => ({
+          item_id: Number(i.item_id),
+          quantity: Number(i.quantity),
+          selling_price: Number(i.selling_price),
+        })),
       });
+
       setMessage("✅ Sale updated successfully!");
       setEditingSale(null);
       fetchSales();
@@ -129,25 +130,44 @@ const ListBarSales = () => {
     }
   };
 
-
   const updateItemField = (index, field, value) => {
     const updated = [...editingSale.items];
-    updated[index][field] = value;
+
+    if (field === "item_id") {
+      const selectedItem = items.find(
+        (it) => it.id === Number(value)
+      );
+
+      updated[index] = {
+        ...updated[index],
+        item_id: Number(value),
+        selling_price: selectedItem
+          ? selectedItem.selling_price
+          : 0,
+      };
+    } else {
+      updated[index][field] = value;
+    }
+
     setEditingSale({ ...editingSale, items: updated });
   };
 
-  const totalEntries = sales.length;
-  const totalAmount = sales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
 
+  /* ===================== TOTALS ===================== */
+  const totalEntries = sales.length;
+  const totalAmount = sales.reduce(
+    (sum, s) => sum + (s.total_amount || 0),
+    0
+  );
+
+  /* ===================== RENDER ===================== */
   return (
     <div className="list-bar-sales-container1">
       <h2 className="page-heading">📋 Bar Sales List</h2>
-
       {message && <div className="message">{message}</div>}
 
       {/* TOP BAR */}
       <div className="top-bar">
-        {/* Filters */}
         <div className="filters">
           <label>Bar:</label>
           <select value={barId} onChange={(e) => setBarId(e.target.value)}>
@@ -168,7 +188,6 @@ const ListBarSales = () => {
           <button onClick={fetchSales}>🔍 Apply</button>
         </div>
 
-        {/* Summary */}
         <div className="compact-summary">
           <span>Entries: <strong>{totalEntries}</strong></span>
           <span>Amount: <strong>₦{totalAmount.toLocaleString()}</strong></span>
@@ -191,7 +210,7 @@ const ListBarSales = () => {
           </thead>
 
           <tbody>
-            {sales.map((sale, idx) => (
+            {sales.map((sale) => (
               <tr key={sale.id}>
                 <td>{sale.id}</td>
                 <td>{new Date(sale.sale_date).toLocaleDateString()}</td>
@@ -218,8 +237,7 @@ const ListBarSales = () => {
         </table>
       </div>
 
-
-      {/* EDIT MODAL */}
+      {/* ===================== EDIT MODAL ===================== */}
       {editingSale && (
         <div className="modal-overlay2">
           <div className="modal2">
@@ -230,9 +248,23 @@ const ListBarSales = () => {
                 <label>Bar</label>
                 <select value={editingSale.bar_id} disabled>
                   {bars.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
                   ))}
                 </select>
+
+              </div>
+
+              <div className="form-group">
+                <label>Sale Date</label>
+                <input
+                  type="datetime-local"
+                  value={editingSale.sale_date}
+                  onChange={(e) =>
+                    setEditingSale({ ...editingSale, sale_date: e.target.value })
+                  }
+                />
               </div>
 
               {editingSale.items.map((item, idx) => (
@@ -242,10 +274,12 @@ const ListBarSales = () => {
                     <button
                       type="button"
                       className="btn-remove-item"
-                      onClick={() => {
-                        const updatedItems = editingSale.items.filter((_, i) => i !== idx);
-                        setEditingSale({ ...editingSale, items: updatedItems });
-                      }}
+                      onClick={() =>
+                        setEditingSale({
+                          ...editingSale,
+                          items: editingSale.items.filter((_, i) => i !== idx),
+                        })
+                      }
                     >
                       ❌
                     </button>
@@ -260,7 +294,7 @@ const ListBarSales = () => {
                       <option value="">Select Item</option>
                       {items.map((it) => (
                         <option key={it.id} value={it.id}>
-                          {it.name} ({it.unit})
+                          {it.name}
                         </option>
                       ))}
                     </select>
@@ -280,12 +314,13 @@ const ListBarSales = () => {
                     <input
                       type="number"
                       value={item.selling_price}
-                      onChange={(e) => updateItemField(idx, "selling_price", e.target.value)}
+                      onChange={(e) =>
+                        updateItemField(idx, "selling_price", e.target.value)
+                      }
                     />
                   </div>
                 </div>
               ))}
-
 
               <button
                 type="button"
@@ -293,7 +328,11 @@ const ListBarSales = () => {
                 onClick={() =>
                   setEditingSale({
                     ...editingSale,
-                    items: [...editingSale.items, { item_id: "", quantity: 0, selling_price: 0 }],
+                    items: [
+                      ...editingSale.items,
+                      { item_id: "", quantity: 1, selling_price: "" }
+
+                    ],
                   })
                 }
               >
@@ -313,12 +352,10 @@ const ListBarSales = () => {
                   Cancel
                 </button>
               </div>
-
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 };
