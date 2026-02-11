@@ -467,7 +467,7 @@ const printContent = () => {
             className="sidebars-button"
             style={{ fontSize: "0.9rem", marginTop: "8px" }}
           >
-            💾 Backup
+            💾 Backup Files
           </button>
 
 

@@ -83,11 +83,11 @@ def create_payment(
     payment_date = payment_request.payment_date.astimezone(lagos_tz)
 
     # Only admin can backdate payments
-    if payment_date.date() < transaction_time.date() and "admin" not in current_user.roles:
-        raise HTTPException(
-            status_code=400,
-            detail="Only admin is allowed to enter a past date for payments."
-        )
+    #if payment_date.date() < transaction_time.date() and "admin" not in current_user.roles:
+        #raise HTTPException(
+            #status_code=400,
+            #detail="Only admin is allowed to enter a past date for payments."
+        #)
 
     # Fetch booking
     booking_record = db.query(booking_models.Booking).filter(

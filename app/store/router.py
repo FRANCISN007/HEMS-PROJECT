@@ -1176,7 +1176,9 @@ def issue_to_bar(
                 bar_id=issue.bar_id,
                 item_id=item_data.item_id,
                 quantity=item_data.quantity,
-                selling_price=last_stock.unit_price if last_stock else 0
+                selling_price=item_obj.selling_price
+                
+
             )
             db.add(bar_inventory)
 
@@ -1194,6 +1196,8 @@ def issue_to_bar(
                     created_at=item_obj.category.created_at
                 ) if item_obj.category else None,
                 unit_price=item_obj.unit_price,
+                selling_price=item_obj.selling_price,  # ✅ ADD THIS
+
                 created_at=item_obj.created_at
             ),
             quantity=item_data.quantity
@@ -1294,6 +1298,7 @@ def list_issues_to_bar(
                             else None
                         ),
                         unit_price=item_obj.unit_price,
+                        selling_price=item_obj.selling_price,  # ✅ ADD THIS
                         created_at=item_obj.created_at
                     ),
                     quantity=issue_item.quantity
@@ -1341,154 +1346,151 @@ def update_bar_issue(
     issue_id: int,
     update_data: store_schemas.IssueCreate,
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "admin"]))
 ):
-    # Fetch the existing issue
     issue = db.query(store_models.StoreIssue).filter_by(id=issue_id).first()
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 
-    if issue.issue_to.lower() != "bar":
-        raise HTTPException(status_code=400, detail="This endpoint only updates bar issues")
+    if issue.issue_to != "bar":
+        raise HTTPException(status_code=400, detail="Only bar issues can be updated")
 
-    # ---------------------------
-    # 1️⃣ RESTORE OLD ITEMS
-    # ---------------------------
-    old_items = issue.issue_items  # correct relationship
-    for old in old_items:
-        qty_to_restore = old.quantity
-
-        # Restore FIFO stock entries
+    # ============================
+    # 1️⃣ ROLLBACK OLD ISSUE
+    # ============================
+    for old_item in issue.issue_items:
+        # Restore store stock
+        remaining = old_item.quantity
         stock_entries = (
             db.query(store_models.StoreStockEntry)
-            .filter(store_models.StoreStockEntry.item_id == old.item_id)
-            .order_by(store_models.StoreStockEntry.purchase_date.asc())
+            .filter(store_models.StoreStockEntry.item_id == old_item.item_id)
+            .order_by(store_models.StoreStockEntry.purchase_date.desc())
             .all()
         )
 
         for entry in stock_entries:
-            if qty_to_restore <= 0:
+            if remaining <= 0:
                 break
-            entry.quantity += qty_to_restore
-            qty_to_restore = 0
+            entry.quantity += remaining
+            remaining = 0
 
         # Restore bar inventory
-        bar_inv = (
-            db.query(bar_models.BarInventory)
-            .filter_by(bar_id=issue.bar_id, item_id=old.item_id)
-            .first()
-        )
+        bar_inv = db.query(bar_models.BarInventory).filter_by(
+            bar_id=issue.bar_id,
+            item_id=old_item.item_id
+        ).first()
+
         if bar_inv:
-            bar_inv.quantity -= old.quantity
-            if bar_inv.quantity < 0:
-                bar_inv.quantity = 0
+            bar_inv.quantity = max(0, bar_inv.quantity - old_item.quantity)
 
     # Delete old issue items
     db.query(store_models.StoreIssueItem).filter_by(issue_id=issue_id).delete()
 
-    # ---------------------------
-    # 2️⃣ VALIDATE NEW ITEMS
-    # ---------------------------
-    old_issue_map = {old.item_id: old.quantity for old in old_items}
-
+    # ============================
+    # 2️⃣ VALIDATE NEW ISSUE
+    # ============================
     for item in update_data.issue_items:
-        requested_qty = item.quantity
         available = (
             db.query(func.sum(store_models.StoreStockEntry.quantity))
             .filter(store_models.StoreStockEntry.item_id == item.item_id)
             .scalar()
         ) or 0
-        old_qty = old_issue_map.get(item.item_id, 0)
-        allowed = available + old_qty
 
-        if requested_qty > allowed:
+        if available < item.quantity:
             raise HTTPException(
                 status_code=400,
-                detail=f"Not enough stock for item {item.item_id}. Requested {requested_qty}, available {allowed}"
+                detail=f"Not enough stock for item {item.item_id}"
             )
 
-    # ---------------------------
+    # ============================
     # 3️⃣ UPDATE ISSUE HEADER
-    # ---------------------------
+    # ============================
+    issue.bar_id = update_data.issued_to_id
     issue.issue_date = update_data.issue_date or datetime.utcnow()
-    issue.issued_to_id = update_data.issued_to_id
     issue.issued_by_id = current_user.id
 
-    # ---------------------------
-    # 4️⃣ DEDUCT STOCK & SAVE NEW ITEMS
-    # ---------------------------
+    issue_items_display: list[store_schemas.IssueItemDisplay] = []
+
+    # ============================
+    # 4️⃣ APPLY NEW ISSUE (FIFO)
+    # ============================
     for item in update_data.issue_items:
-        qty_to_deduct = item.quantity
+        remaining = item.quantity
 
         stock_entries = (
             db.query(store_models.StoreStockEntry)
-            .filter(store_models.StoreStockEntry.item_id == item.item_id, store_models.StoreStockEntry.quantity > 0)
+            .filter(
+                store_models.StoreStockEntry.item_id == item.item_id,
+                store_models.StoreStockEntry.quantity > 0
+            )
             .order_by(store_models.StoreStockEntry.purchase_date.asc())
             .all()
         )
 
         for entry in stock_entries:
-            if qty_to_deduct <= 0:
+            if remaining <= 0:
                 break
-            if entry.quantity >= qty_to_deduct:
-                entry.quantity -= qty_to_deduct
-                qty_to_deduct = 0
+            if entry.quantity >= remaining:
+                entry.quantity -= remaining
+                remaining = 0
             else:
-                qty_to_deduct -= entry.quantity
+                remaining -= entry.quantity
                 entry.quantity = 0
 
-        # Update or create bar inventory
-        bar_inv = (
-            db.query(bar_models.BarInventory)
-            .filter_by(bar_id=update_data.issued_to_id, item_id=item.item_id)
-            .first()
-        )
+        # Update bar inventory
+        item_obj = db.query(store_models.StoreItem).filter_by(id=item.item_id).first()
+
+        bar_inv = db.query(bar_models.BarInventory).filter_by(
+            bar_id=issue.bar_id,
+            item_id=item.item_id
+        ).first()
+
         if bar_inv:
             bar_inv.quantity += item.quantity
         else:
             bar_inv = bar_models.BarInventory(
-                bar_id=update_data.issued_to_id,
+                bar_id=issue.bar_id,
                 item_id=item.item_id,
                 quantity=item.quantity,
-                selling_price=0
+                selling_price=item_obj.selling_price
             )
             db.add(bar_inv)
 
-        # Save new issue item
-        new_item = store_models.StoreIssueItem(
-            issue_id=issue_id,
+        # Save issue item
+        issue_item = store_models.StoreIssueItem(
+            issue_id=issue.id,
             item_id=item.item_id,
             quantity=item.quantity
         )
-        db.add(new_item)
+        db.add(issue_item)
+        db.flush()
 
+        # Build response item
+        issue_items_display.append(
+            store_schemas.IssueItemDisplay(
+                id=issue_item.id,
+                item=store_schemas.StoreItemDisplay(
+                    id=item_obj.id,
+                    name=item_obj.name,
+                    unit=item_obj.unit,
+                    category=store_schemas.StoreCategoryDisplay(
+                        id=item_obj.category.id,
+                        name=item_obj.category.name,
+                        created_at=item_obj.category.created_at
+                    ) if item_obj.category else None,
+                    unit_price=item_obj.unit_price,
+                    selling_price=item_obj.selling_price,
+                    created_at=item_obj.created_at
+                ),
+                quantity=item.quantity
+            )
+        )
+
+    # ============================
+    # 5️⃣ COMMIT & RETURN
+    # ============================
     db.commit()
     db.refresh(issue)
-
-    # ---------------------------
-    # 5️⃣ RETURN ISSUE DISPLAY (frontend-ready)
-    # ---------------------------
-    issue_items_display: List[store_schemas.IssueItemDisplay] = []
-    for issue_item in issue.issue_items:
-        item_obj = db.query(store_models.StoreItem).filter_by(id=issue_item.item_id).first()
-        display_item = store_schemas.IssueItemDisplay(
-            id=issue_item.id,
-            item=store_schemas.StoreItemDisplay(
-                id=item_obj.id,
-                name=item_obj.name,
-                unit=item_obj.unit,
-                category=store_schemas.StoreCategoryDisplay(
-                    id=item_obj.category.id,
-                    name=item_obj.category.name,
-                    category_name=getattr(item_obj.category, "name", None),
-                    created_at=item_obj.category.created_at if item_obj.category else datetime.utcnow()
-                ) if item_obj.category else None,
-                unit_price=item_obj.unit_price,
-                created_at=item_obj.created_at
-            ),
-            quantity=issue_item.quantity
-        )
-        issue_items_display.append(display_item)
 
     bar_obj = db.query(store_models.Bar).filter_by(id=issue.bar_id).first()
 
