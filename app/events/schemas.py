@@ -2,14 +2,15 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, date
+from typing import Union
 
 
 class EventBase(BaseModel):
     organizer: str
     title: str
     description: Optional[str] = None
-    start_datetime: date
-    end_datetime: date
+    start_datetime: Union[date, datetime]
+    end_datetime: Union[date, datetime]
     event_amount: float
     caution_fee: float
     location: Optional[str] = None

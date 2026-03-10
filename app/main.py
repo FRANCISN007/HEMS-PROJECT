@@ -4,8 +4,11 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.database import engine, Base
 
+
+
+
 # Routers
-from app.users.router import router as user_router
+from app.users.routers import router as user_router
 from app.rooms.router import router as rooms_router
 from app.bookings.router import router as bookings_router
 from app.payments.router import router as payments_router
@@ -22,6 +25,9 @@ from app.kitchen.router import router as kitchen_router
 from app.restaurant.router import router as restaurant_router
 from app.restpayment.router import router as restpayment_router
 
+from app.superadmin.router import router as superadmin_router
+from app.business.router import router as business_router
+
 import os
 import sys
 import pytz
@@ -29,6 +35,12 @@ from datetime import datetime
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+from app.core.tenant_middleware import TenantMiddleware
+
+app = FastAPI()
+
+app.add_middleware(TenantMiddleware)
 
 # --------------------------------------------------
 # ENV LOADING (works for installer / frozen mode)
@@ -100,6 +112,8 @@ app.mount("/files", StaticFiles(directory="uploads"), name="files")
 # --------------------------------------------------
 # API ROUTERS (IMPORTANT: BEFORE SPA)
 # --------------------------------------------------
+app.include_router(superadmin_router, prefix="/superadmin", tags=["Super Admin"])
+app.include_router(business_router, prefix="/business", tags=["Business"])
 app.include_router(user_router, prefix="/users", tags=["Users"])
 app.include_router(rooms_router, prefix="/rooms", tags=["Rooms"])
 app.include_router(bookings_router, prefix="/bookings", tags=["Bookings"])

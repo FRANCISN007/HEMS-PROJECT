@@ -11,11 +11,14 @@ from datetime import date
 class RoomSchema(BaseModel):
     room_number: str
     room_type: str
-    amount: float
-    status: Literal["available", "maintenance"]  # Limited to booking-safe statuses
+    amount: Decimal
+    status: Literal["available", "maintenance"] = "available"
+    business_id: Optional[int] = None  # Only used by super_admin
 
     class Config:
         from_attributes = True
+
+
 
 
 

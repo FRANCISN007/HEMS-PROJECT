@@ -6,11 +6,26 @@ from pydantic import validator
 
 
 # -------- USERS --------
+# -------- USERS --------
 class UserSchema(BaseModel):
     username: str
     password: str
-    roles: List[str] = ["user"]  
+    roles: List[str] = ["user"]
     admin_password: Optional[str] = None
+    business_id: Optional[int] = None  # ✅ Link user to a business
+
+    @validator("roles", pre=True, always=True)
+    def ensure_roles(cls, v):
+        if not v:
+            return ["user"]
+        return v
+
+
+
+class BusinessInfo(BaseModel):
+    id: Optional[int]
+    name: Optional[str]
+
 
 
 class UserUpdateSchema(BaseModel):
@@ -22,6 +37,9 @@ class UserDisplaySchema(BaseModel):
     id: int
     username: str
     roles: List[str] = []
+    business_id: Optional[int] = None   # ← ADD THIS
+    business_name: Optional[str] = None   # ← ADD THIS
+
 
     @validator("roles", pre=True)
     def ensure_roles_list(cls, v):
@@ -40,32 +58,17 @@ class UserDisplaySchema(BaseModel):
         from_attributes = True
 
 
-# -------- ROOMS --------
-class RoomSchema(BaseModel):
-    room_number: str
-    room_type: str
-    amount: float
-    status: Literal["available", "checked-in", "maintenance", "reserved"]
 
-    class Config:
-        from_attributes = True
+# -------- SUPER ADMIN --------
+class SuperAdminCreate(BaseModel):
+    username: str
+    password: str
+    admin_license_password: str
 
 
-class RoomUpdateSchema(BaseModel):
-    room_type: Optional[str] = None
-    amount: Optional[int] = None
-    status: Optional[Literal["available", "booked", "maintenance", "reserved"]] = None
-
-    class Config:
-        from_attributes = True
 
 
-class ReservationSchema(BaseModel):
-    room_number: str
-    guest_name: str
-    arrival_date: date
-    departure_date: date
-    status: Optional[str] = "booked"
-
-    class Config:
-        from_attributes = True
+class SuperAdminUpdate(BaseModel):
+    username: str
+    new_password: str
+    admin_license_password: str

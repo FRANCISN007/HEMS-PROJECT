@@ -1,23 +1,31 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Date
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from datetime import datetime
 from app.database import Base
-#from app.vendor import Vendor  # ✅ adjust the path as needed
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
+from datetime import datetime
+import pytz
 import os
-from app.bar.models import Bar  # assuming this exists
+from app.bar.models import Bar
 from app.kitchen.models import Kitchen
+from app.core.mixins import BusinessMixin
+
+def get_local_time():
+    """Return current time in Africa/Lagos timezone"""
+    lagos_tz = pytz.timezone("Africa/Lagos")
+    return datetime.now(lagos_tz)
 
 
 # ----------------------------
 # 1. Store Category
 # ----------------------------
-class StoreCategory(Base):
+class StoreCategory(Base, BusinessMixin):
     __tablename__ = "store_categories"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, nullable=False)  # <- not category_name
-    created_at = Column(DateTime, default=datetime.utcnow)
+    name = Column(String, nullable=False)
+
+    
+
+    created_at = Column(DateTime(timezone=True), default=get_local_time)
 
     items = relationship("StoreItem", back_populates="category")
 
@@ -25,52 +33,47 @@ class StoreCategory(Base):
 # ----------------------------
 # 2. Store Item
 # ----------------------------
-class StoreItem(Base):
+class StoreItem(Base, BusinessMixin):
     __tablename__ = "store_items"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
     unit = Column(String, nullable=False)
     category_id = Column(Integer, ForeignKey("store_categories.id"), nullable=True)
-    unit_price = Column(Float, nullable=False, default=0.0)  # ✅ ADD THIS
-    selling_price = Column(Float, nullable=False, default=0.0)
-    item_type = Column(String(20), nullable=True)  # NEW FIELD
+    unit_price = Column(Float, default=0.0, nullable=False)
+    selling_price = Column(Float, default=0.0, nullable=False)
+    item_type = Column(String(20), nullable=True)
+
+    
     category = relationship("StoreCategory")
+    created_at = Column(DateTime(timezone=True), default=get_local_time)
 
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    stock_entries = relationship("StoreStockEntry", back_populates="item")  # 🔧 This line fixes the error
-    
+    stock_entries = relationship("StoreStockEntry", back_populates="item")
     issue_items = relationship("StoreIssueItem", back_populates="item")
-    
     meal_order_items = relationship("MealOrderItem", back_populates="store_item")
 
-    
 
 # ----------------------------
 # 3. Store Stock Entry (Purchase)
 # ----------------------------
-# models.py
-
-
-class StoreStockEntry(Base):
+class StoreStockEntry(Base, BusinessMixin):
     __tablename__ = "store_stock_entries"
 
     id = Column(Integer, primary_key=True, index=True)
-    item_id = Column(Integer, ForeignKey("store_items.id"))
-    item_name = Column(String, nullable=False)  
-    quantity = Column(Integer)
+    item_id = Column(Integer, ForeignKey("store_items.id"), nullable=False)
+    item_name = Column(String, nullable=False)
+    quantity = Column(Integer, nullable=False)
     original_quantity = Column(Integer, nullable=False)
     invoice_number = Column(String(255), nullable=True)
     unit_price = Column(Float, nullable=True)
     total_amount = Column(Float)
     vendor_id = Column(Integer, ForeignKey("vendors.id"))
-    purchase_date = Column(DateTime, default=datetime.utcnow)
+    purchase_date = Column(DateTime(timezone=True), default=get_local_time)
     created_by = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=get_local_time)
     attachment = Column(String, nullable=True)
 
+    
     # Relationships
     item = relationship("StoreItem")
     vendor = relationship("Vendor", back_populates="purchases")
@@ -80,10 +83,12 @@ class StoreStockEntry(Base):
         if self.attachment:
             return f"/attachments/store_invoices/{os.path.basename(self.attachment)}"
         return None
-    
 
 
-class StoreIssue(Base):
+# ----------------------------
+# 4. Store Issue
+# ----------------------------
+class StoreIssue(Base, BusinessMixin):
     __tablename__ = "store_issues"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -91,9 +96,9 @@ class StoreIssue(Base):
     issued_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     bar_id = Column(Integer, ForeignKey("bars.id"), nullable=True)
     kitchen_id = Column(Integer, ForeignKey("kitchens.id"), nullable=True)
-    issue_date = Column(DateTime, default=datetime.utcnow)
+    issue_date = Column(DateTime(timezone=True), default=get_local_time)
 
-    # Correct relationship name
+    
     issue_items = relationship(
         "StoreIssueItem",
         back_populates="issue",
@@ -101,36 +106,28 @@ class StoreIssue(Base):
         passive_deletes=True
     )
 
-
     bar = relationship("Bar", back_populates="issues")
     kitchen = relationship("Kitchen", back_populates="issues")
 
 
-
-    
-
-class StoreIssueItem(Base):
+class StoreIssueItem(Base, BusinessMixin):
     __tablename__ = "store_issue_items"
 
     id = Column(Integer, primary_key=True, index=True)
-    
-    # Only one issue_id column, with CASCADE
-    issue_id = Column(
-        Integer,
-        ForeignKey("store_issues.id", ondelete="CASCADE"),
-        nullable=False
-    )
-
+    issue_id = Column(Integer, ForeignKey("store_issues.id", ondelete="CASCADE"), nullable=False)
     item_id = Column(Integer, ForeignKey("store_items.id"), nullable=False)
     quantity = Column(Integer, nullable=False)
 
-    # Relationships
+    
+
     issue = relationship("StoreIssue", back_populates="issue_items")
     item = relationship("StoreItem", back_populates="issue_items")
 
 
-
-class StoreInventoryAdjustment(Base):
+# ----------------------------
+# 5. Store Inventory Adjustment
+# ----------------------------
+class StoreInventoryAdjustment(Base, BusinessMixin):
     __tablename__ = "store_inventory_adjustments"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -138,19 +135,24 @@ class StoreInventoryAdjustment(Base):
     quantity_adjusted = Column(Integer, nullable=False)
     reason = Column(String, nullable=False)
     adjusted_by = Column(String, nullable=False)
-    adjusted_at = Column(DateTime, default=datetime.utcnow)
+    adjusted_at = Column(DateTime(timezone=True), default=get_local_time)
+
+   
 
     item = relationship("StoreItem")
 
 
-
-
-class StoreInventory(Base):
+# ----------------------------
+# 6. Store Inventory
+# ----------------------------
+class StoreInventory(Base, BusinessMixin):
     __tablename__ = "store_inventory"
 
     id = Column(Integer, primary_key=True, index=True)
     item_id = Column(Integer, ForeignKey("store_items.id"), unique=True, nullable=False)
     quantity = Column(Integer, default=0)
-    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_updated = Column(DateTime(timezone=True), default=get_local_time, onupdate=get_local_time)
+
+    
 
     item = relationship("StoreItem")

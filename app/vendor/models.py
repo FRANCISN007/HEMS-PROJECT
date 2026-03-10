@@ -3,8 +3,10 @@
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import relationship
 from app.database import Base
+from app.core.mixins import BusinessMixin
 
-class Vendor(Base):
+
+class Vendor(Base, BusinessMixin):
     __tablename__ = "vendors"
 
     id = Column(Integer, primary_key=True, index=True)
