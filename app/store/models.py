@@ -2,16 +2,19 @@ from app.database import Base
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
-import pytz
 import os
 from app.bar.models import Bar
 from app.kitchen.models import Kitchen
 from app.core.mixins import BusinessMixin
 
+from zoneinfo import ZoneInfo
+from datetime import datetime
+
+WAT = ZoneInfo("Africa/Lagos")
+
 def get_local_time():
-    """Return current time in Africa/Lagos timezone"""
-    lagos_tz = pytz.timezone("Africa/Lagos")
-    return datetime.now(lagos_tz)
+    return datetime.now(WAT)
+
 
 
 # ----------------------------
@@ -33,6 +36,8 @@ class StoreCategory(Base, BusinessMixin):
 # ----------------------------
 # 2. Store Item
 # ----------------------------
+WAT = ZoneInfo("Africa/Lagos")
+
 class StoreItem(Base, BusinessMixin):
     __tablename__ = "store_items"
 
@@ -44,10 +49,17 @@ class StoreItem(Base, BusinessMixin):
     selling_price = Column(Float, default=0.0, nullable=False)
     item_type = Column(String(20), nullable=True)
 
-    
+    # Relationship
     category = relationship("StoreCategory")
-    created_at = Column(DateTime(timezone=True), default=get_local_time)
 
+    # ✅ Timezone-aware created_at like Booking
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(WAT)
+    )
+
+    # Relationships
     stock_entries = relationship("StoreStockEntry", back_populates="item")
     issue_items = relationship("StoreIssueItem", back_populates="item")
     meal_order_items = relationship("MealOrderItem", back_populates="store_item")
@@ -68,12 +80,14 @@ class StoreStockEntry(Base, BusinessMixin):
     unit_price = Column(Float, nullable=True)
     total_amount = Column(Float)
     vendor_id = Column(Integer, ForeignKey("vendors.id"))
-    purchase_date = Column(DateTime(timezone=True), default=get_local_time)
+    
+    # ✅ Timezone-aware timestamps
+    purchase_date = Column(DateTime(timezone=True), default=lambda: datetime.now(WAT), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(WAT), nullable=False)
+    
     created_by = Column(String, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=get_local_time)
     attachment = Column(String, nullable=True)
 
-    
     # Relationships
     item = relationship("StoreItem")
     vendor = relationship("Vendor", back_populates="purchases")
@@ -96,19 +110,23 @@ class StoreIssue(Base, BusinessMixin):
     issued_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     bar_id = Column(Integer, ForeignKey("bars.id"), nullable=True)
     kitchen_id = Column(Integer, ForeignKey("kitchens.id"), nullable=True)
-    issue_date = Column(DateTime(timezone=True), default=get_local_time)
-
     
+    # ✅ Timezone-aware issue_date
+    issue_date = Column(DateTime(timezone=True), default=lambda: datetime.now(WAT), nullable=False)
+
+    # Relationships
     issue_items = relationship(
         "StoreIssueItem",
         back_populates="issue",
         cascade="all, delete-orphan",
         passive_deletes=True
     )
-
     bar = relationship("Bar", back_populates="issues")
     kitchen = relationship("Kitchen", back_populates="issues")
 
+
+
+    
 
 class StoreIssueItem(Base, BusinessMixin):
     __tablename__ = "store_issue_items"
@@ -151,8 +169,14 @@ class StoreInventory(Base, BusinessMixin):
     id = Column(Integer, primary_key=True, index=True)
     item_id = Column(Integer, ForeignKey("store_items.id"), unique=True, nullable=False)
     quantity = Column(Integer, default=0)
-    last_updated = Column(DateTime(timezone=True), default=get_local_time, onupdate=get_local_time)
 
-    
+    # ✅ Timezone-aware last_updated like Booking
+    last_updated = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(WAT),
+        onupdate=lambda: datetime.now(WAT),
+        nullable=False
+    )
 
+    # Relationship
     item = relationship("StoreItem")

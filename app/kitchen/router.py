@@ -20,6 +20,9 @@ from datetime import datetime
 
 from app.users import schemas as user_schemas
 
+from app.core.db import db_dependency
+from app.core.business import resolve_business_id
+
 
 
 
@@ -28,109 +31,153 @@ router = APIRouter()
 
 
 
+
+
 # ----------------------------
-# Create a new kitchen
+# Create Kitchen
 # ----------------------------
 @router.post("/", response_model=KitchenDisplaySimple)
 def create_kitchen(
     data: KitchenCreate,
-    db: Session = Depends(get_db)
+    business_id: Optional[int] = Query(None),
+    db: Session = Depends(db_dependency),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
-    """
-    Create a new kitchen.
-    Note: Initial stock is handled separately via Store → Kitchen.
-    """
-    # Ensure kitchen name is unique
-    existing = db.query(kitchen_models.Kitchen).filter(
-        kitchen_models.Kitchen.name == data.name
-    ).first()
-    if existing:
-        raise HTTPException(400, detail=f"Kitchen '{data.name}' already exists.")
+    business_id = resolve_business_id(current_user, business_id)
 
-    # Create kitchen
-    kitchen = kitchen_models.Kitchen(name=data.name)
+    existing = db.query(kitchen_models.Kitchen).filter(
+        kitchen_models.Kitchen.name == data.name,
+        kitchen_models.Kitchen.business_id == business_id
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Kitchen '{data.name}' already exists."
+        )
+
+    kitchen = kitchen_models.Kitchen(
+        name=data.name,
+        business_id=business_id
+    )
+
     db.add(kitchen)
     db.commit()
     db.refresh(kitchen)
+
     return kitchen
 
 
 # ----------------------------
-# List all kitchens (full info)
+# List Kitchens
 # ----------------------------
 @router.get("/", response_model=List[KitchenDisplaySimple])
-def list_kitchens_full(db: Session = Depends(get_db)):
-    """
-    List all kitchens with full information.
-    """
-    kitchens = db.query(kitchen_models.Kitchen).order_by(kitchen_models.Kitchen.id.asc()).all()
+def list_kitchens(
+    business_id: Optional[int] = Query(None),
+    db: Session = Depends(db_dependency),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "admin"]))
+):
+    business_id = resolve_business_id(current_user, business_id)
+
+    kitchens = db.query(kitchen_models.Kitchen).filter(
+        kitchen_models.Kitchen.business_id == business_id
+    ).order_by(
+        kitchen_models.Kitchen.id.asc()
+    ).all()
+
     return kitchens
 
 
 # ----------------------------
-# List kitchens for dropdowns (simple)
+# Simple Kitchen List (Dropdown)
 # ----------------------------
 @router.get("/simple", response_model=List[KitchenDisplaySimple])
-def list_kitchens_simple(db: Session = Depends(get_db)):
-    """
-    Return a simplified list of kitchens (id + name) for dropdowns.
-    """
-    kitchens = db.query(kitchen_models.Kitchen).order_by(kitchen_models.Kitchen.id.asc()).all()
+def list_kitchens_simple(
+    business_id: Optional[int] = Query(None),
+    db: Session = Depends(db_dependency),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "admin"]))
+):
+    business_id = resolve_business_id(current_user, business_id)
+
+    kitchens = db.query(kitchen_models.Kitchen).filter(
+        kitchen_models.Kitchen.business_id == business_id
+    ).order_by(
+        kitchen_models.Kitchen.id.asc()
+    ).all()
+
     return kitchens
 
 
 # ----------------------------
-# Update kitchen name
+# Update Kitchen
 # ----------------------------
 @router.put("/{kitchen_id}", response_model=KitchenDisplaySimple)
 def update_kitchen(
     kitchen_id: int,
-    data: KitchenCreate,  # Only allow updating the name
-    db: Session = Depends(get_db)
+    data: KitchenCreate,
+    business_id: Optional[int] = Query(None),
+    db: Session = Depends(db_dependency),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
-    """
-    Update the name of an existing kitchen.
-    """
-    kitchen = db.query(kitchen_models.Kitchen).filter(
-        kitchen_models.Kitchen.id == kitchen_id
-    ).first()
-    if not kitchen:
-        raise HTTPException(404, detail=f"Kitchen with ID {kitchen_id} not found.")
+    business_id = resolve_business_id(current_user, business_id)
 
-    # Check if new name is already used by another kitchen
+    kitchen = db.query(kitchen_models.Kitchen).filter(
+        kitchen_models.Kitchen.id == kitchen_id,
+        kitchen_models.Kitchen.business_id == business_id
+    ).first()
+
+    if not kitchen:
+        raise HTTPException(status_code=404, detail="Kitchen not found.")
+
     existing = db.query(kitchen_models.Kitchen).filter(
         kitchen_models.Kitchen.name == data.name,
+        kitchen_models.Kitchen.business_id == business_id,
         kitchen_models.Kitchen.id != kitchen_id
     ).first()
+
     if existing:
-        raise HTTPException(400, detail=f"Another kitchen with name '{data.name}' already exists.")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Another kitchen with name '{data.name}' already exists."
+        )
 
     kitchen.name = data.name
+
     db.commit()
     db.refresh(kitchen)
+
     return kitchen
 
 
+# ----------------------------
+# Delete Kitchen
+# ----------------------------
+@router.delete("/{kitchen_id}")
+def delete_kitchen(
+    kitchen_id: int,
+    business_id: Optional[int] = Query(None),
+    db: Session = Depends(db_dependency),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
+):
+    business_id = resolve_business_id(current_user, business_id)
 
-@router.delete("/{kitchen_id}", response_model=dict)
-def delete_kitchen(kitchen_id: int, db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))               
-    ):
-    
-    """
-    Delete a kitchen by ID.
-    Block deletion if there is existing inventory or stock.
-    """
-    kitchen = db.query(Kitchen).filter(Kitchen.id == kitchen_id).first()
+    kitchen = db.query(kitchen_models.Kitchen).filter(
+        kitchen_models.Kitchen.id == kitchen_id,
+        kitchen_models.Kitchen.business_id == business_id
+    ).first()
+
     if not kitchen:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Kitchen with ID {kitchen_id} not found."
-        )
+        raise HTTPException(status_code=404, detail="Kitchen not found.")
 
-    # Check if kitchen has any inventory
-    has_inventory = db.query(KitchenInventory).filter(KitchenInventory.kitchen_id == kitchen_id).first()
-    has_stock = db.query(KitchenStock).filter(KitchenStock.kitchen_id == kitchen_id).first()
+    has_inventory = db.query(KitchenInventory).filter(
+        KitchenInventory.kitchen_id == kitchen_id,
+        KitchenInventory.business_id == business_id
+    ).first()
+
+    has_stock = db.query(KitchenStock).filter(
+        KitchenStock.kitchen_id == kitchen_id,
+        KitchenStock.business_id == business_id
+    ).first()
 
     if has_inventory or has_stock:
         raise HTTPException(
@@ -140,6 +187,7 @@ def delete_kitchen(kitchen_id: int, db: Session = Depends(get_db),
 
     db.delete(kitchen)
     db.commit()
+
     return {"detail": f"Kitchen '{kitchen.name}' deleted successfully."}
 
 

@@ -30,6 +30,16 @@ from app.bar.schemas import BarInventoryAdjustmentCreate, BarInventoryAdjustment
 
 
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from app.core.db import db_dependency
+from app.core.business import resolve_business_id
+
+from sqlalchemy.orm import selectinload
+
+from app.core.timezone import now_wat, to_wat  # ✅ centralized WAT functions
+
 
 
 
@@ -37,66 +47,139 @@ from app.bar.schemas import BarInventoryAdjustmentCreate, BarInventoryAdjustment
 
 router = APIRouter()
 
-# ----------------------------
-# BAR
-# ----------------------------
 
+
+WAT = ZoneInfo("Africa/Lagos")  # Africa/Lagos timezone for consistent timestamps
+
+def now_wat() -> datetime:
+    """Return current time in Africa/Lagos as timezone-aware datetime"""
+    return datetime.now(WAT)
+
+
+# ----------------------------
+# Create Bar
+# ----------------------------
 @router.post("/bars", response_model=bar_schemas.BarDisplay)
 def create_bar(
     bar: bar_schemas.BarCreate,
+    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))  # ✅ only admin
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar", "admin"]))
 ):
-    existing = db.query(bar_models.Bar).filter_by(name=bar.name).first()
+    # Determine business scope
+    if "super_admin" in current_user.roles:
+        effective_business_id = business_id
+        if not effective_business_id:
+            raise HTTPException(status_code=400, detail="Super admin must provide business_id.")
+    else:
+        effective_business_id = current_user.business_id
+
+    # Check for duplicate bar name within the same business
+    existing = (
+        db.query(bar_models.Bar)
+        .filter_by(name=bar.name, business_id=effective_business_id)
+        .first()
+    )
     if existing:
         raise HTTPException(status_code=400, detail="Bar name already exists")
 
-    new_bar = bar_models.Bar(**bar.dict())
+    # Create bar with business_id and timestamp
+    new_bar = bar_models.Bar(
+        **bar.dict(),
+        business_id=effective_business_id,
+        created_at=now_wat()
+    )
     db.add(new_bar)
     db.commit()
     db.refresh(new_bar)
     return new_bar
 
 
+# ----------------------------
+# List Bars (full)
+# ----------------------------
 @router.get("/bars", response_model=List[bar_schemas.BarDisplay])
 def list_bars(
+    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar", "admin"]))
 ):
-    return db.query(bar_models.Bar).order_by(bar_models.Bar.id.asc()).all()
+    # Determine business scope
+    if "super_admin" in current_user.roles:
+        effective_business_id = business_id
+        if not effective_business_id:
+            raise HTTPException(status_code=400, detail="Super admin must provide business_id.")
+    else:
+        effective_business_id = current_user.business_id
+
+    return (
+        db.query(bar_models.Bar)
+        .filter_by(business_id=effective_business_id)
+        .order_by(bar_models.Bar.id.asc())
+        .all()
+    )
 
 
-
+# ----------------------------
+# List Bars (simple)
+# ----------------------------
 @router.get("/bars/simple", response_model=List[bar_schemas.BarDisplaySimple])
-def list_bars(
+def list_bars_simple(
+    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
     db: Session = Depends(get_db),
-    #current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar", "admin"]))
 ):
-    return db.query(bar_models.Bar).order_by(bar_models.Bar.id.asc()).all()
-#
+    # Determine business scope
+    if "super_admin" in current_user.roles:
+        effective_business_id = business_id
+        if not effective_business_id:
+            raise HTTPException(status_code=400, detail="Super admin must provide business_id.")
+    else:
+        effective_business_id = current_user.business_id
+
+    return (
+        db.query(bar_models.Bar)
+        .filter_by(business_id=effective_business_id)
+        .order_by(bar_models.Bar.id.asc())
+        .all()
+    )
+
+
 
 # ----------------------------
-# BAR INVENTORY (Replace BarItem)
+# BAR INVENTORY (Multi-Tenant)
 # ----------------------------
 
+
+# ----------------------------
+# Update Bar
+# ----------------------------
 @router.put("/bars/{bar_id}", response_model=bar_schemas.BarDisplay)
 def update_bar(
     bar_id: int,
-    bar_update: bar_schemas.BarCreate,  # Same schema used in creation
+    bar_update: bar_schemas.BarCreate,
+    business_id: Optional[int] = Query(None, description="Required for super admin"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar", "super_admin"]))
 ):
-    bar = db.query(bar_models.Bar).filter_by(id=bar_id).first()
+    # For super admin, ensure business_id is provided
+    if "super_admin" in current_user.roles and not business_id:
+        raise HTTPException(status_code=400, detail="Super admin must provide business_id")
+
+    resolved_business_id = resolve_business_id(current_user, business_id)
+
+    bar = db.query(bar_models.Bar).filter_by(id=bar_id, business_id=resolved_business_id).first()
     if not bar:
         raise HTTPException(status_code=404, detail="Bar not found")
 
-    # Check if name is being changed to an existing bar name
+    # Ensure unique bar name within the business
     existing = db.query(bar_models.Bar).filter(
         bar_models.Bar.name == bar_update.name,
-        bar_models.Bar.id != bar_id
+        bar_models.Bar.id != bar_id,
+        bar_models.Bar.business_id == resolved_business_id
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Bar name already exists")
+        raise HTTPException(status_code=400, detail="Bar name already exists for this business")
 
     for field, value in bar_update.dict().items():
         setattr(bar, field, value)
@@ -106,20 +189,46 @@ def update_bar(
     return bar
 
 
-@router.delete("/bars/{bar_id}")
+# ----------------------------
+# Delete Bar (Multi-Tenant)
+# ----------------------------
+
+# Inside bar_router
+@router.delete("/{bar_id}")
 def delete_bar(
     bar_id: int,
+    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin", "super_admin"]))
 ):
-    bar = db.query(bar_models.Bar).filter_by(id=bar_id).first()
+    # resolve business
+    roles = [r.lower() for r in current_user.roles]
+    if "super_admin" in roles:
+        effective_business_id = business_id if business_id else current_user.business_id
+        if not effective_business_id:
+            raise HTTPException(status_code=400, detail="Super admin must provide business_id")
+    else:
+        effective_business_id = current_user.business_id
+
+    bar = db.query(bar_models.Bar).filter(
+        bar_models.Bar.id == bar_id,
+        bar_models.Bar.business_id == effective_business_id
+    ).first()
+
     if not bar:
         raise HTTPException(status_code=404, detail="Bar not found")
+
     db.delete(bar)
     db.commit()
-    return {"detail": "Bar deleted"}
+
+    return {
+        "message": "Bar deleted successfully",
+        "bar_id": bar_id,
+        "business_id": effective_business_id
+    }
 
 
+""""
 
 @router.post("/receive-stock", response_model=BarInventoryReceiptDisplay)
 def receive_bar_stock(data: BarStockReceiveCreate, db: Session = Depends(get_db)):
@@ -244,21 +353,46 @@ def delete_bar_inventory(inventory_id: int, db: Session = Depends(get_db),
     db.commit()
     return {"message": "Inventory entry deleted successfully"}
 
+    """""""""
 
 
+# ----------------------------
+# Get Bar Items (Simple) - Multi-Tenant
+# ----------------------------
 @router.get("/items/simple", response_model=List[bar_schemas.BarSaleItemSummary])
 def get_bar_items(
+    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
     db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar","admin","super_admin"]))
 ):
+    # ------------------------------
+    # Resolve business
+    # ------------------------------
+    roles = [r.lower() for r in current_user.roles]
+
+    if "super_admin" in roles:
+        effective_business_id = business_id if business_id else current_user.business_id
+        if not effective_business_id:
+            raise HTTPException(status_code=400, detail="Super admin must provide business_id")
+    else:
+        effective_business_id = current_user.business_id
+
+    # ------------------------------
+    # Subquery (latest inventory)
+    # ------------------------------
     subquery = (
         db.query(
             bar_models.BarInventory.item_id,
             func.max(bar_models.BarInventory.id).label("latest_inventory_id")
         )
+        .filter(bar_models.BarInventory.business_id == effective_business_id)
         .group_by(bar_models.BarInventory.item_id)
         .subquery()
     )
 
+    # ------------------------------
+    # Get items
+    # ------------------------------
     items = (
         db.query(
             store_models.StoreItem.id.label("item_id"),
@@ -268,7 +402,10 @@ def get_bar_items(
         )
         .outerjoin(subquery, subquery.c.item_id == store_models.StoreItem.id)
         .outerjoin(bar_models.BarInventory, bar_models.BarInventory.id == subquery.c.latest_inventory_id)
-        .filter(store_models.StoreItem.item_type == "bar")
+        .filter(
+            store_models.StoreItem.item_type == "bar",
+            store_models.StoreItem.business_id == effective_business_id
+        )
         .all()
     )
 
@@ -276,7 +413,7 @@ def get_bar_items(
         bar_schemas.BarSaleItemSummary(
             item_id=item.item_id,
             item_name=item.item_name,
-            selling_price=item.selling_price or 0,  # default 0 if not set yet
+            selling_price=item.selling_price or 0,
             quantity=0,
             total_amount=0
         )
@@ -287,19 +424,45 @@ def get_bar_items(
 
 
 
+# ----------------------------
+# Get Bar Items (Simple Sell Price) - Multi-Tenant
+# ----------------------------
 @router.get("/items/simplesellprice", response_model=List[bar_schemas.BarSaleItemSummary])
-def get_bar_items(db: Session = Depends(get_db)):
+def get_bar_items(
+    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar","admin","super_admin"]))
+):
     """
     Return all bar items with their selling_price from store_items table.
     """
+
+    # ------------------------------
+    # Resolve business
+    # ------------------------------
+    roles = [r.lower() for r in current_user.roles]
+
+    if "super_admin" in roles:
+        effective_business_id = business_id if business_id else current_user.business_id
+        if not effective_business_id:
+            raise HTTPException(status_code=400, detail="Super admin must provide business_id")
+    else:
+        effective_business_id = current_user.business_id
+
+    # ------------------------------
+    # Query items
+    # ------------------------------
     items = (
         db.query(
             store_models.StoreItem.id.label("item_id"),
             store_models.StoreItem.name.label("item_name"),
             store_models.StoreItem.item_type.label("item_type"),
-            store_models.StoreItem.selling_price.label("selling_price"),  # 🔹 Use StoreItem.selling_price
+            store_models.StoreItem.selling_price.label("selling_price"),
         )
-        .filter(store_models.StoreItem.item_type == "bar")
+        .filter(
+            store_models.StoreItem.item_type == "bar",
+            store_models.StoreItem.business_id == effective_business_id
+        )
         .all()
     )
 
@@ -307,7 +470,7 @@ def get_bar_items(db: Session = Depends(get_db)):
         bar_schemas.BarSaleItemSummary(
             item_id=item.item_id,
             item_name=item.item_name,
-            selling_price=float(item.selling_price or 0),  # ensure numeric
+            selling_price=float(item.selling_price or 0),
             quantity=0,
             total_amount=0
         )
@@ -318,35 +481,85 @@ def get_bar_items(db: Session = Depends(get_db)):
 
 
 
-
+# ----------------------------
+# Update Bar Item Selling Price (Multi-Tenant)
+# ----------------------------
+# ----------------------------
+# Update Bar Item Selling Price (Multi-Tenant)
+# ----------------------------
 @router.put("/inventory/set-price", response_model=bar_schemas.BarInventoryDisplay)
 def update_selling_price(
     data: bar_schemas.BarPriceUpdate,
+    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar", "admin", "super_admin"]))
 ):
-    # Try to find existing bar_inventory record
-    bar_item = db.query(bar_models.BarInventory).filter_by(
-        bar_id=data.bar_id,
-        item_id=data.item_id
+
+    # ------------------------------
+    # Resolve business
+    # ------------------------------
+    roles = [r.lower() for r in current_user.roles]
+
+    if "super_admin" in roles:
+        effective_business_id = business_id if business_id else current_user.business_id
+        if not effective_business_id:
+            raise HTTPException(status_code=400, detail="Super admin must provide business_id")
+    else:
+        effective_business_id = current_user.business_id
+
+    # ------------------------------
+    # Find existing inventory record
+    # ------------------------------
+    bar_item = db.query(bar_models.BarInventory).filter(
+        bar_models.BarInventory.bar_id == data.bar_id,
+        bar_models.BarInventory.item_id == data.item_id,
+        bar_models.BarInventory.business_id == effective_business_id
     ).first()
 
     if bar_item:
-        # Update existing price
+        # Update price
         bar_item.selling_price = data.new_price
     else:
-        # Create new record if not exists
+        # Create new record
         bar_item = bar_models.BarInventory(
             bar_id=data.bar_id,
             item_id=data.item_id,
             selling_price=data.new_price,
-            quantity=0  # quantity is not used now, keep default
+            quantity=0,
+            business_id=effective_business_id
         )
         db.add(bar_item)
 
     db.commit()
     db.refresh(bar_item)
-    return bar_item
+
+    # ------------------------------
+    # Fetch item and bar names
+    # ------------------------------
+    item = db.query(store_models.StoreItem).filter(
+        store_models.StoreItem.id == bar_item.item_id
+    ).first()
+
+    bar = db.query(bar_models.Bar).filter(
+        bar_models.Bar.id == bar_item.bar_id
+    ).first()
+
+    # ------------------------------
+    # Return response
+    # ------------------------------
+    return {
+        "id": bar_item.id,
+        "item_id": bar_item.item_id,
+        "item_name": item.name if item else None,
+        "bar_id": bar_item.bar_id,
+        "bar_name": bar.name if bar else None,
+        "quantity": bar_item.quantity,
+        "selling_price": bar_item.selling_price,
+        "received_at": bar_item.received_at,
+        "note": bar_item.note
+    }
+
+
 
 
 # ----------------------------
