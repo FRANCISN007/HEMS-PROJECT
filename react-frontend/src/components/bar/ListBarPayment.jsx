@@ -32,6 +32,7 @@ const ListBarPayment = () => {
     amount_paid: "",
     payment_method: "",
     note: "",
+    date_paid: today, // default today
   });
 
   // ✅ BANKS
@@ -152,15 +153,22 @@ const ListBarPayment = () => {
       amount_paid: payment.amount_paid,
       payment_method: payment.payment_method,
       note: payment.note,
+      date_paid: payment.date_paid
+        ? new Date(payment.date_paid).toISOString().split("T")[0]
+        : today, // fallback to today
     });
   };
+
 
   const handleSave = async (e) => {
     e.preventDefault();
     try {
       const res = await axiosWithAuth().put(
         `/barpayment/${editingPayment.id}`,
-        formData
+        {
+          ...formData,
+          amount_paid: parseFloat(formData.amount_paid),
+        }
       );
       setPayments(
         payments.map((p) => (p.id === editingPayment.id ? res.data : p))
@@ -171,6 +179,7 @@ const ListBarPayment = () => {
       alert("Failed to update payment.");
     }
   };
+
 
   const handleVoid = async (id) => {
     if (!window.confirm("Are you sure you want to void this payment?")) return;
@@ -442,6 +451,15 @@ const ListBarPayment = () => {
           <div className="modal3">
             <h3>Edit Payment #{editingPayment.id}</h3>
             <form onSubmit={handleSave}>
+              <label>Payment Date</label>
+                <input
+                  type="date"
+                  value={formData.date_paid}
+                  onChange={(e) =>
+                    setFormData({ ...formData, date_paid: e.target.value })
+                  }
+                />
+
               <label>Amount Paid</label>
               <input
                 type="number"

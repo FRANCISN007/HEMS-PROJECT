@@ -9,7 +9,8 @@ const CreatePayment = ({ booking: bookingProp, onClose, onSuccess }) => {
   const bookingFromState = location.state?.booking;
   const booking = bookingProp || bookingFromState;
 
-  const [amountPaid, setAmountPaid] = useState("");
+  const [amountPaid, setAmountPaid] = useState(booking?.amount_due || "");
+
   const [discountAllowed, setDiscountAllowed] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [paymentDate, setPaymentDate] = useState(
@@ -51,6 +52,13 @@ const CreatePayment = ({ booking: bookingProp, onClose, onSuccess }) => {
       </div>
     );
   }
+
+  useEffect(() => {
+    if (booking && booking.amount_due !== undefined) {
+      setAmountPaid(booking.amount_due);
+    }
+  }, [booking]);
+
 
   // Fetch banks
   useEffect(() => {
@@ -171,98 +179,112 @@ const CreatePayment = ({ booking: bookingProp, onClose, onSuccess }) => {
 
   return (
     <div className="payment-form-overlay">
-      <div className="payment-form-container">
-        <h2>💳 Create Payment for Booking #{booking.booking_id || booking.id}</h2>
+    <div className="payment-form-container">
+      <h2>💳 Create Payment for Booking #{booking.booking_id || booking.id}</h2>
+
+      <p>
+        👤 Guest: <strong>{booking.guest_name}</strong>
+      </p>
+
+      {/* ✅ SHOW TOTAL DUE + AMOUNT DUE */}
+      <div className="payment-summary-box">
+        
         <p>
-          👤 Guest: <strong>{booking.guest_name}</strong>
+          Amount Due: 
+          <strong style={{ color: "#d9534f" }}>
+            ₦{Number(booking.amount_due || 0).toLocaleString()}
+          </strong>
         </p>
+      </div>
 
-        {error && <p className="error">{error}</p>}
-        {message && <p className="success">{message}</p>}
+      {error && <p className="error">{error}</p>}
+      {message && <p className="success">{message}</p>}
 
-        <form onSubmit={handleSubmit}>
-          <label>Amount Paid (₦)</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={amountPaid}
-            onChange={(e) => setAmountPaid(e.target.value)}
-            required
-            disabled={disableForm}
-          />
+      <form onSubmit={handleSubmit}>
+        {/* ✅ UPDATED LABEL */}
+        
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={amountPaid}
+          onChange={(e) => setAmountPaid(e.target.value)}
+          required
+          disabled={disableForm}
+        />
 
-          <label>Discount Allowed (₦)</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={discountAllowed}
-            onChange={(e) => setDiscountAllowed(e.target.value)}
-            disabled={disableForm}
-          />
+        <label>Discount Allowed (₦)</label>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={discountAllowed}
+          onChange={(e) => setDiscountAllowed(e.target.value)}
+          disabled={disableForm}
+        />
 
-          <label>Payment Method</label>
-          <select
-            value={paymentMethod}
-            onChange={handlePaymentMethodChange}
-            required
-            disabled={disableForm}
-          >
-            <option value="cash">Cash</option>
-            <option value="bank_transfer">Bank Transfer</option>
-            <option value="pos_card">POS Card</option>
-          </select>
+        <label>Payment Method</label>
+        <select
+          value={paymentMethod}
+          onChange={handlePaymentMethodChange}
+          required
+          disabled={disableForm}
+        >
+          <option value="cash">Cash</option>
+          <option value="bank_transfer">Bank Transfer</option>
+          <option value="pos_card">POS Card</option>
+        </select>
 
-          {["bank_transfer", "pos_card"].includes(paymentMethod) && (
-            <>
-              <label>Select Bank</label>
-              <select
-                value={bankId}
-                onChange={(e) => setBankId(e.target.value)}
-                required
-                disabled={disableForm}
-              >
-                <option value="">-- Select Bank --</option>
-                {banks.map((bank) => (
-                  <option key={bank.id} value={bank.id}>
-                    {bank.name}
-                  </option>
-                ))}
-              </select>
-            </>
+        {["bank_transfer", "pos_card"].includes(paymentMethod) && (
+          <>
+            <label>Select Bank</label>
+            <select
+              value={bankId}
+              onChange={(e) => setBankId(e.target.value)}
+              required
+              disabled={disableForm}
+            >
+              <option value="">-- Select Bank --</option>
+              {banks.map((bank) => (
+                <option key={bank.id} value={bank.id}>
+                  {bank.name}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+
+        <label>Payment Date</label>
+        <input
+          type="datetime-local"
+          value={paymentDate}
+          onChange={(e) => setPaymentDate(e.target.value)}
+          required
+          disabled={disableForm}
+        />
+
+        <div className="payment-buttons">
+          {!disableForm && (
+            <button type="submit" disabled={loading}>
+              {loading ? "Processing..." : "Submit Payment"}
+            </button>
           )}
 
-          <label>Payment Date</label>
-          <input
-            type="datetime-local"
-            value={paymentDate}
-            onChange={(e) => setPaymentDate(e.target.value)}
-            required
-            disabled={disableForm}
-          />
-
-          <div className="payment-buttons">
-            {!disableForm && (
-              <button type="submit" disabled={loading}>
-                {loading ? "Processing..." : "Submit Payment"}
-              </button>
-            )}
-
-            <button
-              type="button"
-              className="cancel-btn"
-              onClick={() => {
-                if (onClose) onClose();
-                else window.history.back();
-              }}
-            >
-              {disableForm ? "Close" : "Cancel"}
-            </button>
-          </div>
-        </form>
-      </div>
+          <button
+            type="button"
+            className="cancel-btn"
+            onClick={() => {
+              if (onClose) onClose();
+              else window.history.back();
+            }}
+          >
+            {disableForm ? "Close" : "Cancel"}
+          </button>
+        </div>
+      </form>
     </div>
+  </div>
+
   );
 };
 

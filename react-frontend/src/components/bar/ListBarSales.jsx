@@ -1,6 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./ListBarSales.css";
+
+import "../restaurant/Receipt.css";
+import { HOTEL_NAME } from "../../config/constants";
 
 const ListBarSales = () => {
   const [sales, setSales] = useState([]);
@@ -22,7 +25,10 @@ const ListBarSales = () => {
     );
   }
 
-  /* ===================== DATES ===================== */
+  const [printSale, setPrintSale] = useState(null);
+  const [printTime, setPrintTime] = useState(null);
+  const printRef = useRef();
+
   const today = new Date().toISOString().split("T")[0];
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
@@ -47,15 +53,21 @@ const ListBarSales = () => {
     setBars(res.data || []);
   };
 
-  const fetchItems = async () => {
-    const res = await axiosWithAuth().get("/store/items/simple");
-    setItems(res.data || []);
+  // 🔹 Fetch items based on search term
+  const fetchItems = async (searchText) => {
+    try {
+      const res = await axiosWithAuth().get("/bar/items/simple-search", {
+        params: { search: searchText, limit: 50 },
+      });
+      return Array.isArray(res.data) ? res.data : [];
+    } catch {
+      return [];
+    }
   };
 
   useEffect(() => {
     fetchSales();
     fetchBars();
-    fetchItems();
   }, []);
 
   useEffect(() => {
@@ -66,6 +78,16 @@ const ListBarSales = () => {
   }, [message]);
 
   /* ===================== ACTIONS ===================== */
+  const handlePrint = (sale) => {
+    setPrintSale(sale);
+    setPrintTime(new Date());
+  };
+
+  const closePrintModal = () => {
+    setPrintSale(null);
+    setPrintTime(null);
+  };
+
   const handleDelete = async (saleId) => {
     if (!window.confirm("Are you sure you want to delete this sale?")) return;
     try {
@@ -81,23 +103,26 @@ const ListBarSales = () => {
     setEditingSale({
       id: sale.id,
       bar_id: sale.bar_id,
-      sale_date: sale.sale_date?.slice(0, 16), // datetime-local safe
-      items: sale.sale_items.map((i) => ({
+      sale_date: sale.sale_date?.slice(0, 16),
+      items: sale.sale_items?.map((i) => ({
         item_id: i.item_id,
+        item_name: i.item_name,
         quantity: i.quantity,
         selling_price: i.selling_price,
-      })),
+        search: i.item_name,
+        suggestions: [],
+      })) || [],
     });
   };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
+    if (!editingSale) return;
 
     if (!editingSale.bar_id) {
       alert("Please select a bar");
       return;
     }
-
     if (!editingSale.sale_date) {
       alert("Please select sale date");
       return;
@@ -130,37 +155,63 @@ const ListBarSales = () => {
     }
   };
 
-  const updateItemField = (index, field, value) => {
+  const handleItemSearchChange = async (index, value) => {
+    if (!editingSale) return;
     const updated = [...editingSale.items];
+    updated[index].search = value;
 
-    if (field === "item_id") {
-      const selectedItem = items.find(
-        (it) => it.id === Number(value)
-      );
-
-      updated[index] = {
-        ...updated[index],
-        item_id: Number(value),
-        selling_price: selectedItem
-          ? selectedItem.selling_price
-          : 0,
-      };
+    if (value.length > 0) {
+      const results = await fetchItems(value);
+      updated[index].suggestions = results;
     } else {
-      updated[index][field] = value;
+      updated[index].suggestions = [];
+      updated[index].item_id = "";
+      updated[index].selling_price = 0;
     }
 
     setEditingSale({ ...editingSale, items: updated });
   };
 
+  const handleSelectItem = (index, item) => {
+    if (!editingSale) return;
+    const updated = [...editingSale.items];
+    updated[index].item_id = item.item_id;
+    updated[index].item_name = item.item_name;
+    updated[index].selling_price = item.selling_price || 0;
+    updated[index].search = item.item_name;
+    updated[index].suggestions = [];
+    setEditingSale({ ...editingSale, items: updated });
+  };
 
-  /* ===================== TOTALS ===================== */
-  const totalEntries = sales.length;
-  const totalAmount = sales.reduce(
-    (sum, s) => sum + (s.total_amount || 0),
-    0
-  );
+  const handleQuantityChange = (index, value) => {
+    if (!editingSale) return;
+    const updated = [...editingSale.items];
+    updated[index].quantity = Number(value);
+    setEditingSale({ ...editingSale, items: updated });
+  };
 
-  /* ===================== RENDER ===================== */
+  const handlePriceChange = (index, value) => {
+    if (!editingSale) return;
+    const updated = [...editingSale.items];
+    updated[index].selling_price = Number(value);
+    setEditingSale({ ...editingSale, items: updated });
+  };
+
+  const addItemRow = () => {
+    if (!editingSale) return;
+    const updated = [
+      ...editingSale.items,
+      { item_id: "", item_name: "", quantity: 1, selling_price: 0, search: "", suggestions: [] },
+    ];
+    setEditingSale({ ...editingSale, items: updated });
+  };
+
+  const removeItemRow = (index) => {
+    if (!editingSale) return;
+    const updated = editingSale.items.filter((_, i) => i !== index);
+    setEditingSale({ ...editingSale, items: updated });
+  };
+
   return (
     <div className="list-bar-sales-container1">
       <h2 className="page-heading">📋 Bar Sales List</h2>
@@ -187,14 +238,9 @@ const ListBarSales = () => {
 
           <button onClick={fetchSales}>🔍 Apply</button>
         </div>
-
-        <div className="compact-summary">
-          <span>Entries: <strong>{totalEntries}</strong></span>
-          <span>Amount: <strong>₦{totalAmount.toLocaleString()}</strong></span>
-        </div>
       </div>
 
-      {/* TABLE */}
+      {/* SALES TABLE */}
       <div className="data-container1">
         <table className="sales-table1">
           <thead>
@@ -208,27 +254,24 @@ const ListBarSales = () => {
               <th>Actions</th>
             </tr>
           </thead>
-
           <tbody>
             {sales.map((sale) => (
               <tr key={sale.id}>
                 <td>{sale.id}</td>
                 <td>{new Date(sale.sale_date).toLocaleDateString()}</td>
                 <td>{sale.bar_name}</td>
-
                 <td>
-                  {sale.sale_items.map((it, i) => (
+                  {sale.sale_items?.map((it, i) => (
                     <div key={i}>
                       {it.item_name} – {it.quantity} × ₦{it.selling_price}
                     </div>
-                  ))}
+                  )) || "--"}
                 </td>
-
-                <td>₦{sale.total_amount.toLocaleString()}</td>
+                <td>₦{sale.total_amount?.toLocaleString() || 0}</td>
                 <td>{sale.created_by}</td>
-
                 <td>
                   <button onClick={() => handleEdit(sale)}>✏ Edit</button>
+                  <button onClick={() => handlePrint(sale)}>🖨 Print</button>
                   <button onClick={() => handleDelete(sale.id)}>🗑 Delete</button>
                 </td>
               </tr>
@@ -244,68 +287,70 @@ const ListBarSales = () => {
             <h3 className="modal-title">✏ Edit Sale</h3>
 
             <form onSubmit={handleUpdate}>
+              {/* BAR SELECTION */}
               <div className="form-group">
                 <label>Bar</label>
-                <select value={editingSale.bar_id} disabled>
+                <select
+                  value={editingSale.bar_id}
+                  onChange={(e) => setEditingSale({ ...editingSale, bar_id: Number(e.target.value) })}
+                >
+                  <option value="">Select Bar</option>
                   {bars.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name}
                     </option>
                   ))}
                 </select>
-
               </div>
 
+              {/* SALE DATE */}
               <div className="form-group">
                 <label>Sale Date</label>
                 <input
                   type="datetime-local"
                   value={editingSale.sale_date}
-                  onChange={(e) =>
-                    setEditingSale({ ...editingSale, sale_date: e.target.value })
-                  }
+                  onChange={(e) => setEditingSale({ ...editingSale, sale_date: e.target.value })}
                 />
               </div>
 
+              {/* SALE ITEMS */}
               {editingSale.items.map((item, idx) => (
                 <div key={idx} className="sale-item-card">
                   <div className="sale-item-header">
                     <h4>Item {idx + 1}</h4>
-                    <button
-                      type="button"
-                      className="btn-remove-item"
-                      onClick={() =>
-                        setEditingSale({
-                          ...editingSale,
-                          items: editingSale.items.filter((_, i) => i !== idx),
-                        })
-                      }
-                    >
+                    <button type="button" className="btn-remove-item" onClick={() => removeItemRow(idx)}>
                       ❌
                     </button>
                   </div>
 
                   <div className="form-row">
                     <label>Item</label>
-                    <select
-                      value={item.item_id}
-                      onChange={(e) => updateItemField(idx, "item_id", e.target.value)}
-                    >
-                      <option value="">Select Item</option>
-                      {items.map((it) => (
-                        <option key={it.id} value={it.id}>
-                          {it.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="autocomplete">
+                      <input
+                        type="text"
+                        placeholder="Type to search..."
+                        value={item.search}
+                        onChange={(e) => handleItemSearchChange(idx, e.target.value)}
+                      />
+                      {item.suggestions.length > 0 && (
+                        <ul className="suggestions-list">
+                          {item.suggestions.map((it) => (
+                            <li key={it.item_id} onClick={() => handleSelectItem(idx, it)}>
+                              {it.item_name}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   </div>
 
                   <div className="form-row">
                     <label>Quantity</label>
                     <input
                       type="number"
+                      min="1"
                       value={item.quantity}
-                      onChange={(e) => updateItemField(idx, "quantity", e.target.value)}
+                      onChange={(e) => handleQuantityChange(idx, e.target.value)}
                     />
                   </div>
 
@@ -313,41 +358,27 @@ const ListBarSales = () => {
                     <label>Selling Price (₦)</label>
                     <input
                       type="number"
+                      min="0"
                       value={item.selling_price}
-                      onChange={(e) =>
-                        updateItemField(idx, "selling_price", e.target.value)
-                      }
+                      onChange={(e) => handlePriceChange(idx, e.target.value)}
                     />
                   </div>
                 </div>
               ))}
 
-              <button
-                type="button"
-                className="btn-add-item"
-                onClick={() =>
-                  setEditingSale({
-                    ...editingSale,
-                    items: [
-                      ...editingSale.items,
-                      { item_id: "", quantity: 1, selling_price: "" }
-
-                    ],
-                  })
-                }
-              >
+              <button type="button" className="btn-add-item" onClick={addItemRow}>
                 ➕ Add Item
               </button>
 
               <div className="total-box">
                 Total: ₦
-                {editingSale.items
-                  .reduce((sum, i) => sum + i.quantity * i.selling_price, 0)
-                  .toLocaleString()}
+                {editingSale.items.reduce((sum, i) => sum + i.quantity * i.selling_price, 0).toLocaleString()}
               </div>
 
               <div className="modal-actions2">
-                <button className="btn-save" type="submit">Save</button>
+                <button className="btn-save" type="submit">
+                  Save
+                </button>
                 <button className="btn-cancel" type="button" onClick={() => setEditingSale(null)}>
                   Cancel
                 </button>
@@ -356,8 +387,82 @@ const ListBarSales = () => {
           </div>
         </div>
       )}
+
+      {/* ===================== PRINT MODAL ===================== */}
+      {printSale && (
+        <div className="modal-overlay2" onClick={closePrintModal}>
+          <div className="modal2" onClick={(e) => e.stopPropagation()}>
+            <div ref={printRef} className="receipt-container">
+              <div className="receipt-header">
+                <h2>{HOTEL_NAME.toUpperCase()}</h2>
+                <h2>Bar Sale</h2>
+                <p style={{ fontSize: "12px", textAlign: "center" }}>{printTime?.toLocaleString()}</p>
+                <hr />
+              </div>
+
+              <div className="receipt-info">
+                <p><strong>Sale #:</strong> {printSale.id}</p>
+                <p><strong>Bar:</strong> {printSale.bar_name}</p>
+                <p><strong>Staff:</strong> {printSale.created_by}</p>
+              </div>
+
+              <hr />
+
+              <div className="receipt-items">
+                {printSale.sale_items?.length > 0 ? (
+                  printSale.sale_items.map((item, idx) => (
+                    <div key={idx} className="receipt-item">
+                      <span>{item.quantity} × {item.item_name}</span>
+                      <span className="amount">
+                        ₦{(item.quantity * item.selling_price).toLocaleString()}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p>No items</p>
+                )}
+              </div>
+
+              <hr />
+
+              <div className="receipt-totals">
+                <p style={{ fontWeight: "bold", fontSize: "16px", display: "flex" }}>
+                  <span>Subtotal</span>
+                  <span>₦{printSale.total_amount?.toLocaleString() || 0}</span>
+                </p>
+              </div>
+
+
+              <hr />
+
+              <div className="receipt-footer">
+                <p>Thank you for your patronage!</p>
+                <p>Powered by HEMS</p>
+              </div>
+            </div>
+
+            <div className="modal-actions2">
+              <button
+                onClick={() => {
+                  const printContent = printRef.current;
+                  const WinPrint = window.open("", "", "width=340,height=600");
+                  WinPrint.document.write(printContent.outerHTML);
+                  WinPrint.document.close();
+                  WinPrint.focus();
+                  WinPrint.print();
+                  WinPrint.close();
+                }}
+              >
+                🖨 Print Now
+              </button>
+              <button onClick={closePrintModal}>❌ Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+    
 };
 
 export default ListBarSales;

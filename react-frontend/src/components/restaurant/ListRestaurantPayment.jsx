@@ -81,7 +81,17 @@ const ListRestaurantPayment = () => {
         total_amount: Number(sale.total_amount) || 0,
         amount_paid: Number(sale.amount_paid) || 0,
         balance: Number(sale.balance) || 0,
+
+        payments: (sale.payments || []).map((p) => ({
+          ...p,
+          amount_paid: Number(p.amount_paid) || 0,
+          payment_mode: p.payment_mode?.toUpperCase() || "",
+          bank: p.bank || null,
+          paid_by: p.paid_by || null,
+          payment_date: p.payment_date || null,   // ✅ CRITICAL FIX
+        })),
       }));
+
 
       setPayments(normalizedSales);
       setSummary(response.data.summary || {});
@@ -127,6 +137,7 @@ const ListRestaurantPayment = () => {
           payment_mode: editPayment.payment_mode.toUpperCase(),
           paid_by: editPayment.paid_by,
           bank: editPayment.bank || null, // selected bank name
+          payment_date: editPayment.payment_date, // ✅ ADD THIS
         }
       );
 
@@ -199,6 +210,21 @@ const ListRestaurantPayment = () => {
   if (loading) return <p>Loading payments...</p>;
   if (error) return <p>{error}</p>;
 
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "N/A";
+
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d)) return dateStr;
+
+      return d.toLocaleDateString("en-GB"); // 21/03/2026
+    } catch {
+      return dateStr;
+    }
+  };
+
+
+
   return (
     <div className="payment-list-container scroll-wrapper">
 
@@ -266,7 +292,7 @@ const ListRestaurantPayment = () => {
             <th>Bank</th>
             <th>Paid By</th>
             <th>Status</th>
-            <th>Date</th>
+            <th>Payment Date</th>
             <th>Total Paid</th>
             <th>Balance</th>
             <th className="th-actions">Actions</th>
@@ -297,7 +323,12 @@ const ListRestaurantPayment = () => {
                   {payment.is_void ? "VOID" : "VALID"}
                 </td>
 
-                <td>{new Date(payment.created_at).toLocaleString()}</td>
+
+                <td>
+                  {formatDate(payment.payment_date)}
+                 
+                </td>
+
                 <td>₦{Number(sale.amount_paid).toLocaleString()}</td>
 
                 <td
@@ -372,108 +403,129 @@ const ListRestaurantPayment = () => {
 
 
       {/* EDIT MODAL */}
-      {editPayment && (
-        <div className="modal-overlay1" onClick={() => setEditPayment(null)}>
-          <div className="modal1 card-scale-in" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Edit Payment</h3>
-            </div>
+        {editPayment && (
+          <div className="modal-overlay1" onClick={() => setEditPayment(null)}>
+            <div
+              className="modal1 card-scale-in"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <h3>Edit Payment</h3>
+              </div>
 
-            <div className="modal-body">
-              <div className="form-grid">
+              <div className="modal-body">
 
-                <div className="form-group">
-                  <label>Payment ID</label>
-                  <span>{editPayment.id}</span>
-                </div>
+                {/* 🔥 HORIZONTAL SCROLL CONTAINER */}
+                <div className="form-scroll-container">
+                  <div className="form-scroll-row">
 
-                <div className="form-group">
-                  <label>Sale ID</label>
-                  <span>{editPayment.sale_id}</span>
-                </div>
+                    <div className="form-item">
+                      <label>Payment ID</label>
+                      <span>{editPayment.id}</span>
+                    </div>
 
-                <div className="form-group full">
-                  <label>Amount Paid (₦)</label>
-                  <input
-                    type="number"
-                    value={newAmount}
-                    onChange={(e) => setNewAmount(e.target.value)}
-                    className="input"
-                  />
-                </div>
+                    <div className="form-item">
+                      <label>Sale ID</label>
+                      <span>{editPayment.sale_id}</span>
+                    </div>
 
-                <div className="form-group full">
-                  <label>Mode of Payment</label>
-                  <select
-                    value={editPayment.payment_mode}
-                    onChange={(e) =>
-                      setEditPayment({
-                        ...editPayment,
-                        payment_mode: e.target.value,
-                      })
-                    }
-                    className="input"
-                  >
-                    <option value="CASH">Cash</option>
-                    <option value="POS">POS</option>
-                    <option value="TRANSFER">Bank Transfer</option>
-                  </select>
-                </div>
+                    <div className="form-item">
+                      <label>Amount Paid (₦)</label>
+                      <input
+                        type="number"
+                        value={newAmount}
+                        onChange={(e) => setNewAmount(e.target.value)}
+                        className="input"
+                      />
+                    </div>
 
-                {/* ------------------------------ */}
-                {/*     NEW BANK INPUT FIELD       */}
-                {/* ------------------------------ */}
-                <div className="form-group full">
-                  <label>Bank</label>
-                  <select
-                    value={editPayment.bank || ""}
-                    onChange={(e) =>
-                      setEditPayment({
-                        ...editPayment,
-                        bank: e.target.value,
-                      })
-                    }
-                    className="input"
-                  >
-                    <option value="">No Bank</option>
-                    {banks.map((b) => (
-                      <option key={b.id} value={b.name}>
-                        {b.name.toUpperCase()}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    <div className="form-item">
+                      <label>Payment Date</label>
+                      <input
+                        type="date"
+                        value={editPayment.payment_date || ""}
+                        max={new Date().toISOString().split("T")[0]}
+                        onChange={(e) =>
+                          setEditPayment({
+                            ...editPayment,
+                            payment_date: e.target.value,
+                          })
+                        }
+                        className="input"
+                      />
+                    </div>
 
+                    <div className="form-item">
+                      <label>Mode of Payment</label>
+                      <select
+                        value={editPayment.payment_mode}
+                        onChange={(e) =>
+                          setEditPayment({
+                            ...editPayment,
+                            payment_mode: e.target.value,
+                          })
+                        }
+                        className="input"
+                      >
+                        <option value="CASH">Cash</option>
+                        <option value="POS">POS</option>
+                        <option value="TRANSFER">Bank Transfer</option>
+                      </select>
+                    </div>
 
-                <div className="form-group full">
-                  <label>Paid By</label>
-                  <input
-                    type="text"
-                    value={editPayment.paid_by || ""}
-                    onChange={(e) =>
-                      setEditPayment({
-                        ...editPayment,
-                        paid_by: e.target.value,
-                      })
-                    }
-                    className="input"
-                  />
+                    <div className="form-item">
+                      <label>Bank</label>
+                      <select
+                        value={editPayment.bank || ""}
+                        onChange={(e) =>
+                          setEditPayment({
+                            ...editPayment,
+                            bank: e.target.value,
+                          })
+                        }
+                        className="input"
+                      >
+                        <option value="">No Bank</option>
+                        {banks.map((b) => (
+                          <option key={b.id} value={b.name}>
+                            {b.name.toUpperCase()}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-item">
+                      <label>Paid By</label>
+                      <input
+                        type="text"
+                        value={editPayment.paid_by || ""}
+                        onChange={(e) =>
+                          setEditPayment({
+                            ...editPayment,
+                            paid_by: e.target.value,
+                          })
+                        }
+                        className="input"
+                      />
+                    </div>
+
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="modal-footer">
-              <button className="btn void" onClick={() => setEditPayment(null)}>
-                Cancel
-              </button>
-              <button className="btn edit" onClick={handleEditSave}>
-                Save
-              </button>
+              <div className="modal-footer">
+                <button className="btn void" onClick={() => setEditPayment(null)}>
+                  Cancel
+                </button>
+                <button className="btn edit" onClick={handleEditSave}>
+                  Save
+                </button>
+              </div>
             </div>
-
           </div>
-        </div>
-      )}
+        )}
+
+
     </div>
   );
 };

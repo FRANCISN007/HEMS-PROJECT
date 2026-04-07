@@ -1,68 +1,198 @@
-.bar-sales-summary {
-  padding: 20px;
-  font-family: Arial, sans-serif;
+/* ================= PAGE ================= */
+.sales-summary-page {
+  padding: 10px 16px;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
-.bar-sales-summary h2 {
+.sales-summary-page h2 {
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+/* ================= FILTER ================= */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.filter-bar select,
+.filter-bar input {
+  padding: 4px 6px;
+  font-size: 13px;
+}
+
+/* ================= TABLE ================= */
+.summary-table-container {
   margin-bottom: 12px;
-  color: #333;
+  overflow-x: auto;
 }
 
-.refresh-btn {
-  margin-bottom: 15px;
-  padding: 8px 16px;
-  border: none;
-  background-color: #007bff;
-  color: white;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-.refresh-btn:hover {
-  background-color: #0056b3;
-}
-
-.error {
-  color: red;
-  font-weight: bold;
-  margin-top: 10px;
-}
-
+/* 🔥 FULL GRID TABLE */
 .summary-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 12px;
+  font-size: 13px;
+}
+
+/* HEADER */
+.summary-table th {
+  background: #f0f2f5;
+  color: #222;
+  font-weight: 600;
+  padding: 8px 6px;
+  text-align: center;
+
+  /* GRID LINES */
+  border: 1px solid #867e7e;
+}
+
+/* CELLS */
+.summary-table td {
+  padding: 6px;
+  text-align: center;
+
+  /* 🔥 FULL GRID (vertical + horizontal) */
+  border: 1px solid #857e7e;
+}
+
+/* 🔥 ZEBRA ROWS (CLEAR) */
+.summary-table tbody tr:nth-child(odd) {
+  background-color: #dcf1c8;
+}
+
+.summary-table tbody tr:nth-child(even) {
+  background-color: #f7f7f7;
+}
+
+/* HOVER */
+.summary-table tbody tr:hover {
+  background-color: #eaf3ff;
+}
+
+/* TOTAL ROW */
+.grand-total-row {
+  background-color: #dfeaff !important;
+  font-weight: bold;
+}
+
+/* ================= SUMMARY GRID ================= */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.card {
+  background: #f1efef;
+  padding: 6px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 13px;
+  border: 1px solid #797373;
+}
+
+.card span {
+  color: #555;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.card h3 {
+  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* CASH highlight */
+.card.highlight {
+  background: #eafaf0;
+  border: 1px solid #28a745;
+}
+
+/* ================= BANK SECTION ================= */
+.bank-section {
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.bank-section h4 {
+  margin-bottom: 4px;
   font-size: 14px;
 }
 
-.summary-table th,
-.summary-table td {
-  border: 1px solid #ddd;
-  padding: 10px;
-  text-align: center;
+/* 🔥 TIGHT + CLEAN ALIGNMENT */
+.bank-line {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* reduced spacing */
+  padding: 4px 0;
+  border-bottom: 1px dashed #ddd;
 }
 
-.summary-table thead th {
-  background-color: #343a40;
-  color: white;
+/* Bank column alignment */
+.bank-name {
+  min-width: 110px;
+  font-weight: 600;
+}
+
+/* POS + Transfer tight */
+.bank-line span {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* ================= SMALL SCREEN ================= */
+@media (max-width: 600px) {
+  .summary-table th,
+  .summary-table td {
+    padding: 4px;
+    font-size: 12px;
+  }
+
+  .bank-name {
+    min-width: 90px;
+  }
+
+  .card h3 {
+    font-size: 12px;
+  }
+}
+
+
+
+.print-btn {
+  padding: 5px 10px;
+  background: #007bff;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.print-btn:hover {
+  background: #0056b3;
+}
+
+
+
+/* TOP SUMMARY (Sales / Paid / Balance) */
+.top-summary {
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 6px;
+}
+
+/* 🔥 PAYMENT ROW (Cash / POS / Transfer) */
+.payment-row {
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 10px;
+}
+
+/* Make CASH stand out more */
+.payment-row .highlight {
+  background: #eafaf0;
+  border: 1px solid #28a745;
   font-weight: bold;
-}
-
-.summary-table tr.even {
-  background-color: #ffffff;
-}
-
-.summary-table tr.odd {
-  background-color: #f8f9fa;
-}
-
-.summary-table tbody tr:hover {
-  background-color: #f1f1f1;
-}
-
-.total-row {
-  font-weight: bold;
-  background-color: #ffeeba;
-  color: #212529;
 }

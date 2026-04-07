@@ -39,12 +39,16 @@
 
 /* Table wrapper (scrolling area) */
 .list-bar-payment-container .table-scroll {
-  max-height: 52vh;           /* adjust height as needed */
-  overflow: auto;
+  max-height: none;
+  overflow-x: auto;   /* horizontal scroll if table too wide */
+  overflow-y: visible; 
   border: 1px solid #e6e6e6;
   border-radius: 6px;
   background: #fff;
 }
+
+
+
 
 /* Compact table */
 .list-bar-payment-container .bar-payment-table {

@@ -8,24 +8,23 @@ const BarBalanceStock = () => {
   const [selectedBar, setSelectedBar] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [search, setSearch] = useState("");
+  const [selectedItemId, setSelectedItemId] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+
+  const axios = axiosWithAuth();
 
   // -----------------------------
   // ROLE CHECK
   // -----------------------------
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
-
-  if (Array.isArray(storedUser.roles)) {
-    roles = storedUser.roles;
-  } else if (typeof storedUser.role === "string") {
-    roles = [storedUser.role];
-  }
-
+  if (Array.isArray(storedUser.roles)) roles = storedUser.roles;
+  else if (storedUser.role) roles = [storedUser.role];
   roles = roles.map((r) => r.toLowerCase());
 
-  if (!(roles.includes("admin") || roles.includes("bar"))) {
+  if (!(roles.includes("admin") || roles.includes("store"))) {
     return (
       <div className="unauthorized">
         <h2>🚫 Access Denied</h2>
@@ -35,51 +34,50 @@ const BarBalanceStock = () => {
   }
 
   // -----------------------------
-  // LOAD BARS
+  // FETCH BARS
   // -----------------------------
   useEffect(() => {
+    const fetchBars = async () => {
+      try {
+        const res = await axios.get("/bar/bars/simple");
+        setBars(res.data || []);
+      } catch (err) {
+        console.error("Failed to fetch bars:", err);
+      }
+    };
     fetchBars();
   }, []);
 
   // -----------------------------
-  // LOAD STOCK BALANCE
+  // FETCH BALANCES
   // -----------------------------
   useEffect(() => {
-    fetchStockBalances(selectedBar, startDate, endDate);
-  }, [selectedBar, startDate, endDate]);
+    const delay = setTimeout(() => {
+      fetchStockBalances();
+    }, 300); // debounce
+    return () => clearTimeout(delay);
+  }, [selectedBar, startDate, endDate, search, selectedItemId]);
 
-  const fetchBars = async () => {
-    try {
-      const axios = axiosWithAuth();
-      const res = await axios.get("/bar/bars/simple");
-      setBars(res.data || []);
-    } catch (error) {
-      console.error("Error fetching bars:", error);
-    }
-  };
-
-  const fetchStockBalances = async (barId = "", start = "", end = "") => {
+  const fetchStockBalances = async () => {
     try {
       setLoading(true);
-      const axios = axiosWithAuth();
+      const params = new URLSearchParams();
+      if (selectedBar) params.append("bar_id", selectedBar);
+      if (startDate) params.append("start_date", startDate);
+      if (endDate) params.append("end_date", endDate);
+      if (selectedItemId) params.append("item_id", selectedItemId);
+      if (search) params.append("search", search);
 
-      let url = `/store/bar-balance-stock?`;
-      if (barId) url += `bar_id=${barId}&`;
-      if (start) url += `start_date=${start}&`;
-      if (end) url += `end_date=${end}&`;
-
-      const res = await axios.get(url);
+      const res = await axios.get(`/store/bar-balance-stock?${params.toString()}`);
       setBalances(res.data || []);
-    } catch (error) {
-      console.error("Error fetching stock balances:", error);
+    } catch (err) {
+      console.error("Failed to fetch balances:", err);
       setMessage("❌ Failed to load stock balances");
       setTimeout(() => setMessage(""), 3000);
     } finally {
       setLoading(false);
     }
   };
-
-  const handleBarChange = (e) => setSelectedBar(e.target.value);
 
   // -----------------------------
   // TOTALS
@@ -88,112 +86,129 @@ const BarBalanceStock = () => {
     (sum, item) => sum + (item.balance_total_amount || 0),
     0
   );
+  const totalStockBalance = balances.reduce((sum, item) => sum + (item.balance || 0), 0);
 
-  const totalStockBalance = balances.reduce(
-    (sum, item) => sum + (item.balance || 0),
-    0
-  );
-
-  if (loading) return <p>Loading...</p>;
-
+  // -----------------------------
+  // RENDER
+  // -----------------------------
   return (
-    <div className="stock-balance-container">
+    <div className="stock-balance-container1">
       <div className="stock-balance-header">
-        <h2>📊 Bar Stock Balance Report.</h2>
+        <h2>📊 Bar Stock Balance Report</h2>
 
-        <div className="filter-frame">
-          {/* BAR FILTER */}
-          <div className="filter-group">
-            <label>Bar:</label>
-            <select value={selectedBar} onChange={handleBarChange}>
-              <option value="">All Bars</option>
-              {bars.map((bar) => (
-                <option key={bar.id} value={bar.id}>
-                  {bar.name}
-                </option>
-              ))}
-            </select>
+        {/* FILTERS */}
+        <div className="filter-frame1">
+          {/* Row 1: Bar + Dates */}
+          <div className="filter-row date-group1">
+            <div className="filter-group1">
+              <label>Bar:</label>
+              <select value={selectedBar} onChange={(e) => setSelectedBar(e.target.value)}>
+                <option value="">All Bars</option>
+                {bars.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="filter-group1">
+              <label>Start:</label>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </div>
+
+            <div className="filter-group1">
+              <label>End:</label>
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
           </div>
 
-          {/* DATE FILTERS */}
-          <div className="filter-group">
-            <label>Start Date:</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-          </div>
+          {/* Row 2: Search + Item */}
+          <div className="filter-row search-group">
+            <div className="filter-group1">
+              <label>Search:</label>
+              <input
+                type="text"
+                placeholder="Search item..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setSelectedItemId("");
+                }}
+              />
+            </div>
 
-          <div className="filter-group">
-            <label>End Date:</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
+            <div className="filter-group1">
+              <label>Item:</label>
+              <select
+                value={selectedItemId}
+                onChange={(e) => {
+                  setSelectedItemId(e.target.value);
+                  setSearch("");
+                }}
+              >
+                <option value="">All Items</option>
+                {balances.map((item) => (
+                  <option key={item.item_id} value={item.item_id}>
+                    {item.item_name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
-        <div className="total-stock">
+        {/* TOTALS */}
+        <div className="total-stock1">
           <div>
-            Total Stock Value:{" "}
-            <strong>₦{totalStockAmount.toLocaleString()}</strong>
+            Total Stock Value: <strong>₦{totalStockAmount.toLocaleString()}</strong>
           </div>
           <div>
-            Stock Balance (Quantity):{" "}
-            <strong>{totalStockBalance.toLocaleString()}</strong>
+            Stock Balance: <strong>{totalStockBalance.toLocaleString()}</strong>
           </div>
         </div>
       </div>
 
       {message && <div className="message">{message}</div>}
 
-      <table>
-        <thead>
-          <tr>
-            <th>Bar</th>
-            <th>Item</th>
-            <th>Unit</th>
-            <th>Category</th>
-            <th>Item Type</th>
-            <th>Total Received</th>
-            <th>Total Sold</th>
-            <th>Total Adjusted</th>
-            <th>Balance</th>
-            <th>Current Unit Price</th>
-            <th>Balance Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {balances.map((item, index) => (
-            <tr
-              key={`${item.item_id}-${item.bar_id}`}
-              className={index % 2 === 0 ? "even-row" : "odd-row"}
-            >
-              <td>{item.bar_name}</td>
-              <td>{item.item_name}</td>
-              <td>{item.unit}</td>
-              <td>{item.category_name}</td>
-              <td>{item.item_type}</td>
-              <td>{item.total_received}</td>
-              <td>{item.total_sold}</td>
-              <td>{item.total_adjusted}</td>
-              <td>{item.balance}</td>
-              <td>
-                {item.last_unit_price
-                  ? `₦${item.last_unit_price.toLocaleString()}`
-                  : "-"}
-              </td>
-              <td>
-                {item.balance_total_amount
-                  ? `₦${item.balance_total_amount.toLocaleString()}`
-                  : "-"}
-              </td>
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Bar</th>
+              <th>Item</th>
+              <th>Unit</th>
+              <th>Category</th>
+              <th>Item Type</th>
+              <th>Total Received</th>
+              <th>Total Sold</th>
+              <th>Total Adjusted</th>
+              <th>Balance</th>
+              <th>Unit Price</th>
+              <th>Balance Value</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {balances.map((item, idx) => (
+              <tr key={`${item.bar_id}-${item.item_id}`} className={idx % 2 === 0 ? "even-row" : "odd-row"}>
+                <td>{item.bar_name}</td>
+                <td>{item.item_name}</td>
+                <td>{item.unit}</td>
+                <td>{item.category_name}</td>
+                <td>{item.item_type}</td>
+                <td>{item.total_received}</td>
+                <td>{item.total_sold}</td>
+                <td>{item.total_adjusted}</td>
+                <td>{item.balance}</td>
+                <td>{item.last_unit_price ? `₦${item.last_unit_price.toLocaleString()}` : "-"}</td>
+                <td>{item.balance_total_amount ? `₦${item.balance_total_amount.toLocaleString()}` : "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 };

@@ -1,124 +1,186 @@
-.stock-balance-container {
-  padding: 20px;
+/* ================= CONTAINER ================= */
+.stock-balance-container2 {
+  padding: 8px;
+  font-family: Arial, sans-serif;
+  max-width: 1200px;  /* wider container for large screens */
+  width: 100%;
+  margin: 0 auto;
+  background: #fafafa;
+  border-radius: 6px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
 }
 
-.stock-balance-container h2 {
-  margin-bottom: 15px;
-  
+/* ================= HEADER ================= */
+.stock-balance-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
 }
 
 .stock-balance-header h2 {
-  font-size: 26px;   /* or bigger */
+  font-size: 20px;
   font-weight: 700;
+  margin: 0;
+  color: #2c3e50;
 }
 
+/* ================= FILTER FRAME ================= */
+.filter-frame2 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 6px 4px;
+  background: #ffffff;
+  border-radius: 6px;
+  box-shadow: 0px 1px 4px rgba(0,0,0,0.08);
+  width: 100%;
+  align-items: center;
+}
 
-.stock-balance-container table {
+/* Rows inside filter */
+.filter-row2 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  flex: 1; /* allow spreading */
+}
+
+/* Each input group */
+.filter-group2 {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1; /* expand evenly */
+}
+
+/* Label */
+.filter-group2 label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Inputs & Selects */
+.filter-group2 input,
+.filter-group2 select {
+  min-width: 120px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 12px;
+  background: #fafafa;
+  width: 100%; /* fill parent group */
+}
+
+.filter-group2 input:focus,
+.filter-group2 select:focus {
+  border-color: #007bff;
+  outline: none;
+  background: #fff;
+}
+
+/* Wider inputs for search/item row */
+.filter-row2.search-group input {
+  min-width: 150px;
+}
+
+.filter-row2.search-group select {
+  min-width: 130px;
+}
+
+/* ================= TOTALS ================= */
+.total-stock2 {
+  display: flex;
+  gap: 10px;
+  font-size: 14px;
+  color: #2d572c;
+  background: #e6f4ea;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-top: 6px;
+  align-self: flex-start;
+}
+
+/* ================= TABLE ================= */
+.stock-balance-container2 table {
   width: 100%;
   border-collapse: collapse;
+  margin-top: 6px;
+  table-layout: auto; /* expand columns naturally */
 }
 
-/* REMOVE border-radius from cells */
-.stock-balance-container th,
-.stock-balance-container td {
-  padding: 4px;
+.stock-balance-container2 th,
+.stock-balance-container2 td {
+  padding: 4px 6px;
   border: 1px solid #ccc;
+  font-size: 14px;
   text-align: left;
 }
 
-
-
-.stock-balance-container th {
-  background-color: #293552; /* deep dark navy */
-  color: #ffffff;
-  text-transform: uppercase;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  border: 1px solid #bdbdbd; /* consistent border with data cells */
-  padding: 7px;
+.stock-balance-container2 th {
+  background-color: #293552;
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
   text-align: center;
+  letter-spacing: 0.3px;
 }
-
 
 .even-row {
   background-color: #f9f9f9;
 }
 
 .odd-row {
-  background-color: #ffffff;
+  background-color: #fff;
 }
 
+/* ================= MESSAGE ================= */
 .message {
   background-color: #e7f5e9;
-  color: green;
-  padding: 8px;
-  margin-bottom: 10px;
-  border-radius: 4px;
-}
-
-.stock-balance-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
-
-.total-stock {
-  font-size: 16px;
   color: #2d572c;
-  background: #e6f4ea;
-  padding: 5px 10px;
-  border-radius: 5px;
-}
-
-
-
-
-
-
-/* Filter container */
-.filter-frame {
-  display: flex;
-  align-items: center;
-  gap: 20px; /* more space between Category and Bar */
-  background: #ffffff;
-  padding: 8px 12px;
-  border-radius: 6px;
-  box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
-  flex-wrap: wrap; /* allow wrapping on smaller screens */
-}
-
-/* Each filter group (label + select) */
-.filter-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Label styling with fixed width */
-.filter-group label {
-  display: inline-block;
-  width: 70px;   /* ✅ fixed width so both align */
-  font-weight: 500;
-  font-size: 14px;
-  color: #333;
-  white-space: nowrap;
-}
-
-/* Select styling */
-.filter-group select {
-  flex: 1;
-  min-width: 150px;
-  padding: 5px 10px;
+  padding: 5px 8px;
+  margin-bottom: 6px;
   border-radius: 4px;
-  border: 1px solid #ccc;
-  font-size: 14px;
-  background: #fafafa;
-  transition: border 0.2s;
+  font-size: 12px;
 }
 
-.filter-group select:focus {
-  border-color: #007bff;
-  outline: none;
+/* ================= RESPONSIVE ================= */
+@media (max-width: 992px) {
+  .stock-balance-container2 {
+    width: 98%;
+  }
+
+  .filter-frame2 {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-row2 {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .filter-group2 input,
+  .filter-group2 select {
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .filter-frame2 {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-row2 {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .filter-group2 input,
+  .filter-group2 select {
+    width: 100%;
+  }
 }

@@ -5,19 +5,25 @@ import "./StockBalance.css";
 const StockBalance = () => {
   const [balances, setBalances] = useState([]);
   const [categories, setCategories] = useState([]);
+
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedItemType, setSelectedItemType] = useState(""); // ✔ NEW
-  const [loading, setLoading] = useState(true);
+  const [selectedItemType, setSelectedItemType] = useState("");
+
+  const [search, setSearch] = useState("");          // ✅ NEW (typing search)
+  const [selectedItemId, setSelectedItemId] = useState(""); // ✅ NEW (exact item)
+
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
-  let roles = [];
+  const axios = axiosWithAuth();
 
-  if (Array.isArray(storedUser.roles)) {
-    roles = storedUser.roles;
-  } else if (typeof storedUser.role === "string") {
-    roles = [storedUser.role];
-  }
+  /* ================= AUTH ================= */
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = Array.isArray(storedUser.roles)
+    ? storedUser.roles
+    : storedUser.role
+    ? [storedUser.role]
+    : [];
 
   roles = roles.map((r) => r.toLowerCase());
 
@@ -30,51 +36,45 @@ const StockBalance = () => {
     );
   }
 
+  /* ================= FETCH ================= */
   useEffect(() => {
     fetchCategories();
   }, []);
 
+  // ✅ debounce all filters
   useEffect(() => {
-    // Fetch when either filter changes
-    fetchStockBalances(selectedCategory, selectedItemType);
-  }, [selectedCategory, selectedItemType]);
+    const delay = setTimeout(() => {
+      fetchStockBalances();
+    }, 300);
+
+    return () => clearTimeout(delay);
+  }, [selectedCategory, selectedItemType, search, selectedItemId]);
 
   const fetchCategories = async () => {
     try {
-      const axios = axiosWithAuth();
       const res = await axios.get("/store/categories");
       setCategories(res.data || []);
     } catch (error) {
-      console.error("Error fetching categories:", error);
+      console.error(error);
     }
   };
 
-  const fetchStockBalances = async (categoryId = "", itemType = "") => {
+  const fetchStockBalances = async () => {
     try {
       setLoading(true);
-      const axios = axiosWithAuth();
 
-      let url = `/store/balance-stock`;
+      const res = await axios.get("/store/balance-stock", {
+        params: {
+          category_id: selectedCategory || undefined,
+          item_type: selectedItemType || undefined,
+          item_id: selectedItemId || undefined,
+          search: search || undefined,
+        },
+      });
 
-      // Build query params dynamically
-      const params = [];
-      if (categoryId) params.push(`category_id=${categoryId}`);
-      if (itemType) params.push(`item_type=${itemType}`);
-
-      if (params.length > 0) {
-        url += `?${params.join("&")}`;
-      }
-
-      const res = await axios.get(url);
-
-      // Sort alphabetically
-      const sorted = (res.data || []).sort((a, b) =>
-        a.item_name.localeCompare(b.item_name)
-      );
-
-      setBalances(sorted);
+      setBalances(res.data || []);
     } catch (error) {
-      console.error("Error fetching stock balances:", error);
+      console.error(error);
       setMessage("❌ Failed to load stock balances");
       setTimeout(() => setMessage(""), 3000);
     } finally {
@@ -82,32 +82,25 @@ const StockBalance = () => {
     }
   };
 
-  const handleCategoryChange = (e) => {
-    setSelectedCategory(e.target.value);
-  };
-
-  const handleItemTypeChange = (e) => {
-    setSelectedItemType(e.target.value);
-  };
-
+  /* ================= TOTAL ================= */
   const totalStockAmount = balances.reduce(
     (sum, item) => sum + (item.balance_total_amount || 0),
     0
   );
 
-  if (loading) return <p>Loading...</p>;
-
+  /* ================= UI ================= */
   return (
-    <div className="stock-balance-container">
-      <div className="stock-balance-header">
-        <h2>📊 Stock Balance Report</h2>
+    <div className="stock-balance-container3">
+    <div className="stock-balance-header">
+      <h2>📊 Stock Balance Report</h2>
 
-        <div className="filter-frame">
-          <label htmlFor="categoryFilter">Category:</label>
+      <div className="filter-frame3">
+        {/* CATEGORY */}
+        <div className="filter-group3 category-filter">
+          <label>Category</label>
           <select
-            id="categoryFilter"
             value={selectedCategory}
-            onChange={handleCategoryChange}
+            onChange={(e) => setSelectedCategory(e.target.value)}
           >
             <option value="">All Categories</option>
             {categories.map((cat) => (
@@ -116,13 +109,14 @@ const StockBalance = () => {
               </option>
             ))}
           </select>
+        </div>
 
-          {/* NEW ITEM TYPE FILTER */}
-          <label htmlFor="itemTypeFilter">Item Type:</label>
+        {/* ITEM TYPE */}
+        <div className="filter-group3 type-filter">
+          <label>Type</label>
           <select
-            id="itemTypeFilter"
             value={selectedItemType}
-            onChange={handleItemTypeChange}
+            onChange={(e) => setSelectedItemType(e.target.value)}
           >
             <option value="">All Types</option>
             <option value="Store">Store</option>
@@ -132,27 +126,63 @@ const StockBalance = () => {
           </select>
         </div>
 
-        <div className="total-stock">
-          Total Stock Value:{" "}
-          <strong>₦{totalStockAmount.toLocaleString()}</strong>
+        {/* SEARCH INPUT */}
+        <div className="filter-group3 search-filter">
+          <label>Search</label>
+          <input
+            type="text"
+            placeholder="Search item..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setSelectedItemId("");
+            }}
+          />
+        </div>
+
+        {/* ITEM DROPDOWN */}
+        <div className="filter-group3 item-filter">
+          <label>Item</label>
+          <select
+            value={selectedItemId}
+            onChange={(e) => {
+              setSelectedItemId(e.target.value);
+              setSearch("");
+            }}
+          >
+            <option value="">All Items</option>
+            {balances.map((item) => (
+              <option key={item.item_id} value={item.item_id}>
+                {item.item_name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
-      {message && <div className="message">{message}</div>}
+      <div className="total-stock3">
+        Total: <strong>₦{totalStockAmount.toLocaleString()}</strong>
+      </div>
+    </div>
 
+    {message && <div className="message">{message}</div>}
+
+    {loading ? (
+      <p>Loading...</p>
+    ) : (
       <table>
         <thead>
           <tr>
             <th>Items</th>
             <th>Unit</th>
             <th>Category</th>
-            <th>Item Type</th>
-            <th>Total Received</th>
-            <th>Total Issued</th>
-            <th>Total Adjusted</th>
+            <th>Type</th>
+            <th>Received</th>
+            <th>Issued</th>
+            <th>Adjusted</th>
             <th>Balance</th>
-            <th>Current Unit Price</th>
-            <th>Balance Value</th>
+            <th>Unit Price</th>
+            <th>Value</th>
           </tr>
         </thead>
         <tbody>
@@ -183,7 +213,9 @@ const StockBalance = () => {
           ))}
         </tbody>
       </table>
-    </div>
+    )}
+  </div>
+
   );
 };
 

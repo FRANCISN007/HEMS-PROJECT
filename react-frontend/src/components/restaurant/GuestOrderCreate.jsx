@@ -11,21 +11,14 @@ const currencyNGN = (value) =>
 const GuestOrderCreate = () => {
   const [locations, setLocations] = useState([]);
   const [kitchens, setKitchens] = useState([]);
-  const [items, setItems] = useState([]);
   const [message, setMessage] = useState("");
 
-  /* ===============================
-     ROLE CHECK
-  =============================== */
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
-  let roles = [];
-
-  if (Array.isArray(storedUser.roles)) {
-    roles = storedUser.roles;
-  } else if (typeof storedUser.role === "string") {
-    roles = [storedUser.role];
-  }
-
+  let roles = Array.isArray(storedUser.roles)
+    ? storedUser.roles
+    : typeof storedUser.role === "string"
+    ? [storedUser.role]
+    : [];
   roles = roles.map((r) => r.toLowerCase());
 
   if (!(roles.includes("admin") || roles.includes("restaurant"))) {
@@ -37,9 +30,8 @@ const GuestOrderCreate = () => {
     );
   }
 
-  /* ===============================
-     STATE
-  =============================== */
+  const axios = axiosWithAuth();
+
   const [order, setOrder] = useState({
     location_id: "",
     kitchen_id: "",
@@ -54,40 +46,66 @@ const GuestOrderCreate = () => {
     store_item_id: "",
     quantity: 1,
     price_per_unit: "",
+    search: "",
+    suggestions: [],
+    selectedItem: null, // store the full item
   });
 
-  /* ===============================
-     AUTO CLEAR MESSAGE
-  =============================== */
+  // Auto clear message
   useEffect(() => {
     if (!message) return;
     const t = setTimeout(() => setMessage(""), 3000);
     return () => clearTimeout(t);
   }, [message]);
 
-  /* ===============================
-     FETCH DROPDOWNS
-  =============================== */
+  // Fetch locations and kitchens
   useEffect(() => {
-    const api = axiosWithAuth();
-
-    Promise.all([
-      api.get("/restaurant/locations"),
-      api.get("/kitchen/simple"),
-      // ✅ NEW endpoint using StoreItem selling_price
-      api.get("/restaurant/items/store-selling"),
-    ])
-      .then(([locRes, kitRes, itemRes]) => {
+    Promise.all([axios.get("/restaurant/locations"), axios.get("/kitchen/simple")])
+      .then(([locRes, kitRes]) => {
         setLocations(locRes.data || []);
         setKitchens(kitRes.data || []);
-        setItems([...itemRes.data].sort((a, b) => a.id - b.id));
       })
       .catch(() => setMessage("❌ Failed to load dropdown data"));
   }, []);
 
-  /* ===============================
-     ADD ITEM
-  =============================== */
+  // Fetch items for search
+  const fetchItems = async (searchText) => {
+    if (!searchText) return [];
+    try {
+      const res = await axios.get("/restaurant/items/store-selling", { params: { search: searchText } });
+      return Array.isArray(res.data) ? res.data : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const handleNewItemChange = async (field, value) => {
+    const updated = { ...newItem, [field]: value };
+
+    // Search input
+    if (field === "search") {
+      updated.store_item_id = "";
+      updated.price_per_unit = "";
+      updated.selectedItem = null;
+      if (value.length > 0) updated.suggestions = await fetchItems(value);
+      else updated.suggestions = [];
+    }
+
+    // Select from suggestions
+    if (field === "store_item_id") {
+      const selected = updated.suggestions.find((i) => i.id === Number(value));
+      if (selected) {
+        updated.store_item_id = selected.id;
+        updated.price_per_unit = selected.selling_price || 0;
+        updated.search = selected.name;
+        updated.selectedItem = selected; // store the full object
+      }
+      updated.suggestions = [];
+    }
+
+    setNewItem(updated);
+  };
+
   const addItem = () => {
     if (!newItem.store_item_id || Number(newItem.quantity) <= 0) return;
 
@@ -99,49 +117,25 @@ const GuestOrderCreate = () => {
           store_item_id: Number(newItem.store_item_id),
           quantity: Number(newItem.quantity),
           price_per_unit: Number(newItem.price_per_unit),
+          selectedItem: newItem.selectedItem, // keep the full object for table display
         },
       ],
     }));
 
-    setNewItem({
-      store_item_id: "",
-      quantity: 1,
-      price_per_unit: "",
-    });
+    setNewItem({ store_item_id: "", quantity: 1, price_per_unit: "", search: "", suggestions: [], selectedItem: null });
   };
 
   const removeItem = (idx) => {
-    setOrder((prev) => ({
-      ...prev,
-      items: prev.items.filter((_, i) => i !== idx),
-    }));
+    setOrder((prev) => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) }));
   };
 
-  /* ===============================
-     SUBMIT ORDER
-  =============================== */
   const submitOrder = async (e) => {
     e.preventDefault();
-
-    if (!order.location_id) {
-      setMessage("❌ Please select a location.");
-      return;
-    }
-
-    if (!order.kitchen_id) {
-      setMessage("❌ Please select a kitchen.");
-      return;
-    }
-
-    if (order.order_type === "room_service" && !order.room_number) {
-      setMessage("❌ Room Service requires a room number.");
-      return;
-    }
-
-    if (order.items.length === 0) {
-      setMessage("❌ Please add at least one item.");
-      return;
-    }
+    if (!order.location_id) return setMessage("❌ Please select a location.");
+    if (!order.kitchen_id) return setMessage("❌ Please select a kitchen.");
+    if (order.order_type === "room_service" && !order.room_number)
+      return setMessage("❌ Room Service requires a room number.");
+    if (order.items.length === 0) return setMessage("❌ Please add at least one item.");
 
     const payload = {
       ...order,
@@ -155,163 +149,70 @@ const GuestOrderCreate = () => {
     };
 
     try {
-      await axiosWithAuth().post("/restaurant/meal-orders", payload);
+      await axios.post("/restaurant/meal-orders", payload);
       setMessage("✅ Guest order created successfully!");
-
-      setOrder({
-        location_id: "",
-        kitchen_id: "",
-        order_type: "room_service",
-        room_number: "",
-        guest_name: "",
-        status: "open",
-        items: [],
-      });
+      setOrder({ location_id: "", kitchen_id: "", order_type: "room_service", room_number: "", guest_name: "", status: "open", items: [] });
+      setNewItem({ store_item_id: "", quantity: 1, price_per_unit: "", search: "", suggestions: [], selectedItem: null });
     } catch (err) {
       setMessage(err?.response?.data?.detail || "❌ Failed to create order.");
     }
   };
 
-  /* ===============================
-     BUILD TABLE
-  =============================== */
+  // Build table rows
   const rows = order.items.map((it) => {
-    const storeItem = items.find(
-      (m) => Number(m.id) === Number(it.store_item_id)
-    );
-
-    const unit =
-      Number(it.price_per_unit) ||
-      Number(storeItem?.selling_price) ||
-      0;
-
-    const lineTotal = unit * Number(it.quantity || 0);
-
+    const storeItem = it.selectedItem || {};
+    const unit = Number(it.price_per_unit) || Number(storeItem.selling_price) || 0;
     return {
-      name: storeItem?.name || "--",
+      name: storeItem.name || "--",
+      type: storeItem.item_type?.toUpperCase() || "",
       quantity: it.quantity,
       unitPrice: unit,
-      lineTotal,
+      lineTotal: unit * it.quantity,
     };
   });
 
   const grandTotal = rows.reduce((sum, r) => sum + r.lineTotal, 0);
 
-  /* ===============================
-     RENDER
-  =============================== */
   return (
     <div className="guestorder-container">
-      <div className="guestorder-header">
-        <h2>🧾 Create Guest Order</h2>
-      </div>
+      <h2>🧾 Create Guest Order</h2>
+      {message && <p className="guestorder-message">{message}</p>}
 
       <form className="guestorder-form" onSubmit={submitOrder}>
-        {/* Location */}
-        <select
-          value={order.location_id}
-          onChange={(e) =>
-            setOrder({ ...order, location_id: e.target.value })
-          }
-        >
+        <select value={order.location_id} onChange={(e) => setOrder({ ...order, location_id: e.target.value })}>
           <option value="">-- Select Location --</option>
-          {locations.map((loc) => (
-            <option key={loc.id} value={loc.id}>
-              {loc.name}
-            </option>
-          ))}
+          {locations.map((loc) => (<option key={loc.id} value={loc.id}>{loc.name}</option>))}
         </select>
 
-        {/* Kitchen */}
-        <select
-          value={order.kitchen_id}
-          onChange={(e) =>
-            setOrder({ ...order, kitchen_id: e.target.value })
-          }
-          required
-        >
+        <select value={order.kitchen_id} onChange={(e) => setOrder({ ...order, kitchen_id: e.target.value })}>
           <option value="">-- Select Kitchen --</option>
-          {kitchens.map((k) => (
-            <option key={k.id} value={k.id}>
-              {k.name}
-            </option>
-          ))}
+          {kitchens.map((k) => (<option key={k.id} value={k.id}>{k.name}</option>))}
         </select>
 
-        {/* Order Type */}
-        <select
-          value={order.order_type}
-          onChange={(e) =>
-            setOrder({ ...order, order_type: e.target.value })
-          }
-        >
+        <select value={order.order_type} onChange={(e) => setOrder({ ...order, order_type: e.target.value })}>
           <option value="room_service">Room Service</option>
           <option value="dine_in">Dine In</option>
           <option value="takeaway">Takeaway</option>
         </select>
 
-        {/* Guest Name */}
-        <input
-          type="text"
-          placeholder="Guest Name (optional)"
-          value={order.guest_name}
-          onChange={(e) =>
-            setOrder({ ...order, guest_name: e.target.value })
-          }
-        />
+        <input type="text" placeholder="Guest Name (optional)" value={order.guest_name} onChange={(e) => setOrder({ ...order, guest_name: e.target.value })} />
+        <input type="text" placeholder="Room Number (required for room service)" value={order.room_number} onChange={(e) => setOrder({ ...order, room_number: e.target.value })} />
 
-        {/* Room Number */}
-        <input
-          type="text"
-          placeholder="Room Number (required for room service)"
-          value={order.room_number}
-          onChange={(e) =>
-            setOrder({ ...order, room_number: e.target.value })
-          }
-        />
-
-        {/* Add Item */}
+        {/* Searchable item */}
         <div className="guestorder-item-form">
-          <select
-            value={newItem.store_item_id}
-            onChange={(e) => {
-              const itemId = Number(e.target.value);
-              const selectedItem = items.find((i) => i.id === itemId);
-
-              setNewItem({
-                ...newItem,
-                store_item_id: itemId,
-                price_per_unit: selectedItem?.selling_price || "",
-              });
-            }}
-          >
-            <option value="">-- Select Item --</option>
-            {items.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name} ({currencyNGN(item.selling_price)})
-              </option>
-            ))}
-          </select>
-
-          <input
-            type="number"
-            min="1"
-            value={newItem.quantity}
-            onChange={(e) =>
-              setNewItem({ ...newItem, quantity: e.target.value })
-            }
-          />
-
-          <input
-            type="number"
-            min="0"
-            value={newItem.price_per_unit}
-            readOnly
-          />
-
-          <button type="button" onClick={addItem}>
-            ➕ Add Item
-          </button>
+          <input type="text" placeholder="Type to search item..." value={newItem.search} onChange={(e) => handleNewItemChange("search", e.target.value)} />
+          {newItem.suggestions.length > 0 && (
+            <ul className="suggestions-list">
+              {newItem.suggestions.map((item) => (
+                <li key={item.id} onClick={() => handleNewItemChange("store_item_id", item.id)}>
+                  {item.name} ({currencyNGN(item.selling_price)}) [{item.item_type?.toUpperCase() || ""}]
+                </li>
+              ))}
+            </ul>
+          )}
+          <input type="number" min="1" value={newItem.quantity} onChange={(e) => handleNewItemChange("quantity", e.target.value)} />
+          <input type="number" min="0" value={newItem.price_per_unit} onChange={(e) => handleNewItemChange("price_per_unit", e.target.value)} />
+          <button type="button" onClick={addItem}>➕ Add Item</button>
         </div>
 
         {/* Items Table */}
@@ -333,35 +234,19 @@ const GuestOrderCreate = () => {
                   <td>{r.quantity}</td>
                   <td>{currencyNGN(r.unitPrice)}</td>
                   <td>{currencyNGN(r.lineTotal)}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="delete action-btn"
-                      onClick={() => removeItem(i)}
-                    >
-                      ❌
-                    </button>
-                  </td>
+                  <td><button type="button" className="delete action-btn" onClick={() => removeItem(i)}>❌</button></td>
                 </tr>
               ))}
               <tr>
-                <td colSpan="3" style={{ textAlign: "right", fontWeight: 600 }}>
-                  Total
-                </td>
-                <td colSpan="2" style={{ fontWeight: 700 }}>
-                  {currencyNGN(grandTotal)}
-                </td>
+                <td colSpan="4" style={{ textAlign: "right", fontWeight: 600 }}>Total</td>
+                <td colSpan="2" style={{ fontWeight: 700 }}>{currencyNGN(grandTotal)}</td>
               </tr>
             </tbody>
           </table>
         )}
 
-        <button type="submit" className="submit-btn">
-          ✅ Create Order
-        </button>
+        <button type="submit" className="submit-btn">✅ Create Order</button>
       </form>
-
-      {message && <p className="guestorder-message">{message}</p>}
     </div>
   );
 };

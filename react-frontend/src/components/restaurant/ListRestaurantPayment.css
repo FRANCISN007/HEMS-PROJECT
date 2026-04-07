@@ -28,7 +28,7 @@
 
 /* Header */
 .modal-header {
-  padding: 10px 12px;
+  padding: 4px 8px;
   border-bottom: 1px solid #eee;
   background: #f9fafb;
   text-align: center;
@@ -37,19 +37,20 @@
 .modal-header h3 {
   margin: 0;
   font-size: 1rem;
-  font-weight: 600;
-  color: #111;
+  font-weight: 700;
+  color: #000000;
 }
 
 /* Body */
 .modal-body {
-  padding: 12px;
+  padding: 4px;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 10px;
+  gap: 6px;
+  
 }
 
 .form-group {
@@ -243,5 +244,44 @@
 }
 
 .scroll-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+
+
+
+/* Full vertical scroll wrapper - remove vertical scroll */
+.scroll-wrapper {
+  height: auto;           /* let it expand with content */
+  overflow-y: visible;    /* remove vertical scroll */
+  overflow-x: auto;       /* keep horizontal scroll for table */
+  padding-right: 0;       /* remove extra padding */
+}
+
+/* Make table scroll horizontally if too wide */
+.payment-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;     /* table fits container width */
+  overflow-x: auto;
+  display: block;          /* enables horizontal scroll */
+}
+
+/* Optional: modern horizontal scrollbar */
+.payment-table::-webkit-scrollbar {
+  height: 6px;            /* horizontal scrollbar height */
+}
+
+.payment-table::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 6px;
+}
+
+.payment-table::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 6px;
+}
+
+.payment-table::-webkit-scrollbar-thumb:hover {
   background: #555;
 }

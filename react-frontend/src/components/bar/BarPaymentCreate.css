@@ -221,3 +221,30 @@
   text-align: right;
   font-size: 16px;
 }
+
+
+/* ================= Bar Selection Input ================= */
+.bar-payment-container2 select {
+  width: 100%;               /* Full width for better alignment */
+  max-width: 400px;          /* Optional: limit max width */
+  padding: 10px 12px;        /* Comfortable padding */
+  font-size: 16px;           /* Readable text */
+  border: 1px solid #ccc;    /* Light gray border */
+  border-radius: 6px;        /* Slightly rounded corners */
+  background-color: #fff;    /* White background */
+  color: #333;               /* Dark text */
+  outline: none;             /* Remove default focus outline */
+  transition: all 0.2s ease-in-out; /* Smooth focus effect */
+  margin: 12px 0;            /* Vertical spacing */
+  cursor: pointer;           /* Pointer on hover */
+}
+
+.bar-payment-container2 select:focus {
+  border-color: #4a90e2;     /* Blue border on focus */
+  box-shadow: 0 0 5px rgba(74, 144, 226, 0.5); /* Subtle glow */
+}
+
+.bar-payment-container2 option {
+  padding: 8px;              /* Space inside dropdown options */
+  font-size: 15px;           /* Slightly smaller text for options */
+}

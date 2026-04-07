@@ -431,39 +431,77 @@ const ListGuestOrder = () => {
                 <p><strong>Guest:</strong> {printOrder.guest_name || "--"}</p>
                 <p><strong>Room:</strong> {printOrder.room_number || "--"}</p>
                 <p><strong>Type:</strong> {printOrder.order_type}</p>
-                <p><strong>Kitchen:</strong> {kitchens.find((k) => k.id === printOrder.kitchen_id)?.name || "--"}</p>
+                <p>
+                  <strong>Kitchen:</strong>{" "}
+                  {kitchens.find((k) => k.id === printOrder.kitchen_id)?.name || "--"}
+                </p>
               </div>
 
               <hr />
 
-              <div className="receipt-items">
-                {printOrder.items && printOrder.items.length > 0 ? (
-                  printOrder.items.map((item, idx) => (
-                    <div key={idx} className="receipt-item">
-                      <span>{item.quantity} × {item.item_name}</span>
-                      <span className="amount">
-                        {currencyNGN(item.total_price || (item.price_per_unit || 0) * item.quantity)}
-                      </span>
+              {/* ✅ CALCULATE TOTAL */}
+              {(() => {
+                const orderTotal = (printOrder.items || []).reduce(
+                  (sum, item) =>
+                    sum +
+                    (Number(item.total_price) ||
+                      (Number(item.price_per_unit) || 0) *
+                        (Number(item.quantity) || 0)),
+                  0
+                );
+
+                return (
+                  <>
+                    <div className="receipt-items">
+                      {printOrder.items && printOrder.items.length > 0 ? (
+                        printOrder.items.map((item, idx) => (
+                          <div key={idx} className="receipt-item">
+                            <span>
+                              {item.quantity} × {item.item_name}
+                            </span>
+                            <span className="amount">
+                              {currencyNGN(
+                                item.total_price ||
+                                  (item.price_per_unit || 0) * item.quantity
+                              )}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p>No items</p>
+                      )}
                     </div>
-                  ))
-                ) : (
-                  <p>No items</p>
-                )}
-              </div>
 
-              <hr />
-              <div className="receipt-footer">
-                <p>-- Send to Kitchen --</p>
-              </div>
+                    <hr />
+
+                    {/* ✅ TOTAL DISPLAY */}
+                    <div className="receipt-total">
+                      <strong>Total:</strong>
+                       <strong><span>{currencyNGN(orderTotal)} </span>  </strong>
+                    </div>
+
+                    <hr />
+
+                    <div className="receipt-footer">
+                      <p>-- Send to Kitchen --</p>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             <div className="modal-actions">
-              <button onClick={printModalContent} className="print-btn">🖨️ Print Now</button>
-              <button onClick={closePrintModal} className="close-btn">❌</button>
+              <button onClick={printModalContent} className="print-btn">
+                🖨️ Print Now
+              </button>
+              <button onClick={closePrintModal} className="close-btn">
+                ❌
+              </button>
             </div>
           </div>
         </div>
       )}
+
 
       {/* Edit Modal */}
       {editingOrder && (

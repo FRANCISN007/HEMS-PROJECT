@@ -150,43 +150,61 @@ const fetchSalesWithDates = async (from, to) => {
         <head>
           <title>Sale Receipt #${selectedSale.id}</title>
           <style>
-            body {
-              font-family: monospace, Arial, sans-serif;
-              margin: 0;
-              padding: 5px;
-              width: 80mm;   /* ✅ thermal printer width */
-            }
-            h2 {
-              text-align: center;
-              font-size: 14px;
-              margin: 2px 0;
-            }
-            p {
-              margin: 2px 0;
-              font-size: 12px;
-            }
-            hr {
-              border: 1px dashed #000;
-              margin: 6px 0;
-            }
-            .receipt-item {
-              display: flex;
-              justify-content: space-between;
-              font-size: 12px;
-            }
-            .grand-total {
-              font-weight: bold;
-            }
-            .footer {
-              text-align: center;
-              margin-top: 6px;
-              font-size: 11px;
-            }
-          </style>
+          @page {
+            margin: 0; /* ✅ remove printer default margins */
+          }
+
+          body {
+            font-family: monospace, Arial, sans-serif;
+            margin: 10;
+            padding: 2px 4px; /* ✅ reduced left/right padding */
+            width: 76mm; /* ✅ slightly less than 80mm for safety */
+          }
+
+          h2 {
+            text-align: center;
+            font-size: 13px;
+            margin: 1px 0;
+          }
+
+          p {
+            margin: 1px 0;
+            font-size: 11px; /* ✅ slightly smaller */
+          }
+
+          hr {
+            border: none;
+            border-top: 1px dashed #000;
+            margin: 3px 0;
+          }
+
+          .receipt-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+          }
+
+          .receipt-item span:first-child {
+            max-width: 60%;
+            word-wrap: break-word;
+          }
+
+          .grand-total {
+            font-weight: bold;
+            font-size: 12px;
+          }
+
+          .footer {
+            text-align: center;
+            margin-top: 4px;
+            font-size: 10px;
+          }
+        </style>
+
         </head>
         <body>
-          <h2>Destone Hotel & Suite</h2>
-          <p style="text-align:center;">Bar / Restaurant</p>
+          <h2>${HOTEL_NAME}</h2>
+          <p style="text-align:center;">Restaurant Sale Receipt</p>
           <p style="text-align:center;">${new Date(selectedSale.created_at).toLocaleString()}</p>
           <hr />
 

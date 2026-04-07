@@ -1,28 +1,31 @@
 // src/components/store/IssueItems.jsx
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./IssueItems.css";
 
 const IssueItems = () => {
   const [bars, setBars] = useState([]);
-  const [items, setItems] = useState([]);
-  const [rows, setRows] = useState([{ itemId: "", quantity: "" }]);
   const [issuedTo, setIssuedTo] = useState("");
   const [issueDate, setIssueDate] = useState("");
   const [message, setMessage] = useState("");
 
-  // 👉 Format as YYYY-MM-DD
-  const getToday = () => {
-    const today = new Date();
-    return today.toISOString().split("T")[0];
-  };
+  const [rows, setRows] = useState([
+    { itemId: "", itemName: "", search: "", suggestions: [], quantity: "" },
+  ]);
+
+  const fetchTimeout = useRef(null);
+  const axios = axiosWithAuth();
+
+  const getToday = () => new Date().toISOString().split("T")[0];
 
   useEffect(() => {
     setIssueDate(getToday());
   }, []);
 
-  // Get user roles
+  // =============================
+  // 🔐 ROLE CHECK
+  // =============================
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = Array.isArray(storedUser.roles)
     ? storedUser.roles
@@ -41,98 +44,146 @@ const IssueItems = () => {
     );
   }
 
-  // Fetch Bars & Items
+  // =============================
+  // FETCH BARS
+  // =============================
   useEffect(() => {
-    fetchBars();
-    fetchItems();
+    axios
+      .get("/bar/bars/simple")
+      .then((res) =>
+        setBars(Array.isArray(res.data) ? res.data : res.data.bars || [])
+      )
+      .catch((err) => console.error("❌ Error fetching bars", err));
   }, []);
 
-  useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => setMessage(""), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [message]);
+  // =============================
+  // 🔍 SEARCH BAR ITEMS
+  // =============================
+  const fetchItems = async (searchText) => {
+    if (!searchText) return [];
 
-  const fetchBars = async () => {
     try {
-      const res = await axiosWithAuth().get("/bar/bars/simple");
-      setBars(Array.isArray(res.data) ? res.data : res.data.bars || []);
-    } catch (err) {
-      console.error("❌ Error fetching bars", err);
+      const res = await axios.get("/bar/items/simple-search", {
+        params: {
+          search: searchText,
+          limit: 50,
+        },
+      });
+
+      // ✅ Normalize backend
+      return (res.data || []).map((item) => ({
+        id: item.item_id,
+        name: item.item_name,
+        price: item.selling_price,
+      }));
+    } catch {
+      return [];
     }
   };
 
-  const fetchItems = async () => {
-    try {
-      const res = await axiosWithAuth().get("/bar/items/simple");
-      setItems(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
-      console.error("Error fetching items", err);
-    }
-  };
-
-
+  // =============================
+  // ROW CHANGE
+  // =============================
   const handleRowChange = (index, field, value) => {
     const updated = [...rows];
-    updated[index][field] = value;
-    setRows(updated);
-  };
 
-  const addRow = () => {
-    setRows([...rows, { itemId: "", quantity: "" }]);
-  };
+    // 🔍 SEARCH INPUT
+    if (field === "search") {
+      updated[index].search = value;
+      updated[index].itemId = "";
+      updated[index].itemName = "";
 
-  const removeRow = (index) => {
-    const updated = [...rows];
-    updated.splice(index, 1);
+      if (fetchTimeout.current) clearTimeout(fetchTimeout.current);
+
+      fetchTimeout.current = setTimeout(async () => {
+        const results = await fetchItems(value);
+
+        setRows((prev) => {
+          const temp = [...prev];
+          temp[index].suggestions = results;
+          return temp;
+        });
+      }, 300);
+    }
+
+    // ✅ SELECT ITEM
+    if (field === "select_item") {
+      updated[index].itemId = value.id;
+      updated[index].itemName = value.name;
+      updated[index].search = value.name;
+      updated[index].suggestions = [];
+    }
+
+    // 🔢 QUANTITY
+    if (field === "quantity") {
+      updated[index].quantity = value;
+    }
+
     setRows(updated);
   };
 
   // =============================
-  //  SUBMIT HANDLER (MAIN FIX)
+  // ADD / REMOVE ROW
+  // =============================
+  const addRow = () => {
+    setRows([
+      ...rows,
+      { itemId: "", itemName: "", search: "", suggestions: [], quantity: "" },
+    ]);
+  };
+
+  const removeRow = (index) => {
+    setRows(rows.filter((_, i) => i !== index));
+  };
+
+  // =============================
+  // SUBMIT
   // =============================
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!issuedTo || rows.length === 0) {
-      alert("Please select a bar and at least one item.");
+    if (!issuedTo) return alert("Select a bar");
+
+    const validRows = rows.filter((r) => r.itemId && r.quantity);
+
+    if (!validRows.length) {
+      alert("Add at least one valid item");
       return;
     }
-
-    // Convert "2025-12-06" → "2025-12-06T00:00:00"
-    const issueDateISO = issueDate + "T00:00:00";
 
     const payload = {
       issue_to: "bar",
       issued_to_id: parseInt(issuedTo),
-      issue_items: rows.map((row) => ({
+      issue_items: validRows.map((row) => ({
         item_id: parseInt(row.itemId),
         quantity: parseFloat(row.quantity),
       })),
-      issue_date: issueDateISO,
+      issue_date: issueDate + "T00:00:00",
     };
 
-
     try {
-      await axiosWithAuth().post("/store/bar", payload);
-      setMessage("✅ Items successfully issued to bar.");
+      await axios.post("/store/bar", payload);
 
-      // Reset
-      setRows([{ itemId: "", quantity: "" }]);
+      setMessage("✅ Items successfully issued to bar");
+
+      setRows([
+        { itemId: "", itemName: "", search: "", suggestions: [], quantity: "" },
+      ]);
       setIssuedTo("");
       setIssueDate(getToday());
     } catch (err) {
-      setMessage(err.response?.data?.detail || "❌ Error issuing items.");
-      console.error("Issue error", err);
+      setMessage(err.response?.data?.detail || "❌ Error issuing items");
     }
   };
 
+  // =============================
+  // UI
+  // =============================
   return (
     <div className="issue-items-container">
       <h2>📤 Issue Items to Bar</h2>
-      <form onSubmit={handleSubmit} className="issue-form">
 
+      <form onSubmit={handleSubmit} className="issue-form">
         <label>Select Bar</label>
         <select
           value={issuedTo}
@@ -152,37 +203,47 @@ const IssueItems = () => {
           type="date"
           value={issueDate}
           onChange={(e) => setIssueDate(e.target.value)}
-          required
-          readOnly={roles.includes("store")} // store cannot change date
+          readOnly={roles.includes("store")}
         />
 
         <table className="issue-table">
           <thead>
             <tr>
               <th>Item</th>
-              <th>Quantity</th>
-              <th>❌</th>
+              <th>Qty</th>
+              <th></th>
             </tr>
           </thead>
+
           <tbody>
             {rows.map((row, idx) => (
               <tr key={idx}>
                 <td>
-                  <select
-                    value={row.itemId}
-                    onChange={(e) =>
-                      handleRowChange(idx, "itemId", e.target.value)
-                    }
-                    required
-                  >
-                    <option value="">-- Item --</option>
-                    {items.map((item) => (
-                      <option key={item.item_id} value={item.item_id}>
-                      {item.item_name}
-                    </option>
+                  <div className="autocomplete">
+                    <input
+                      type="text"
+                      placeholder="Search item..."
+                      value={row.search}
+                      onChange={(e) =>
+                        handleRowChange(idx, "search", e.target.value)
+                      }
+                    />
 
-                    ))}
-                  </select>
+                    {row.suggestions.length > 0 && (
+                      <ul className="suggestions-list">
+                        {row.suggestions.map((item) => (
+                          <li
+                            key={item.id}
+                            onClick={() =>
+                              handleRowChange(idx, "select_item", item)
+                            }
+                          >
+                            {item.name} - ₦{item.price}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </td>
 
                 <td>
@@ -194,7 +255,6 @@ const IssueItems = () => {
                     onChange={(e) =>
                       handleRowChange(idx, "quantity", e.target.value)
                     }
-                    required
                   />
                 </td>
 

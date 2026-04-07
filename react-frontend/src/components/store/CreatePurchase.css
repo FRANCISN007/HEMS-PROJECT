@@ -57,28 +57,34 @@
   border: 1px solid #ddd;
   border-radius: 8px;
   background: #fff;
-  overflow-x: auto;
+
+  /* ✅ FIX: remove horizontal scroll */
+  overflow: visible;
+  position: relative;
 }
+
 
 .table-header {
   display: grid;
-  grid-template-columns: 2.4fr 1.3fr 1.3fr 1.3fr 1.3fr 0.8fr;
-  background-color: #f7f7f7;
-  padding: 6px;
-  font-weight: 600;
-  font-size: 14px;
-  border-bottom: 1px solid #ddd;
-  color: #333;
+  grid-template-columns: 2fr 2fr 1.5fr 1.9fr 1.9fr 0.7fr;
 }
 
 .table-row {
   display: grid;
-  grid-template-columns: 0.4fr 2.2fr 2fr 1.3fr 1.3fr 0.8fr;
+  grid-template-columns: 1fr 2fr 1.5fr 1.5fr 1.5fr 1fr;
   gap: 8px;
-  padding: 8px;
-  align-items: center;
-  border-bottom: 1px solid #eee;
 }
+
+
+.table-row {
+  position: relative;
+  z-index: 1;
+}
+
+.table-row:hover {
+  z-index: 10;
+}
+
 
 .table-row:nth-child(even) {
   background-color: #fafafa;
@@ -198,6 +204,7 @@
   text-align: center;
 }
 
+
 .purchase-table select,
 .purchase-table input {
   width: 100%;
@@ -206,6 +213,8 @@
 
 .total-cell {
   font-weight: bold;
+
+
 }
 
 .add-row-btn {
@@ -236,3 +245,60 @@
   font-weight: bold;
 }
 
+
+
+.autocomplete {
+  position: relative;
+  width: 100%;
+}
+
+.suggestions-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  max-height: 200px;
+  overflow-y: auto;
+
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+
+  z-index: 9999; /* ✅ VERY IMPORTANT */
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.suggestions-list li {
+  padding: 8px;
+  cursor: pointer;
+}
+
+.suggestions-list li:hover {
+  background: #f1f1f1;
+}
+
+
+/* ===== Compact Top Row ===== */
+.top-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.5fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+/* Attachment row */
+.attachment-row {
+  margin-bottom: 15px;
+}
+
+/* Full width helper */
+.full-width {
+  width: 100%;
+}
+
+
+@media (max-width: 768px) {
+  .top-row {
+    grid-template-columns: 1fr;
+  }
+}

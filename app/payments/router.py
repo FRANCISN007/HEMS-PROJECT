@@ -1,56 +1,38 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
-
-
 from typing import Optional
 from datetime import date, datetime, timedelta, timezone
+
 from sqlalchemy.orm import Session
-from sqlalchemy import between
+from sqlalchemy import between, func
+
 from app.database import get_db
 from app.payments import schemas as payment_schemas, crud
 from app.payments import models as payment_models
 from app.users.auth import get_current_user
-from app.users.permissions import role_required  # 👈 permission helper
+from app.users.permissions import role_required
 from app.users import schemas as user_schemas
-from app.users import schemas
-from app.rooms import models as room_models  # Ensure Room model is imported
+from app.rooms import models as room_models
 from app.bookings import models as booking_models
-from sqlalchemy.sql import func
-from sqlalchemy import func
-import pytz
-from loguru import logger
-from app.bookings import models  # Import the models module from bookings
-from app.bank import models as  bank_models
+from app.bank import models as bank_models
 
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
+from sqlalchemy import func
+
+
+from app.core.timezone import now_wat, to_wat
+
+
+from loguru import logger
 import os
+
+WAT = ZoneInfo("Africa/Lagos")
 
 
 router = APIRouter()
 
-
 # Set up logging
 logger.add("app.log", rotation="500 MB", level="DEBUG")
-
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
-LAGOS_TZ = ZoneInfo("Africa/Lagos")
-
-def get_local_time():
-    return datetime.now(LAGOS_TZ)
-
-
-def make_timezone_aware(dt: datetime) -> datetime:
-    """
-    Convert datetime to Lagos timezone-aware datetime.
-    """
-    if dt is None:
-        return None
-
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=LAGOS_TZ)
-
-    return dt.astimezone(LAGOS_TZ)
-
 
 
 # ---------------------------------------------------
@@ -60,164 +42,194 @@ def make_timezone_aware(dt: datetime) -> datetime:
 def create_payment(
     booking_id: int,
     payment_request: payment_schemas.PaymentCreateSchema,
+    business_id: Optional[int] = Query(None),
+
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
-    business_id = current_user.business_id
-    transaction_time = get_local_time()
+    try:
+        # ✅ ALWAYS use core timezone
+        now = now_wat()
 
-    # -----------------------------
-    # Normalize payment date
-    # -----------------------------
-    payment_date = make_timezone_aware(payment_request.payment_date)
-
-    if payment_date > transaction_time:
-        raise HTTPException(
-            status_code=400,
-            detail="Payment date cannot be in the future."
-        )
-
-    # -----------------------------
-    # Fetch booking (Tenant Safe)
-    # -----------------------------
-    booking_record = db.query(booking_models.Booking).filter(
-        booking_models.Booking.id == booking_id,
-        booking_models.Booking.business_id == business_id
-    ).first()
-
-    if not booking_record:
-        raise HTTPException(status_code=404, detail="Booking not found")
-
-    booking_date = make_timezone_aware(booking_record.booking_date)
-
-    if payment_date.date() < booking_date.date():
-        raise HTTPException(
-            status_code=400,
-            detail=f"Payment date cannot be earlier than booking date ({booking_date.date()})"
-        )
-
-    # -----------------------------
-    # Fetch Room
-    # -----------------------------
-    room = crud.get_room_by_number(db, booking_record.room_number)
-
-    if not room:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Room {booking_record.room_number} not found"
-        )
-
-    # -----------------------------
-    # Validate booking status
-    # -----------------------------
-    allowed_status = ["checked-in", "reserved"]
-
-    if booking_record.status not in allowed_status:
-        if booking_record.status == "checked-out" and booking_record.payment_status != "fully paid":
-            pass
+        # -------------------------------
+        # 1️⃣ Determine business scope
+        # -------------------------------
+        if "super_admin" in current_user.roles:
+            effective_business_id = business_id
+            if not effective_business_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Super admin must provide business_id."
+                )
         else:
+            effective_business_id = current_user.business_id
+
+        # -------------------------------
+        # 2️⃣ Normalize payment date (WAT ONLY FROM CORE)
+        # -------------------------------
+        raw_payment_date = payment_request.payment_date or now
+        payment_date = to_wat(raw_payment_date)
+
+        if payment_date > now:
             raise HTTPException(
                 status_code=400,
-                detail="Payment allowed only for checked-in, reserved, or checked-out bookings with balance."
+                detail="Payment date cannot be in the future."
             )
 
-    # -----------------------------
-    # Calculate totals
-    # -----------------------------
-    total_due = booking_record.number_of_days * room.amount
-
-    existing_payments = db.query(payment_models.Payment).filter(
-        payment_models.Payment.booking_id == booking_id,
-        payment_models.Payment.status != "voided"
-    ).all()
-
-    total_existing_payment = sum(
-        p.amount_paid + (p.discount_allowed or 0)
-        for p in existing_payments
-    )
-
-    new_payment_total = (
-        total_existing_payment
-        + payment_request.amount_paid
-        + (payment_request.discount_allowed or 0)
-    )
-
-    balance_due = total_due - new_payment_total
-
-    # -----------------------------
-    # Determine payment status
-    # -----------------------------
-    if balance_due > 0:
-        payment_status = "part payment"
-    elif balance_due < 0:
-        payment_status = "excess payment"
-    else:
-        payment_status = "fully paid"
-
-    # -----------------------------
-    # Validate Bank (Tenant Safe)
-    # -----------------------------
-    bank_record = None
-    method = payment_request.payment_method.lower()
-
-    if method in ["bank_transfer", "pos_card"]:
-        if not payment_request.bank_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Bank is required for POS or bank transfer."
-            )
-
-        bank_record = db.query(bank_models.Bank).filter(
-            bank_models.Bank.id == payment_request.bank_id,
-            bank_models.Bank.business_id == business_id
+        # -------------------------------
+        # 3️⃣ Fetch booking (tenant-safe)
+        # -------------------------------
+        booking = db.query(booking_models.Booking).filter(
+            booking_models.Booking.id == booking_id,
+            booking_models.Booking.business_id == effective_business_id,
+            booking_models.Booking.deleted == False
         ).first()
 
-        if not bank_record:
-            raise HTTPException(status_code=404, detail="Bank not found")
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
 
-    else:
-        payment_request.bank_id = None
+        # -------------------------------
+        # 4️⃣ Validate booking_date vs payment_date
+        # -------------------------------
+        booking_date = to_wat(booking.booking_date) if booking.booking_date else None
 
-    # -----------------------------
-    # Create payment
-    # -----------------------------
-    new_payment = payment_models.Payment(
-        booking_id=booking_id,
-        business_id=business_id,
-        amount_paid=payment_request.amount_paid,
-        discount_allowed=payment_request.discount_allowed,
-        payment_method=payment_request.payment_method,
-        payment_date=payment_date,
-        bank_id=payment_request.bank_id,
-        balance_due=balance_due,
-        status=payment_status,
-        created_by=current_user.username
-    )
+        if booking_date and payment_date.date() < booking_date.date():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Payment date cannot be earlier than booking date ({booking_date.date()})"
+            )
 
-    db.add(new_payment)
+        # -------------------------------
+        # 5️⃣ Validate booking status
+        # -------------------------------
+        if booking.status not in ["checked-in", "reserved", "checked-out"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid booking status for payment."
+            )
 
-    # -----------------------------
-    # Update booking payment status
-    # -----------------------------
-    booking_record.payment_status = payment_status
+        # -------------------------------
+        # 6️⃣ Calculate totals
+        # -------------------------------
+        total_due = booking.booking_cost or 0
 
-    db.commit()
-    db.refresh(new_payment)
+        existing_payments = db.query(payment_models.Payment).filter(
+            payment_models.Payment.booking_id == booking_id,
+            payment_models.Payment.business_id == effective_business_id,
+            payment_models.Payment.status != "voided"
+        ).all()
 
-    return {
-        "message": "Payment processed successfully",
-        "payment_details": {
-            "payment_id": new_payment.id,
-            "amount_paid": new_payment.amount_paid,
-            "discount_allowed": new_payment.discount_allowed,
-            "payment_method": new_payment.payment_method,
-            "bank": bank_record.name if bank_record else None,
-            "payment_date": new_payment.payment_date,
-            "balance_due": new_payment.balance_due,
-            "status": new_payment.status,
-            "created_by": new_payment.created_by
+        total_existing = sum(
+            (p.amount_paid or 0) + (p.discount_allowed or 0)
+            for p in existing_payments
+        )
+
+        new_total = (
+            total_existing
+            + (payment_request.amount_paid or 0)
+            + (payment_request.discount_allowed or 0)
+        )
+
+        balance_due = total_due - new_total
+
+        # -------------------------------
+        # 7️⃣ Determine payment status
+        # -------------------------------
+        if balance_due > 0:
+            payment_status = "part payment"
+        elif balance_due < 0:
+            payment_status = "excess payment"
+        else:
+            payment_status = "fully paid"
+
+        # -------------------------------
+        # 8️⃣ Validate bank (tenant-safe)
+        # -------------------------------
+        bank_record = None
+        method = (payment_request.payment_method or "").lower()
+
+        if method in ["bank_transfer", "transfer", "pos", "pos_card"]:
+            if not payment_request.bank_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Bank is required for POS or transfer."
+                )
+
+            bank_record = db.query(bank_models.Bank).filter(
+                bank_models.Bank.id == payment_request.bank_id,
+                bank_models.Bank.business_id == effective_business_id
+            ).first()
+
+            if not bank_record:
+                raise HTTPException(status_code=404, detail="Bank not found")
+        else:
+            payment_request.bank_id = None
+
+        # -------------------------------
+        # 9️⃣ Create payment
+        # -------------------------------
+        new_payment = payment_models.Payment(
+            booking_id=booking.id,
+            business_id=effective_business_id,
+            room_number=booking.room_number,
+            guest_name=booking.guest_name,
+
+            amount_paid=payment_request.amount_paid,
+            discount_allowed=payment_request.discount_allowed or 0,
+            payment_method=payment_request.payment_method,
+
+            # ✅ FIXED TIMEZONE USAGE (FROM CORE ONLY)
+            payment_date=payment_date,
+
+            bank_id=payment_request.bank_id,
+            balance_due=balance_due,
+            status=payment_status,
+            created_by=current_user.username
+        )
+
+        db.add(new_payment)
+
+        # -------------------------------
+        # 🔟 Update booking payment status
+        # -------------------------------
+        booking.payment_status = payment_status
+
+        db.commit()
+        db.refresh(new_payment)
+
+        # -------------------------------
+        # 1️⃣1️⃣ Response
+        # -------------------------------
+        return {
+            "message": "Payment processed successfully",
+            "payment_details": {
+                "payment_id": new_payment.id,
+                "booking_id": booking.id,
+                "room_number": booking.room_number,
+                "guest_name": booking.guest_name,
+
+                "amount_paid": new_payment.amount_paid,
+                "discount_allowed": new_payment.discount_allowed,
+                "payment_method": new_payment.payment_method,
+                "bank": bank_record.name if bank_record else None,
+
+                # optional: keep raw DB value (already WAT)
+                "payment_date": new_payment.payment_date,
+
+                "balance_due": new_payment.balance_due,
+                "status": new_payment.status,
+                "created_by": new_payment.created_by
+            }
         }
-    }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal Server Error: {str(e)}"
+        )
+
+
 
 
 
@@ -225,218 +237,233 @@ def create_payment(
 
 @router.get("/list")
 def list_payments(
-    start_date: Optional[date] = Query(None, description="date format-yyyy-mm-dd"),
-    end_date: Optional[date] = Query(None, description="date format-yyyy-mm-dd"),
-    business_id: Optional[int] = Query(None, description="Super admin can specify business_id"),
+    start_date: Optional[date] = Query(None, description="yyyy-mm-dd"),
+    end_date: Optional[date] = Query(None, description="yyyy-mm-dd"),
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard", "super_admin"]))
 ):
-    """
-    List payments including voided/cancelled for display,
-    but exclude them from summary totals.
+    try:
 
-    Super Admin can pass business_id to inspect a specific business.
-    """
+        roles = set(current_user.roles)
 
-    roles = set(current_user.roles)
+        # ---------------------------------
+        # Business resolution
+        # ---------------------------------
+        target_business_id = (
+            business_id if "super_admin" in roles and business_id
+            else current_user.business_id
+        )
 
-    # -----------------------------
-    # Determine target business
-    # -----------------------------
-    if "super_admin" in roles and business_id:
-        target_business_id = business_id
-    else:
-        target_business_id = current_user.business_id
+        # ---------------------------------
+        # SAFE WAT date conversion
+        # ---------------------------------
+        now = now_wat()
 
-    # -----------------------------
-    # Convert date filters
-    # -----------------------------
-    start_datetime = datetime.combine(start_date, datetime.min.time(), ZoneInfo("Africa/Lagos")) if start_date else None
-    end_datetime = datetime.combine(end_date, datetime.max.time(), ZoneInfo("Africa/Lagos")) if end_date else None
+        start_datetime = None
+        end_datetime = None
 
-    query = db.query(payment_models.Payment).filter(
-        payment_models.Payment.business_id == target_business_id
-    )
+        if start_date:
+            start_datetime = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=WAT)
 
-    if start_datetime and end_datetime:
-        if start_datetime > end_datetime:
-            raise HTTPException(status_code=400, detail="Start date cannot be after end date.")
-        query = query.filter(payment_models.Payment.payment_date.between(start_datetime, end_datetime))
-    elif start_datetime:
-        query = query.filter(payment_models.Payment.payment_date >= start_datetime)
-    elif end_datetime:
-        query = query.filter(payment_models.Payment.payment_date <= end_datetime)
+        if end_date:
+            end_datetime = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=WAT)
 
-    payments = query.order_by(payment_models.Payment.id.desc()).all()
+        # ---------------------------------
+        # Base query
+        # ---------------------------------
+        query = db.query(payment_models.Payment).filter(
+            payment_models.Payment.business_id == target_business_id
+        )
 
-    if not payments:
-        return {"message": "No payments found for the specified criteria."}
+        if start_datetime and end_datetime:
+            if start_datetime > end_datetime:
+                raise HTTPException(status_code=400, detail="Start date cannot be after end date.")
 
-    # -----------------------------
-    # Fetch related bookings
-    # -----------------------------
-    booking_ids = {p.booking_id for p in payments if p.booking_id}
-
-    bookings = {}
-    if booking_ids:
-        booking_objs = db.query(booking_models.Booking).filter(
-            booking_models.Booking.id.in_(booking_ids),
-            booking_models.Booking.business_id == target_business_id
-        ).all()
-
-        bookings = {b.id: b for b in booking_objs}
-
-    # -----------------------------
-    # Aggregate totals (non-voided)
-    # -----------------------------
-    sums_map = {}
-
-    if booking_ids:
-        agg = db.query(
-            payment_models.Payment.booking_id,
-            func.coalesce(func.sum(payment_models.Payment.amount_paid), 0).label("sum_paid"),
-            func.coalesce(func.sum(payment_models.Payment.discount_allowed), 0).label("sum_discount")
-        ).filter(
-            payment_models.Payment.booking_id.in_(booking_ids),
-            payment_models.Payment.business_id == target_business_id,
-            ~payment_models.Payment.status.in_(["voided", "cancelled"])
-        ).group_by(payment_models.Payment.booking_id).all()
-
-        for row in agg:
-            sums_map[row.booking_id] = {
-                "sum_paid": float(row.sum_paid),
-                "sum_discount": float(row.sum_discount),
-            }
-
-    # -----------------------------
-    # Summary totals
-    # -----------------------------
-    total_bookings = set()
-    total_booking_cost = 0
-    total_amount_paid = 0
-    total_discount_allowed = 0
-    total_cash = 0
-    total_pos = 0
-    total_bank_transfer = 0
-
-    bank_method_totals = {}
-
-    method_map = {
-        "pos": "pos_card",
-        "card": "pos_card",
-        "pos card": "pos_card",
-        "pos_card": "pos_card",
-        "transfer": "bank_transfer",
-        "bank": "bank_transfer",
-        "bank transfer": "bank_transfer",
-        "bank_transfer": "bank_transfer",
-        "cash": "cash",
-    }
-
-    payment_list = []
-
-    # -----------------------------
-    # Process payments
-    # -----------------------------
-    for payment in payments:
-
-        booking = bookings.get(payment.booking_id)
-
-        current_balance = None
-
-        if booking:
-            sums = sums_map.get(payment.booking_id, {"sum_paid": 0, "sum_discount": 0})
-            current_balance = (booking.booking_cost or 0) - (
-                sums["sum_paid"] + sums["sum_discount"]
+            query = query.filter(
+                payment_models.Payment.payment_date.between(start_datetime, end_datetime)
             )
 
-        payment_list.append({
-            "payment_id": payment.id,
-            "guest_name": payment.guest_name,
-            "room_number": payment.room_number,
-            "booking_cost": booking.booking_cost if booking else None,
-            "amount_paid": payment.amount_paid,
-            "discount_allowed": payment.discount_allowed,
-            "balance_due": current_balance,
-            "payment_method": payment.payment_method,
-            "payment_date": payment.payment_date.isoformat(),
-            "status": payment.status,
-            "void_date": payment.void_date.isoformat() if payment.void_date else None,
-            "booking_id": payment.booking_id,
-            "created_by": payment.created_by,
-            "bank_id": payment.bank_id,
-            "bank_name": payment.bank.name if payment.bank else None,
-        })
+        elif start_datetime:
+            query = query.filter(payment_models.Payment.payment_date >= start_datetime)
 
-        # Skip voided payments in totals
-        if payment.status in ["voided", "cancelled"]:
-            continue
+        elif end_datetime:
+            query = query.filter(payment_models.Payment.payment_date <= end_datetime)
 
-        if booking and payment.booking_id not in total_bookings:
-            total_booking_cost += booking.booking_cost or 0
-            total_bookings.add(payment.booking_id)
+        payments = query.order_by(payment_models.Payment.id.desc()).all()
 
-        total_amount_paid += payment.amount_paid or 0
-        total_discount_allowed += payment.discount_allowed or 0
+        if not payments:
+            return {"message": "No payments found for the specified criteria."}
 
-        method = method_map.get(
-            (payment.payment_method or "").lower(),
-            (payment.payment_method or "").lower()
-        )
+        # ---------------------------------
+        # Related bookings
+        # ---------------------------------
+        booking_ids = {p.booking_id for p in payments if p.booking_id}
 
-        bank_name = payment.bank.name if payment.bank else None
+        bookings = {}
+        if booking_ids:
+            booking_objs = db.query(booking_models.Booking).filter(
+                booking_models.Booking.id.in_(booking_ids),
+                booking_models.Booking.business_id == target_business_id
+            ).all()
 
-        if method == "cash":
-            total_cash += payment.amount_paid or 0
+            bookings = {b.id: b for b in booking_objs}
 
-        elif method == "pos_card":
-            total_pos += payment.amount_paid or 0
+        # ---------------------------------
+        # Aggregation (non-voided)
+        # ---------------------------------
+        sums_map = {}
 
-        elif method == "bank_transfer":
-            total_bank_transfer += payment.amount_paid or 0
+        if booking_ids:
+            agg = db.query(
+                payment_models.Payment.booking_id,
+                func.coalesce(func.sum(payment_models.Payment.amount_paid), 0),
+                func.coalesce(func.sum(payment_models.Payment.discount_allowed), 0)
+            ).filter(
+                payment_models.Payment.booking_id.in_(booking_ids),
+                payment_models.Payment.business_id == target_business_id,
+                ~payment_models.Payment.status.in_(["voided", "cancelled"])
+            ).group_by(payment_models.Payment.booking_id).all()
 
-        if bank_name:
-            if bank_name not in bank_method_totals:
-                bank_method_totals[bank_name] = {"pos_card": 0, "bank_transfer": 0}
+            for row in agg:
+                sums_map[row[0]] = {
+                    "sum_paid": float(row[1]),
+                    "sum_discount": float(row[2]),
+                }
 
-            if method == "pos_card":
-                bank_method_totals[bank_name]["pos_card"] += payment.amount_paid or 0
+        # ---------------------------------
+        # Totals
+        # ---------------------------------
+        total_bookings = set()
+        total_booking_cost = 0
+        total_amount_paid = 0
+        total_discount_allowed = 0
+        total_cash = 0
+        total_pos = 0
+        total_bank_transfer = 0
+
+        bank_method_totals = {}
+
+        method_map = {
+            "pos": "pos_card",
+            "card": "pos_card",
+            "pos card": "pos_card",
+            "pos_card": "pos_card",
+            "transfer": "bank_transfer",
+            "bank": "bank_transfer",
+            "bank transfer": "bank_transfer",
+            "bank_transfer": "bank_transfer",
+            "cash": "cash",
+        }
+
+        payment_list = []
+
+        # ---------------------------------
+        # Process payments
+        # ---------------------------------
+        for payment in payments:
+
+            booking = bookings.get(payment.booking_id)
+
+            sums = sums_map.get(payment.booking_id, {"sum_paid": 0, "sum_discount": 0})
+
+            current_balance = None
+            if booking:
+                current_balance = (booking.booking_cost or 0) - (
+                    sums["sum_paid"] + sums["sum_discount"]
+                )
+
+            payment_list.append({
+                "payment_id": payment.id,
+                "guest_name": payment.guest_name,
+                "room_number": payment.room_number,
+                "booking_cost": booking.booking_cost if booking else None,
+                "amount_paid": payment.amount_paid,
+                "discount_allowed": payment.discount_allowed,
+                "balance_due": current_balance,
+                "payment_method": payment.payment_method,
+                "payment_date": payment.payment_date.astimezone(WAT).isoformat() if payment.payment_date else None,
+                "status": payment.status,
+                "void_date": payment.void_date.astimezone(WAT).isoformat() if payment.void_date else None,
+                "booking_id": payment.booking_id,
+                "created_by": payment.created_by,
+                "bank_id": payment.bank_id,
+                "bank_name": payment.bank.name if payment.bank else None,
+            })
+
+            # Skip voided in totals
+            if payment.status in ["voided", "cancelled"]:
+                continue
+
+            if booking and payment.booking_id not in total_bookings:
+                total_booking_cost += booking.booking_cost or 0
+                total_bookings.add(payment.booking_id)
+
+            total_amount_paid += payment.amount_paid or 0
+            total_discount_allowed += payment.discount_allowed or 0
+
+            method = method_map.get(
+                (payment.payment_method or "").lower(),
+                (payment.payment_method or "").lower()
+            )
+
+            bank_name = payment.bank.name if payment.bank else None
+
+            if method == "cash":
+                total_cash += payment.amount_paid or 0
+
+            elif method == "pos_card":
+                total_pos += payment.amount_paid or 0
 
             elif method == "bank_transfer":
-                bank_method_totals[bank_name]["bank_transfer"] += payment.amount_paid or 0
+                total_bank_transfer += payment.amount_paid or 0
 
-    # -----------------------------
-    # Compute total due
-    # -----------------------------
-    total_due = sum(
-        (bookings[b].booking_cost or 0) -
-        (
-            sums_map.get(b, {"sum_paid": 0, "sum_discount": 0})["sum_paid"]
-            + sums_map.get(b, {"sum_paid": 0, "sum_discount": 0})["sum_discount"]
+            if bank_name:
+                if bank_name not in bank_method_totals:
+                    bank_method_totals[bank_name] = {"pos_card": 0, "bank_transfer": 0}
+
+                if method == "pos_card":
+                    bank_method_totals[bank_name]["pos_card"] += payment.amount_paid or 0
+
+                elif method == "bank_transfer":
+                    bank_method_totals[bank_name]["bank_transfer"] += payment.amount_paid or 0
+
+        # ---------------------------------
+        # Compute total due
+        # ---------------------------------
+        total_due = sum(
+            (bookings[b].booking_cost or 0) -
+            (
+                sums_map.get(b, {"sum_paid": 0, "sum_discount": 0})["sum_paid"]
+                + sums_map.get(b, {"sum_paid": 0, "sum_discount": 0})["sum_discount"]
+            )
+            for b in total_bookings
         )
-        for b in total_bookings
-    )
 
-    # -----------------------------
-    # Final response
-    # -----------------------------
-    return {
-        "summary": {
-            "total_bookings": len(total_bookings),
-            "total_booking_cost": total_booking_cost,
-            "total_amount_paid": total_amount_paid,
-            "total_discount_allowed": total_discount_allowed,
-            "total_due": total_due,
-        },
-        "payment_method_totals": {
-            "total_cash": total_cash,
-            "total_pos": total_pos,
-            "total_bank_transfer": total_bank_transfer,
-            "total_payment": total_cash + total_pos + total_bank_transfer,
-            **bank_method_totals
-        },
-        "payments": payment_list,
-    }
+        # ---------------------------------
+        # Response
+        # ---------------------------------
+        return {
+            "summary": {
+                "total_bookings": len(total_bookings),
+                "total_booking_cost": total_booking_cost,
+                "total_amount_paid": total_amount_paid,
+                "total_discount_allowed": total_discount_allowed,
+                "total_due": total_due,
+            },
+            "payment_method_totals": {
+                "total_cash": total_cash,
+                "total_pos": total_pos,
+                "total_bank_transfer": total_bank_transfer,
+                "total_payment": total_cash + total_pos + total_bank_transfer,
+                **bank_method_totals
+            },
+            "payments": payment_list,
+        }
+
+    except Exception as e:
+        logger.error(f"Error listing payments: {repr(e)}")
+        raise HTTPException(status_code=500, detail="An error occurred while retrieving payments.")
 
 
 
@@ -732,6 +759,7 @@ def total_payment(
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard", "super_admin"]))
 ):
     try:
+        from app.core.timezone import now_wat, to_wat
 
         roles = set(current_user.roles)
 
@@ -744,10 +772,15 @@ def total_payment(
             target_business_id = current_user.business_id
 
         # --------------------------------------
-        # Lagos timezone today
+        # FIXED: Use core timezone ONLY
         # --------------------------------------
-        lagos_now = datetime.now(ZoneInfo("Africa/Lagos"))
-        today_start = datetime.combine(lagos_now.date(), datetime.min.time(), ZoneInfo("Africa/Lagos"))
+        now = now_wat()
+        today_date = now.date()
+
+        today_start = now.replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+
         today_end = today_start + timedelta(days=1)
 
         # --------------------------------------
@@ -813,15 +846,10 @@ def total_payment(
 
             bank_name = payment.bank.name if payment.bank else None
 
-            # Update main totals
             if method in total_by_method:
                 total_by_method[method] += amount
 
-            # --------------------------------
-            # Bank summary
-            # --------------------------------
             if bank_name:
-
                 if bank_name not in bank_summary:
                     bank_summary[bank_name] = {
                         "pos_card": 0,
@@ -834,9 +862,6 @@ def total_payment(
                 if method == "bank_transfer":
                     bank_summary[bank_name]["bank_transfer"] += amount
 
-            # --------------------------------
-            # Payment list
-            # --------------------------------
             payment_list.append({
                 "payment_id": payment.id,
                 "room_number": payment.room_number,
@@ -846,7 +871,7 @@ def total_payment(
                 "discount_allowed": payment.discount_allowed,
                 "balance_due": payment.balance_due,
                 "payment_method": method,
-                "payment_date": payment.payment_date.isoformat(),
+                "payment_date": payment.payment_date.isoformat() if payment.payment_date else None,
                 "status": payment.status,
                 "booking_id": payment.booking_id,
                 "created_by": payment.created_by,
@@ -875,14 +900,13 @@ def total_payment(
         )
 
 
-from datetime import datetime, date
 
-@router.get("/debtor_list")
-def get_debtor_list(
-    debtor_name: Optional[str] = Query(None),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
-    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
+
+
+
+@router.get("/total_daily_payment")
+def total_payment(
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard", "super_admin"]))
 ):
@@ -890,181 +914,96 @@ def get_debtor_list(
 
         roles = set(current_user.roles)
 
-        # --------------------------------------------
-        # Determine business
-        # --------------------------------------------
-        if "super_admin" in roles and business_id:
-            target_business_id = business_id
-        else:
-            target_business_id = current_user.business_id
+        target_business_id = business_id if "super_admin" in roles and business_id else current_user.business_id
 
-        # --------------------------------------------
-        # Date parsing
-        # --------------------------------------------
-        def parse_date(d):
-            return datetime.strptime(d, "%Y-%m-%d").date() if d else None
+        # ✅ FIX: use WAT consistently
+        now = now_wat()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
 
-        start_date_obj = parse_date(start_date)
-        end_date_obj = parse_date(end_date)
+        payments = db.query(payment_models.Payment).filter(
+            payment_models.Payment.business_id == target_business_id,
+            payment_models.Payment.payment_date >= today_start,
+            payment_models.Payment.payment_date < today_end,
+            payment_models.Payment.status != "voided"
+        ).order_by(payment_models.Payment.id.desc()).all()
 
-        start_datetime = None
-        end_datetime = None
+        payment_list = []
+        total_amount = 0
 
-        if start_date_obj:
-            start_datetime = datetime.combine(
-                start_date_obj,
-                datetime.min.time(),
-                ZoneInfo("Africa/Lagos")
-            )
+        total_by_method = {
+            "cash": 0,
+            "pos_card": 0,
+            "bank_transfer": 0
+        }
 
-        if end_date_obj:
-            end_datetime = datetime.combine(
-                end_date_obj,
-                datetime.max.time(),
-                ZoneInfo("Africa/Lagos")
-            )
+        bank_summary = {}
 
-        # --------------------------------------------
-        # 1️⃣ GROSS DEBT (ALL BOOKINGS)
-        # --------------------------------------------
-        all_bookings = db.query(booking_models.Booking).filter(
-            booking_models.Booking.business_id == target_business_id,
-            booking_models.Booking.status != "cancelled",
-            booking_models.Booking.payment_status != "complimentary"
-        ).all()
+        method_map = {
+            "pos": "pos_card",
+            "card": "pos_card",
+            "pos card": "pos_card",
+            "pos_card": "pos_card",
+            "transfer": "bank_transfer",
+            "bank": "bank_transfer",
+            "bank transfer": "bank_transfer",
+            "bank_transfer": "bank_transfer",
+            "cash": "cash",
+        }
 
-        total_gross_debt = 0
+        for payment in payments:
 
-        for booking in all_bookings:
+            amount = payment.amount_paid or 0
+            total_amount += amount
 
-            room = db.query(room_models.Room).filter(
-                room_models.Room.room_number == booking.room_number,
-                room_models.Room.business_id == target_business_id
-            ).first()
+            method = method_map.get((payment.payment_method or "").lower(), payment.payment_method)
 
-            if not room:
-                continue
+            bank_name = payment.bank.name if payment.bank else None
 
-            total_due = (booking.number_of_days or 0) * (room.amount or 0)
+            if method in total_by_method:
+                total_by_method[method] += amount
 
-            payments = db.query(payment_models.Payment).filter(
-                payment_models.Payment.booking_id == booking.id,
-                payment_models.Payment.business_id == target_business_id,
-                payment_models.Payment.status != "voided"
-            ).all()
+            if bank_name:
+                if bank_name not in bank_summary:
+                    bank_summary[bank_name] = {"pos_card": 0, "bank_transfer": 0}
 
-            total_paid = sum(p.amount_paid or 0 for p in payments)
-            total_discount = sum(p.discount_allowed or 0 for p in payments)
+                if method == "pos_card":
+                    bank_summary[bank_name]["pos_card"] += amount
 
-            balance_due = total_due - (total_paid + total_discount)
+                if method == "bank_transfer":
+                    bank_summary[bank_name]["bank_transfer"] += amount
 
-            if balance_due > 0:
-                total_gross_debt += balance_due
-
-        # --------------------------------------------
-        # 2️⃣ CURRENT DEBT (FILTERED)
-        # --------------------------------------------
-        bookings_filtered = db.query(booking_models.Booking).filter(
-            booking_models.Booking.business_id == target_business_id,
-            booking_models.Booking.status != "cancelled",
-            booking_models.Booking.payment_status != "complimentary"
-        )
-
-        if start_datetime:
-            bookings_filtered = bookings_filtered.filter(
-                booking_models.Booking.booking_date >= start_datetime
-            )
-
-        if end_datetime:
-            bookings_filtered = bookings_filtered.filter(
-                booking_models.Booking.booking_date <= end_datetime
-            )
-
-        if debtor_name:
-            bookings_filtered = bookings_filtered.filter(
-                booking_models.Booking.guest_name.ilike(f"%{debtor_name}%")
-            )
-
-        bookings_filtered = bookings_filtered.all()
-
-        debtor_list = []
-        total_current_debt = 0
-
-        # --------------------------------------------
-        # Process filtered bookings
-        # --------------------------------------------
-        for booking in bookings_filtered:
-
-            room = db.query(room_models.Room).filter(
-                room_models.Room.room_number == booking.room_number,
-                room_models.Room.business_id == target_business_id
-            ).first()
-
-            if not room:
-                continue
-
-            total_due = (booking.number_of_days or 0) * (room.amount or 0)
-
-            payments = db.query(payment_models.Payment).filter(
-                payment_models.Payment.booking_id == booking.id,
-                payment_models.Payment.business_id == target_business_id,
-                payment_models.Payment.status != "voided"
-            ).all()
-
-            total_paid = sum(p.amount_paid or 0 for p in payments)
-            total_discount = sum(p.discount_allowed or 0 for p in payments)
-
-            balance_due = total_due - (total_paid + total_discount)
-
-            if balance_due > 0:
-
-                last_payment_date = max(
-                    (p.payment_date for p in payments if p.payment_date),
-                    default=None
-                )
-
-                debtor_list.append({
-                    "guest_name": booking.guest_name,
-                    "room_number": booking.room_number,
-                    "room_price": room.amount or 0,
-                    "number_of_days": booking.number_of_days or 0,
-                    "booking_id": booking.id,
-                    "booking_cost": total_due,
-                    "total_paid": total_paid,
-                    "discount_allowed": total_discount,
-                    "amount_due": balance_due,
-                    "booking_date": booking.booking_date,
-                    "last_payment_date": last_payment_date
-                })
-
-                total_current_debt += balance_due
-
-        # --------------------------------------------
-        # Sort by last payment
-        # --------------------------------------------
-        debtor_list.sort(
-            key=lambda x: x["last_payment_date"] or datetime.min,
-            reverse=True
-        )
+            # ✅ FIX: ensure timezone-safe output
+            payment_list.append({
+                "payment_id": payment.id,
+                "room_number": payment.room_number,
+                "guest_name": payment.guest_name,
+                "booking_cost": payment.booking.booking_cost if payment.booking else None,
+                "amount_paid": amount,
+                "discount_allowed": payment.discount_allowed,
+                "balance_due": payment.balance_due,
+                "payment_method": method,
+                "payment_date": payment.payment_date.astimezone().isoformat() if payment.payment_date else None,
+                "status": payment.status,
+                "booking_id": payment.booking_id,
+                "created_by": payment.created_by,
+                "bank": bank_name,
+            })
 
         return {
-            "total_debtors": len(debtor_list),
-            "total_current_debt": total_current_debt,
-            "total_gross_debt": total_gross_debt,
-            "debtors": debtor_list
+            "message": "Today's payment data retrieved successfully.",
+            "total_payments": len(payment_list),
+            "total_amount": total_amount,
+            "total_by_method": {
+                **total_by_method,
+                **bank_summary
+            },
+            "payments": payment_list,
         }
 
     except Exception as e:
-        import traceback
-
-        logger.error(
-            f"Error retrieving debtor list: {repr(e)}\n{traceback.format_exc()}"
-        )
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}"
-        )
+        logger.error(f"Error retrieving daily sales: {repr(e)}")
+        raise HTTPException(status_code=500, detail="An error occurred while retrieving daily sales.")
 
 
 @router.get("/outstanding")
@@ -1256,10 +1195,14 @@ def get_payment_by_id(
         )
 
 
+from fastapi import HTTPException, Depends, Query
+from sqlalchemy.orm import Session
+from app.core.timezone import now_wat
+
 @router.put("/void/{payment_id}")
 def void_payment(
     payment_id: int,
-    business_id: Optional[int] = Query(None, description="Required for super admin"),
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin", "super_admin"]))
 ):
@@ -1268,7 +1211,7 @@ def void_payment(
         roles = set(current_user.roles)
 
         # ---------------------------------------
-        # Determine business (same logic as other endpoints)
+        # Business resolution
         # ---------------------------------------
         if "super_admin" in roles:
             if not business_id:
@@ -1281,7 +1224,7 @@ def void_payment(
             target_business_id = current_user.business_id
 
         # ---------------------------------------
-        # Fetch payment
+        # Fetch payment (safe join avoided)
         # ---------------------------------------
         payment = db.query(payment_models.Payment).filter(
             payment_models.Payment.id == payment_id,
@@ -1289,15 +1232,13 @@ def void_payment(
         ).first()
 
         if not payment:
-            logger.warning(f"Payment {payment_id} not found for business {target_business_id}")
-
             raise HTTPException(
                 status_code=404,
                 detail=f"Payment with ID {payment_id} not found."
             )
 
         # ---------------------------------------
-        # Check if already voided
+        # Already voided check
         # ---------------------------------------
         if payment.status == "voided":
             raise HTTPException(
@@ -1306,35 +1247,55 @@ def void_payment(
             )
 
         # ---------------------------------------
-        # Void payment
+        # Void payment (timezone-safe)
         # ---------------------------------------
-        lagos_now = datetime.now(ZoneInfo("Africa/Lagos"))
-
         payment.status = "voided"
-        payment.void_date = lagos_now
+        payment.void_date = now_wat()
 
         # ---------------------------------------
-        # Update booking payment status
+        # Update booking safely
         # ---------------------------------------
-        booking = db.query(booking_models.Booking).filter(
-            booking_models.Booking.id == payment.booking_id,
-            booking_models.Booking.business_id == target_business_id
-        ).first()
+        booking = None
+
+        if payment.booking_id:
+            booking = db.query(booking_models.Booking).filter(
+                booking_models.Booking.id == payment.booking_id,
+                booking_models.Booking.business_id == target_business_id
+            ).first()
 
         if booking:
-            booking.payment_status = "pending"
+            # recompute booking payment status safely
+            remaining_payments = db.query(payment_models.Payment).filter(
+                payment_models.Payment.booking_id == booking.id,
+                payment_models.Payment.business_id == target_business_id,
+                payment_models.Payment.status != "voided"
+            ).all()
+
+            total_paid = sum(p.amount_paid or 0 for p in remaining_payments)
+            total_discount = sum(p.discount_allowed or 0 for p in remaining_payments)
+
+            room = db.query(room_models.Room).filter(
+                room_models.Room.room_number == booking.room_number,
+                room_models.Room.business_id == target_business_id
+            ).first()
+
+            if room:
+                total_due = (booking.number_of_days or 0) * (room.amount or 0)
+                balance = total_due - (total_paid + total_discount)
+
+                booking.payment_status = "paid" if balance <= 0 else "pending"
 
         # ---------------------------------------
-        # Save changes
+        # Commit
         # ---------------------------------------
         db.commit()
+
+        # IMPORTANT: refresh before accessing relationships
         db.refresh(payment)
 
-        logger.info(
-            f"Payment {payment_id} voided successfully for business {target_business_id}"
-        )
-
-        bank_name = payment.bank.name if payment.bank else "N/A"
+        bank_name = None
+        if payment.bank:
+            bank_name = getattr(payment.bank, "name", None)
 
         return {
             "message": f"Payment {payment_id} has been voided successfully.",
@@ -1342,21 +1303,19 @@ def void_payment(
                 "payment_id": payment.id,
                 "status": payment.status,
                 "void_date": payment.void_date.isoformat() if payment.void_date else None,
-                "bank": bank_name,
+                "bank": bank_name or "N/A",
             },
             "booking_details": {
                 "booking_id": booking.id if booking else None,
-                "payment_status": booking.payment_status if booking else "Not Found",
+                "payment_status": booking.payment_status if booking else None,
             },
         }
 
-    except HTTPException as e:
-        raise e
+    except HTTPException:
+        raise
 
     except Exception as e:
-
         db.rollback()
-
         logger.error(f"Error voiding payment {payment_id}: {repr(e)}")
 
         raise HTTPException(

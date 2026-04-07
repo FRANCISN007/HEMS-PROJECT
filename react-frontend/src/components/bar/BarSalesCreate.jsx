@@ -1,23 +1,24 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./BarSalesCreate.css";
 
 const BarSalesCreate = () => {
   const [bars, setBars] = useState([]);
-  const [items, setItems] = useState([]);
   const [barId, setBarId] = useState("");
-
-  // ✅ Sale Date (default = now)
-  const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 16));
-
-  const [saleItems, setSaleItems] = useState([{ item_id: "", quantity: 1, selling_price: 0, total: 0 }]);
+  const [saleDate, setSaleDate] = useState(new Date().toISOString().slice(0, 16));
+  const [saleItems, setSaleItems] = useState([
+    { item_id: "", item_name: "", search: "", suggestions: [], quantity: 1, selling_price: 0, total: 0 },
+  ]);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
 
-  // 🔐 Role check
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const roles = user.roles || [];
 
+  const axios = axiosWithAuth();
+  const fetchTimeout = useRef(null);
+
+  // Role check
   if (!(roles.includes("admin") || roles.includes("bar"))) {
     return (
       <div className="unauthorized">
@@ -27,56 +28,17 @@ const BarSalesCreate = () => {
     );
   }
 
-  // ⏬ Fetch bars
+  // Fetch bars
   useEffect(() => {
-    axiosWithAuth()
+    axios
       .get("/bar/bars/simple")
       .then((res) => setBars(Array.isArray(res.data) ? res.data : []))
-      .catch((err) => console.error("❌ Fetch bars failed:", err));
+      .catch(() => showMessage("❌ Failed to load bars", "error"));
   }, []);
 
-  // ⏬ Fetch items
-  useEffect(() => {
-    axiosWithAuth()
-      .get("/bar/items/simplesellprice")
-      .then((res) => setItems(Array.isArray(res.data) ? res.data : []))
-      .catch((err) => console.error("❌ Fetch items failed:", err));
-  }, []);
-
-  // 🔢 Recalculate totals
-  const totalAmount = useMemo(() => saleItems.reduce((sum, row) => sum + row.total, 0), [saleItems]);
-
-  const recalcRow = (row) => {
-    const qty = Number(row.quantity || 0);
-    const price = Number(row.selling_price || 0);
-    return { ...row, total: qty * price };
-  };
-
-  // ➕ Add row
-  const handleAddRow = () => {
-    setSaleItems([...saleItems, { item_id: "", quantity: 1, selling_price: 0, total: 0 }]);
-  };
-
-  // ❌ Remove row
-  const handleRemoveRow = (index) => setSaleItems(saleItems.filter((_, i) => i !== index));
-
-  // ✏️ Row changes
-  const handleRowChange = (index, field, value) => {
-    const updated = [...saleItems];
-    if (field === "item_id") {
-      const selected = items.find((i) => i.item_id === Number(value));
-      updated[index] = recalcRow({
-        ...updated[index],
-        item_id: value,
-        selling_price: selected?.selling_price || 0,
-      });
-    } else {
-      updated[index] = recalcRow({ ...updated[index], [field]: value });
-    }
-    setSaleItems(updated);
-  };
-
-  // 🔔 Messages
+  // ===============================
+  // Helpers
+  // ===============================
   const showMessage = (text, type = "success") => {
     setMessage(text);
     setMessageType(type);
@@ -86,7 +48,88 @@ const BarSalesCreate = () => {
     }, 3000);
   };
 
-  // 💾 Submit
+  const recalcRow = (row) => {
+    const qty = Number(row.quantity || 0);
+    const price = Number(row.selling_price || 0);
+    return { ...row, total: qty * price };
+  };
+
+  const fetchItems = async (searchText) => {
+    if (!searchText) return [];
+    try {
+      const res = await axios.get("/bar/items/simple-search", { params: { search: searchText, limit: 50 } });
+      return Array.isArray(res.data) ? res.data : [];
+    } catch {
+      return [];
+    }
+  };
+
+  // ===============================
+  // Row handlers
+  // ===============================
+  const handleRowChange = (index, field, value) => {
+    const updated = [...saleItems];
+
+    // Search input
+    if (field === "search") {
+      updated[index].search = value;
+      updated[index].item_id = "";
+      updated[index].item_name = "";
+      updated[index].selling_price = 0;
+
+      // Debounce
+      if (fetchTimeout.current) clearTimeout(fetchTimeout.current);
+      fetchTimeout.current = setTimeout(async () => {
+        if (value) {
+          const results = await fetchItems(value);
+          setSaleItems((prev) => {
+            const temp = [...prev];
+            temp[index].suggestions = results;
+            return temp;
+          });
+        } else {
+          setSaleItems((prev) => {
+            const temp = [...prev];
+            temp[index].suggestions = [];
+            return temp;
+          });
+        }
+      }, 300);
+    }
+
+    // Selecting a suggestion
+    if (field === "select_item") {
+      const selected = value; // full item object
+      updated[index].item_id = selected.item_id;
+      updated[index].item_name = selected.item_name;
+      updated[index].selling_price = selected.selling_price || 0;
+      updated[index].search = selected.item_name;
+      updated[index].suggestions = [];
+    }
+
+    // Quantity or price
+    if (field === "quantity" || field === "selling_price") {
+      updated[index][field] = value;
+    }
+
+    updated[index] = recalcRow(updated[index]);
+    setSaleItems(updated);
+  };
+
+  const handleAddRow = () => {
+    setSaleItems([
+      ...saleItems,
+      { item_id: "", item_name: "", search: "", suggestions: [], quantity: 1, selling_price: 0, total: 0 },
+    ]);
+  };
+
+  const handleRemoveRow = (index) => setSaleItems(saleItems.filter((_, i) => i !== index));
+
+  const totalAmount = useMemo(() => saleItems.reduce((sum, row) => sum + row.total, 0), [saleItems]);
+
+  // ===============================
+  // Submit
+  // ===============================
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!barId) return showMessage("⚠ Please select a bar.", "warning");
@@ -98,33 +141,34 @@ const BarSalesCreate = () => {
       const payload = {
         bar_id: Number(barId),
         sale_date: new Date(saleDate).toISOString(),
-        items: validItems.map((row) => ({
-          item_id: Number(row.item_id),
-          quantity: Number(row.quantity),
-          selling_price: Number(row.selling_price),
+        items: validItems.map((r) => ({
+          item_id: Number(r.item_id),
+          quantity: Number(r.quantity),
+          selling_price: Number(r.selling_price),
         })),
       };
-      await axiosWithAuth().post("/bar/sales", payload);
+      await axios.post("/bar/sales", payload);
       showMessage("✅ Sale recorded successfully!");
 
-      // Reset
+      // Reset form
       setBarId("");
       setSaleDate(new Date().toISOString().slice(0, 16));
-      setSaleItems([{ item_id: "", quantity: 1, selling_price: 0, total: 0 }]);
+      setSaleItems([{ item_id: "", item_name: "", search: "", suggestions: [], quantity: 1, selling_price: 0, total: 0 }]);
     } catch (err) {
-      console.error("❌ Sale failed:", err);
+      console.error(err);
       showMessage(err.response?.data?.detail || "❌ Failed to record sale.", "error");
     }
   };
 
+  // ===============================
+  // Render
+  // ===============================
   return (
     <div className="sale-container">
       <h2>🍹 Record Bar Sale</h2>
-
       {message && <p className={`sale-message msg-${messageType}`}>{message}</p>}
 
       <form onSubmit={handleSubmit}>
-        {/* Bar + Sale Date Row */}
         <div className="bar-date-row">
           <div className="form-group">
             <label>Bar</label>
@@ -149,7 +193,6 @@ const BarSalesCreate = () => {
           </div>
         </div>
 
-        {/* Sale Items Table */}
         <table className="sale-table">
           <thead>
             <tr>
@@ -164,17 +207,23 @@ const BarSalesCreate = () => {
             {saleItems.map((row, index) => (
               <tr key={index}>
                 <td>
-                  <select
-                    value={row.item_id}
-                    onChange={(e) => handleRowChange(index, "item_id", e.target.value)}
-                  >
-                    <option value="">-- Select --</option>
-                    {items.map((item) => (
-                      <option key={item.item_id} value={item.item_id}>
-                        {item.item_name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="autocomplete">
+                    <input
+                      type="text"
+                      placeholder="Type to search item..."
+                      value={row.search}
+                      onChange={(e) => handleRowChange(index, "search", e.target.value)}
+                    />
+                    {row.suggestions.length > 0 && (
+                      <ul className="suggestions-list">
+                        {row.suggestions.map((item) => (
+                          <li key={item.item_id} onClick={() => handleRowChange(index, "select_item", item)}>
+                            {item.item_name} (₦{item.selling_price})
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </td>
                 <td>
                   <input
@@ -200,8 +249,6 @@ const BarSalesCreate = () => {
                 </td>
               </tr>
             ))}
-
-            {/* Grand Total Row */}
             <tr className="grand-total-row">
               <td colSpan="3" style={{ textAlign: "right" }}>
                 <strong>Grand Total:</strong>

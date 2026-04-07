@@ -1,28 +1,41 @@
 // src/components/bar/BarSalesSummary.jsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
+import { HOTEL_NAME } from "../../config/constants";
 import "./BarSalesSummary.css";
 
 const BarSalesSummary = () => {
-  const [summary, setSummary] = useState([]);
-  const [bars, setBars] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [grandTotal, setGrandTotal] = useState(0);
+  const getToday = () => new Date().toISOString().split("T")[0];
+  const printRef = useRef();
 
+  const [startDate, setStartDate] = useState(getToday());
+  const [endDate, setEndDate] = useState(getToday());
   const [barId, setBarId] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [bars, setBars] = useState([]);
 
-  // ✅ Helper: get today's date as YYYY-MM-DD
-  const getToday = () => {
-    return new Date().toISOString().split("T")[0];
+  const [items, setItems] = useState([]);
+  const [itemsSummary, setItemsSummary] = useState({});
+  const [paymentSummary, setPaymentSummary] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  // ================= FORMAT =================
+  const formatAmount = (value) => {
+    return new Intl.NumberFormat("en-NG").format(Number(value || 0));
   };
 
-  // ✅ Fetch sales summary
-  const fetchSummary = useCallback(async () => {
+  // ================= FETCH BARS =================
+  const fetchBars = async () => {
+    try {
+      const res = await axiosWithAuth().get("/bar/bars/simple");
+      setBars(res.data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // ================= FETCH SUMMARY =================
+  const fetchSummary = async () => {
     setLoading(true);
-    setError("");
 
     try {
       const params = {};
@@ -32,51 +45,93 @@ const BarSalesSummary = () => {
 
       const res = await axiosWithAuth().get("/bar/item-summary", { params });
 
-      const items = res.data.items || [];
-      setSummary(items);
-      setGrandTotal(res.data.grand_total || 0);
+      setItems(res.data.items || []);
+      setItemsSummary(res.data.items_summary || {});
+      setPaymentSummary(res.data.payment_summary || {});
     } catch (err) {
-      console.error("❌ Fetch error:", err);
-      setError("❌ Failed to fetch bar sales summary.");
-    } finally {
-      setLoading(false);
+      console.error(err);
     }
-  }, [barId, startDate, endDate]);
 
-  // ✅ Fetch list of bars once
-  const fetchBars = useCallback(async () => {
-    try {
-      const res = await axiosWithAuth().get("/bar/bars/simple");
-      setBars(res.data || []);
-    } catch (err) {
-      console.error("❌ Failed to fetch bars:", err);
-    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchBars();
+    fetchSummary();
   }, []);
 
-  // ✅ On mount, set default to today
   useEffect(() => {
-    const today = getToday();
-    setStartDate(today);
-    setEndDate(today);
-    fetchBars();
-  }, [fetchBars]);
+    fetchSummary();
+  }, [barId, startDate, endDate]);
 
-  // ✅ Whenever filters change (including default today), fetch summary
-  useEffect(() => {
-    if (startDate && endDate) {
-      fetchSummary();
-    }
-  }, [fetchSummary, startDate, endDate]);
+  // ================= PRINT =================
+  const handlePrint = () => {
+    const content = printRef.current.innerHTML;
+    const win = window.open("", "", "width=900,height=700");
+
+    win.document.write(`
+      <html>
+        <head>
+          <title>Bar Sales Summary</title>
+          <style>
+            body { font-family: Arial; padding: 10px; font-size: 12px; }
+            h1, h2, h4 { text-align: center; }
+
+            table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+            th, td { border: 1px solid #000; padding: 5px; text-align: center; }
+            th { background: #eee; }
+
+            .grand-total-row {
+              font-weight: bold;
+              border-top: 3px solid #000;
+              background: #f0f0f0;
+            }
+
+            .summary-grid {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 8px;
+              margin-bottom: 8px;
+            }
+
+            .card {
+              border: 1px solid #000;
+              padding: 6px;
+              text-align: center;
+            }
+
+            .highlight {
+              background: #eafaf0;
+              border: 1px solid #28a745;
+            }
+
+            .bank-line {
+              display: grid;
+              grid-template-columns: 120px 1fr 1fr;
+              gap: 10px;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>${HOTEL_NAME}</h1>
+          <h2>🍷 Bar Sales Summary</h2>
+          ${content}
+        </body>
+      </html>
+    `);
+
+    win.document.close();
+    win.print();
+  };
 
   return (
-    <div className="bar-sales-summary">
-      <h2>🍷 Bar Item Sales Summary</h2>
+    <div className="sales-summary-page">
+      <h2>🍷 Bar Sales Summary</h2>
 
-      {/* Filters */}
-      <div className="filters">
-        <label>Bar:</label>
+      {/* ================= FILTERS ================= */}
+      <div className="filter-bar">
         <select value={barId} onChange={(e) => setBarId(e.target.value)}>
-          <option value="">-- All Bars --</option>
+          <option value="">All Bars</option>
           {bars.map((bar) => (
             <option key={bar.id} value={bar.id}>
               {bar.name}
@@ -84,65 +139,95 @@ const BarSalesSummary = () => {
           ))}
         </select>
 
-        <label>Start Date:</label>
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-        />
+        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
 
-        <label>End Date:</label>
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-        />
-
-        <button onClick={fetchSummary} className="refresh-btn">
-          🔍 Apply
+        <button className="print-btn" onClick={handlePrint}>
+          🖨️ Print
         </button>
       </div>
 
-      {/* Loading and Error */}
-      {loading && <p>Loading sales summary...</p>}
-      {error && <p className="error">{error}</p>}
+      {loading ? <p>Loading...</p> : (
+        <div ref={printRef}>
+          {/* ================= ITEMS TABLE ================= */}
+          <div className="summary-table-container">
+            <table className="summary-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Qty</th>
+                  <th>Price</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, idx) => (
+                  <tr key={idx}>
+                    <td>{item.item}</td>
+                    <td>{item.qty}</td>
+                    <td>₦{formatAmount(item.price)}</td>
+                    <td>₦{formatAmount(item.amount)}</td>
+                  </tr>
+                ))}
 
-      {/* Table */}
-      {!loading && !error && summary.length > 0 && (
-        <table className="summary-table">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Quantity Sold</th>
-              <th>Selling Price</th>
-              <th>Total Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {summary.map((row, idx) => (
-              <tr
-                key={row.item_id}
-                className={idx % 2 === 0 ? "even" : "odd"}
-              >
-                <td>{row.item_name}</td>
-                <td>{row.total_quantity}</td>
-                <td>₦{Number(row.selling_price).toLocaleString()}</td>
-                <td>₦{Number(row.total_amount).toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="total-row">
-              <td colSpan="3">GRAND TOTAL</td>
-              <td>₦{Number(grandTotal).toLocaleString()}</td>
-            </tr>
-          </tfoot>
-        </table>
-      )}
+                <tr className="grand-total-row">
+                  <td colSpan="3">Total</td>
+                  <td>₦{formatAmount(itemsSummary.grand_total)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-      {/* Empty state */}
-      {!loading && !error && summary.length === 0 && (
-        <p>No sales summary available.</p>
+          {/* ================= SUMMARY ================= */}
+          <div className="summary-grid">
+            <div className="card">
+              <span>Sales</span>
+              <h3>₦{formatAmount(paymentSummary.total_sales)}</h3>
+            </div>
+
+            <div className="card">
+              <span>Paid</span>
+              <h3>₦{formatAmount(paymentSummary.total_paid)}</h3>
+            </div>
+
+            <div className="card">
+              <span>Balance</span>
+              <h3>₦{formatAmount(paymentSummary.total_due)}</h3>
+            </div>
+          </div>
+
+          {/* ================= PAYMENT TYPES ================= */}
+          <div className="summary-grid">
+            <div className="card highlight">
+              <span>Cash</span>
+              <h3>₦{formatAmount(paymentSummary.total_cash)}</h3>
+            </div>
+
+            <div className="card">
+              <span>POS</span>
+              <h3>₦{formatAmount(paymentSummary.total_pos)}</h3>
+            </div>
+
+            <div className="card">
+              <span>Transfer</span>
+              <h3>₦{formatAmount(paymentSummary.total_transfer)}</h3>
+            </div>
+          </div>
+
+          {/* ================= BANK ================= */}
+          <div className="bank-section">
+            <h4>🏦 Bank Breakdown</h4>
+
+            {paymentSummary.banks &&
+              Object.entries(paymentSummary.banks).map(([bank, data]) => (
+                <div key={bank} className="bank-line">
+                  <span>{bank}</span>
+                  <span>POS: ₦{formatAmount(data.pos)}</span>
+                  <span>Transfer: ₦{formatAmount(data.transfer)}</span>
+                </div>
+              ))}
+          </div>
+        </div>
       )}
     </div>
   );

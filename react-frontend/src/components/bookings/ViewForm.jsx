@@ -1,6 +1,5 @@
 import React, { useEffect } from "react";
-
-
+import { HOTEL_NAME } from "../../config/constants";
 
 const ViewForm = ({ booking }) => {
   useEffect(() => {
@@ -27,6 +26,15 @@ const ViewForm = ({ booking }) => {
             .header {
               text-align: center;
               margin-bottom: 20px;
+            }
+            .hotel-name {
+              font-size: 22px;
+              font-weight: bold;
+              margin-bottom: 5px;
+            }
+            .form-title {
+              font-size: 18px;
+              margin-bottom: 15px;
             }
             .grid {
               display: grid;
@@ -57,8 +65,10 @@ const ViewForm = ({ booking }) => {
         </head>
         <body>
           <div class="header">
-            <h2>Guest Booking Form</h2>
+            <div class="hotel-name">${HOTEL_NAME}</div>
+            <div class="form-title">Guest Booking Form</div>
           </div>
+
           <div class="grid">
             <div><span class="label">Booking ID:</span> ${booking.id}</div>
             <div><span class="label">Room No:</span> ${booking.room_number}</div>
@@ -87,12 +97,12 @@ const ViewForm = ({ booking }) => {
             I accept full responsibility for any violations and understand that I will be held liable as specified herein.<br/><br/>
 
             <b>RULES AND DIRECTIVES</b><br/>
-            X No smoking of any kind or intake of hard drugs in the room or toilet. Fine is N200,000.<br/>
+            X No smoking of any kind or intake of hard drugs in the room or toilet. Fine is N20,000.<br/>
             X Guests are not allowed to bring in food and drinks from outside into the hotel premises.<br/>
-            X Smoking of cigarette is only allowed by the Pool Bar area.<br/>
+            X Smoking of cigarette is only allowed outside.<br/>
             X All guests are to drop their keycards whenever they are leaving the hotel premises.<br/>
-            X Misplacement of room keycard attracts a fine of N5,000 for immediate replacement.<br/>
-            X Destroying or staining towels, bedsheets, rugs, and especially wallpaper in the room or any area in the hotel will attract immediate replacement.<br/><br/>
+            X Misplacement of room keycard attracts a fine of N10,000 for immediate replacement.<br/>
+            X Destroying or staining towels, bedsheets, or rugs in the room or any area in the hotel will attract immediate replacement.<br/><br/>
 
             <b>NOTE:</b> Guests that go contrary to the above stated rules and directives will be evicted without refund.<br/><br/>
 

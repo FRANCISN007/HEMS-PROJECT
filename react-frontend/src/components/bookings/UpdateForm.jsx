@@ -10,6 +10,7 @@ const UpdateForm = ({ booking, onClose }) => {
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [rooms, setRooms] = useState([]);
 
 
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
@@ -39,9 +40,17 @@ const UpdateForm = ({ booking, onClose }) => {
       setFormData({
         ...booking,
         mode_of_identification: booking.mode_of_identification?.trim() || "",
+        room_number: booking.room_number || "", // ✅ ADD THIS
       });
     }
   }, [booking]);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/rooms/`)
+      .then(res => res.json())
+      .then(data => setRooms(data))
+      .catch(err => console.error(err));
+  }, []);
 
   // ✅ Handle normal input
   const handleChange = (e) => {
@@ -137,6 +146,17 @@ const UpdateForm = ({ booking, onClose }) => {
               onChange={handleChange}
             />
           </div>
+
+          <div className="sform-row">
+            <label>Room Number</label>
+            <input
+              name="room_number"
+              value={formData.room_number || ""}
+              onChange={handleChange}
+              required
+            />
+          </div>
+
 
           <div className="sform-row">
             <label>Arrival Date</label>

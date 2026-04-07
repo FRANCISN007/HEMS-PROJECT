@@ -1,37 +1,46 @@
-
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
-import pytz
-from sqlalchemy.sql import func
 
+from app.core.timezone import now_wat, to_wat
 
 
 class PaymentCreateSchema(BaseModel):
-    
     amount_paid: float
-    discount_allowed: Optional[float]   # New discount field, default to 0.0
-    payment_method: str  # E.g., 'credit_card', 'cash', 'bank_transfer'
-    #payment_date: datetime
-    payment_date: datetime = datetime.now(pytz.timezone("Africa/Lagos"))
-    created_by: Optional[str] = None  # Remove manual input, get from `current_user`
-    #booking_cost: Optional[float]  # Update booking cost if provided
-    bank_id: Optional[int] = None  # ✅ new field
-    
+    discount_allowed: Optional[float] = 0.0
+    payment_method: str
+
+    payment_date: Optional[datetime] = None  # ✅ FIXED
+
+    created_by: Optional[str] = None
+    bank_id: Optional[int] = None
+
     class Config:
         from_attributes = True
+
+    def model_post_init(self, __context):
+        if self.payment_date:
+            self.payment_date = to_wat(self.payment_date)
+
+
 
 class PaymentUpdateSchema(BaseModel):
-    guest_name: str
-    room_number: str
-    amount_paid: Optional[float] = None  # Update the amount if provided
-    discount_allowed: Optional[float]   # Update discount if provided
-    payment_method: Optional[str] = None  # Update the payment method if provided
-    payment_date: datetime = datetime.now(pytz.timezone("Africa/Lagos"))
-    #payment_date: datetime # Update the payment date if provided
-    status: Optional[str] = None  # Update the status (e.g., 'completed', 'pending') if provided
-    #booking_cost: Optional[float]   # Update booking cost if provided
-    
+    guest_name: Optional[str] = None
+    room_number: Optional[str] = None
+
+    amount_paid: Optional[float] = None
+    discount_allowed: Optional[float] = None
+    payment_method: Optional[str] = None
+
+    # ✅ WAT default
+    payment_date: Optional[datetime] = Field(default_factory=now_wat)
+
+    status: Optional[str] = None
+
     class Config:
         from_attributes = True
 
+    # ✅ Normalize timezone
+    def model_post_init(self, __context):
+        if self.payment_date:
+            self.payment_date = to_wat(self.payment_date)

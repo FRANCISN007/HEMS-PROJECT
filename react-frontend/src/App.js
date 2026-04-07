@@ -24,6 +24,8 @@ import CreateBooking from "./components/bookings/CreateBooking";
 import ListBooking from "./components/bookings/ListBooking";
 import CheckoutGuest from "./components/bookings/CheckoutGuest";
 import CancelBooking from "./components/bookings/CancelBooking";
+import SummaryReport from "./components/bookings/SummaryReport";
+
 
 import CreateBank from "./components/payments/CreateBank";
 import CreatePayment from "./components/payments/CreatePayment";
@@ -212,6 +214,8 @@ const App = () => {
             <Route path="list" element={<ListBooking />} />
             <Route path="checkout" element={<CheckoutGuest />} />
             <Route path="cancel" element={<CancelBooking />} />
+            <Route path="summary" element={<SummaryReport />} />
+
           </Route>
 
           {/* Payments */}

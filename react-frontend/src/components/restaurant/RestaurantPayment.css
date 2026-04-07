@@ -110,7 +110,7 @@
   border-collapse: collapse;
   margin-top: 10px;
   font-size: 12px;
-  border: 2px solid #d1d5db; /* outer border */
+  border: 2px solid #171718; /* outer border */
   background: white;
   border-radius: 10px;
   overflow: hidden;
@@ -119,12 +119,22 @@
 
 .sales-table th,
 .sales-table td {
-  border: 1px solid #cbd5e1; /* 🔹 visible grid lines */
+  border: 1px solid #9ba7b6; /* 🔹 visible grid lines */
   padding: 6px 8px;
-  line-height: 1.4;
+  line-height: 1.6;
   text-align: center;
   white-space: nowrap;
+  font-size: 12px;
+
 }
+
+.sales-table td {
+  
+  font-size: 14px;
+  font-weight: 600;
+  
+}
+
 
 .sales-table th {
   background-color: #263455;    /* Dark navy black background */
@@ -156,7 +166,7 @@
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 13px;
   transition: 0.2s;
 }
 
@@ -276,6 +286,8 @@
 .modal-actions .btn-secondary:hover {
   background-color: #a71d2a;
 }
+
+
 
 /* Animation */
 @keyframes fadeIn {

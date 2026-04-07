@@ -8,6 +8,8 @@ from app.rooms import models
 from loguru import logger
 from sqlalchemy import between
 
+from app.core.timezone import now_wat, to_wat
+
 
 # Set up logging
 #logger.add("app.log", rotation="500 MB", level="DEBUG")
@@ -19,34 +21,73 @@ def create_payment(
     booking_id: int,
     balance_due: float,
     status: str,
-    created_by: str
+    created_by: str,
+    business_id: int
 ):
     """
-    Create a new payment for a booking and associate it with the booking.
+    Create a new payment for a booking (multi-tenant safe, WAT compliant)
     """
-    # Step 1: Ensure the booking exists
-    booking = db.query(booking_models.Booking).filter(booking_models.Booking.id == booking_id).first()
-    if not booking:
-        raise Exception(f"Booking with ID {booking_id} does not exist.")
+    
 
-    # Step 2: Create the new payment record
+    # -------------------------------
+    # 1️⃣ Fetch booking (tenant-safe)
+    # -------------------------------
+    booking = db.query(booking_models.Booking).filter(
+        booking_models.Booking.id == booking_id,
+        booking_models.Booking.business_id == business_id,
+        booking_models.Booking.deleted == False
+    ).first()
+
+    if not booking:
+        raise Exception(f"Booking with ID {booking_id} not found in this business.")
+
+    # -------------------------------
+    # 2️⃣ Normalize payment date (WAT)
+    # -------------------------------
+    now = now_wat()
+    payment_date = to_wat(payment.payment_date or now)
+
+    if payment_date > now:
+        raise Exception("Payment date cannot be in the future.")
+
+    # -------------------------------
+    # 3️⃣ Validate against booking_date
+    # -------------------------------
+    if booking.booking_date:
+        booking_date = to_wat(booking.booking_date)
+
+        if payment_date.date() < booking_date.date():
+            raise Exception(
+                f"Payment date cannot be earlier than booking date ({booking_date.date()})"
+            )
+
+    # -------------------------------
+    # 4️⃣ Create payment
+    # -------------------------------
     new_payment = payment_models.Payment(
-        booking_id=booking_id,  # Correctly assign the booking_id here
-        room_number=booking.room_number,  # Extract room number from the booking record
-        guest_name=booking.guest_name,  # Extract guest name from the booking record
+        booking_id=booking.id,
+        business_id=business_id,
+
+        room_number=booking.room_number,
+        guest_name=booking.guest_name,
+
         amount_paid=payment.amount_paid,
+        discount_allowed=payment.discount_allowed or 0,
         balance_due=balance_due,
-        discount_allowed=payment.discount_allowed,
+
         payment_method=payment.payment_method,
-        bank_id=payment.bank_id, # ✅ store bank_id
-        payment_date=payment.payment_date,  # Ensure it remains a datetime object
+        bank_id=payment.bank_id,
+
+        payment_date=payment_date,
         status=status,
-        void_date=None, 
-        created_by=created_by,  # Track who created the payment
-        
+        void_date=None,
+
+        created_by=created_by
     )
 
-    # Step 3: Add and commit the payment to the database
+    # -------------------------------
+    # 5️⃣ Save
+    # -------------------------------
     db.add(new_payment)
     db.commit()
     db.refresh(new_payment)

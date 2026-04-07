@@ -1,88 +1,186 @@
-.bar-container {
-  background: #fff;
-  padding: 12px;              /* ⬇ reduced */
+/* ================= CONTAINER ================= */
+.stock-balance-container1 {
+  padding: 8px;
+  font-family: Arial, sans-serif;
+  max-width: 1200px;  /* wider container for large screens */
+  width: 100%;
+  margin: 0 auto;
+  background: #fafafa;
   border-radius: 6px;
-  box-shadow: 0px 1px 6px rgba(0,0,0,0.08);
-  max-width: 100%;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
 }
 
-.bar-header {
+/* ================= HEADER ================= */
+.stock-balance-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;         /* ⬇ tighter */
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
 }
 
-.bar-header h2 {
+.stock-balance-header h2 {
+  font-size: 20px;
+  font-weight: 700;
   margin: 0;
-  font-size: 1.2rem;          /* ⬇ smaller */
+  color: #2c3e50;
 }
 
-.close-btn {
-  background: red;
-  border: none;
-  color: white;
-  font-size: 1rem;
-  cursor: pointer;
-  padding: 2px 6px;           /* ⬇ compact */
-  border-radius: 3px;
+/* ================= FILTER FRAME ================= */
+.filter-frame1 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 6px 4px;
+  background: #ffffff;
+  border-radius: 6px;
+  box-shadow: 0px 1px 4px rgba(0,0,0,0.08);
+  width: 100%;
+  align-items: center;
 }
 
-.table-wrapper {
-  overflow-x: auto;
-  margin-top: 8px;            /* ⬇ */
+/* Rows inside filter */
+.filter-row1 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  flex: 1; /* allow spreading */
 }
 
-.bar-table {
+/* Each input group */
+.filter-group1 {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1; /* expand evenly */
+}
+
+/* Label */
+.filter-group1 label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Inputs & Selects */
+.filter-group1 input,
+.filter-group1 select {
+  min-width: 120px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 12px;
+  background: #fafafa;
+  width: 100%; /* fill parent group */
+}
+
+.filter-group1 input:focus,
+.filter-group1 select:focus {
+  border-color: #007bff;
+  outline: none;
+  background: #fff;
+}
+
+/* Wider inputs for search/item row */
+.filter-row1.search-group input {
+  min-width: 150px;
+}
+
+.filter-row1.search-group select {
+  min-width: 130px;
+}
+
+/* ================= TOTALS ================= */
+.total-stock1 {
+  display: flex;
+  gap: 10px;
+  font-size: 14px;
+  color: #2d572c;
+  background: #e6f4ea;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-top: 6px;
+  align-self: flex-start;
+}
+
+/* ================= TABLE ================= */
+.stock-balance-container1 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.85rem;         /* ⬇ key for compactness */
+  margin-top: 6px;
+  table-layout: auto; /* expand columns naturally */
 }
 
-.bar-table th,
-.bar-table td {
-  border: 1px solid #e0e0e0;
-  padding: 4px 6px;           /* ⬇ very compact */
-  text-align: center;
-  white-space: nowrap;        /* ⬅ prevents tall rows */
+.stock-balance-container1 th,
+.stock-balance-container1 td {
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  text-align: left;
 }
 
-.bar-table th {
-  background-color: #f5f5f5;
+.stock-balance-container1 th {
+  background-color: #293552;
+  color: #fff;
   font-weight: 600;
+  font-size: 13px;
+  text-align: center;
+  letter-spacing: 0.3px;
 }
 
 .even-row {
-  background-color: #fafafa;
+  background-color: #f9f9f9;
 }
 
 .odd-row {
   background-color: #fff;
 }
 
-.bar-table tr:hover {
-  background-color: #f0f7ff;  /* subtle hover */
+/* ================= MESSAGE ================= */
+.message {
+  background-color: #e7f5e9;
+  color: #2d572c;
+  padding: 5px 8px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  font-size: 12px;
 }
 
-.no-data {
-  text-align: center;
-  font-style: italic;
-  padding: 10px;
-  font-size: 0.85rem;
+/* ================= RESPONSIVE ================= */
+@media (max-width: 992px) {
+  .stock-balance-container1 {
+    width: 98%;
+  }
+
+  .filter-frame1 {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-row1 {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .filter-group1 input,
+  .filter-group1 select {
+    width: 100%;
+  }
 }
 
-.negative {
-  color: #c9302c;
-  font-weight: 600;
-}
+@media (max-width: 768px) {
+  .filter-frame1 {
+    flex-direction: column;
+    align-items: stretch;
+  }
 
-.positive {
-  color: #2e8b57;
-  font-weight: 600;
-}
+  .filter-row1 {
+    width: 100%;
+    justify-content: flex-start;
+  }
 
-.bar-message {
-  margin-top: 6px;
-  font-size: 0.85rem;
-  color: #d9534f;
+  .filter-group1 input,
+  .filter-group1 select {
+    width: 100%;
+  }
 }

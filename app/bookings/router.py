@@ -12,10 +12,14 @@ from app.users.permissions import role_required  # 👈 permission helper
 from app.rooms import models as room_models  # Import room models
 from app.bookings import schemas, models as  booking_models
 from app.payments import models as payment_models
-from app.bookings.schemas import BookingOut
+from app.bookings.schemas import BookingOut, BookingSummaryReport
 from app.users import schemas as user_schemas
 from loguru import logger
 from datetime import datetime, time
+from app.core.tenant import resolve_business_id  # adjust import if needed
+from app.core.timezone import now_wat, to_wat
+
+
 import os
 import shutil
 from fastapi import UploadFile, File, Form
@@ -48,162 +52,163 @@ def create_booking(
     attachment_file: Optional[UploadFile] = File(None),
     attachment_str: Optional[str] = Form(None),
 
-    business_id: Optional[int] = Form(None),
+    booking_date: Optional[date] = Form(None),
+    business_id: Optional[int] = Form(None),  # ✅ NEW
 
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
+    try:
+        now = now_wat()
+        today = now.date()
+        booking_date = booking_date or today
 
-    normalized_room_number = room_number.strip().lower()
+        # -------------------------------
+        # 1️⃣ Tenant logic (STANDARDIZED)
+        # -------------------------------
+        if "super_admin" in current_user.roles:
+            effective_business_id = business_id
+            if not effective_business_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Super admin must provide business_id."
+                )
+        else:
+            effective_business_id = current_user.business_id
 
-    # -------------------------------
-    # Determine business scope
-    # -------------------------------
-    if "super_admin" in current_user.roles:
-        effective_business_id = business_id
-        if not effective_business_id:
+        # -------------------------------
+        # 2️⃣ Validate booking_date
+        # -------------------------------
+        if booking_date > today:
             raise HTTPException(
                 status_code=400,
-                detail="Super admin must provide business_id."
+                detail="Booking date cannot be in the future."
             )
-    else:
-        effective_business_id = current_user.business_id
 
-    # -------------------------------
-    # Find room
-    # -------------------------------
-    room = (
-        db.query(room_models.Room)
-        .filter(
+        # -------------------------------
+        # 3️⃣ Normalize room
+        # -------------------------------
+        normalized_room_number = room_number.strip().lower()
+
+        room = db.query(room_models.Room).filter(
             func.lower(room_models.Room.room_number) == normalized_room_number,
             room_models.Room.business_id == effective_business_id
-        )
-        .first()
-    )
+        ).first()
 
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
+        if not room:
+            raise HTTPException(status_code=404, detail="Room not found")
 
-    if room.status == "maintenance":
-        raise HTTPException(status_code=400, detail="Room is under maintenance.")
+        if room.status == "maintenance":
+            raise HTTPException(
+                status_code=400,
+                detail="Room is under maintenance."
+            )
 
-    # -------------------------------
-    # Prevent early same-day booking
-    # -------------------------------
-    if arrival_date == date.today():
-        now = datetime.now().time()
+        # -------------------------------
+        # 4️⃣ Same-day turnover check
+        # -------------------------------
+        if arrival_date == today:
+            now = now.time()
 
-        overlapping_departure = (
+
+            overlapping_departure = (
+                db.query(booking_models.Booking)
+                .filter(
+                    func.lower(booking_models.Booking.room_number) == normalized_room_number,
+                    booking_models.Booking.business_id == effective_business_id,
+                    booking_models.Booking.status.notin_(["checked-out", "cancelled"]),
+                    booking_models.Booking.departure_date == arrival_date
+                )
+                .first()
+            )
+
+            if overlapping_departure and now < time(12, 0):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Room {room.room_number} cannot be booked until after 12:00 PM today."
+                )
+
+        # -------------------------------
+        # 5️⃣ Attachment handling
+        # -------------------------------
+        attachment_path = None
+
+        if attachment_file and attachment_file.filename:
+            upload_dir = "uploads/attachments/"
+            os.makedirs(upload_dir, exist_ok=True)
+
+            file_location = os.path.join(upload_dir, attachment_file.filename)
+
+            with open(file_location, "wb") as buffer:
+                shutil.copyfileobj(attachment_file.file, buffer)
+
+            attachment_path = f"/uploads/attachments/{attachment_file.filename}"
+
+        elif attachment_str:
+            attachment_path = attachment_str
+
+        # -------------------------------
+        # 6️⃣ Date validation
+        # -------------------------------
+        if departure_date <= arrival_date:
+            raise HTTPException(
+                status_code=400,
+                detail="Departure date must be after arrival date."
+            )
+
+        if booking_type == "reservation" and arrival_date <= today:
+            raise HTTPException(
+                status_code=400,
+                detail="Reservation bookings must be for future dates."
+            )
+
+        # -------------------------------
+        # 7️⃣ Overlapping booking check
+        # -------------------------------
+        overlapping_booking = (
             db.query(booking_models.Booking)
             .filter(
                 func.lower(booking_models.Booking.room_number) == normalized_room_number,
+                booking_models.Booking.business_id == effective_business_id,
                 booking_models.Booking.status.notin_(["checked-out", "cancelled"]),
-                booking_models.Booking.departure_date == arrival_date,
-                booking_models.Booking.business_id == effective_business_id
+                and_(
+                    booking_models.Booking.arrival_date < departure_date,
+                    booking_models.Booking.departure_date > arrival_date,
+                ),
             )
             .first()
         )
 
-        if overlapping_departure and now < time(12, 0):
+        if overlapping_booking:
             raise HTTPException(
                 status_code=400,
-                detail=f"Room {room.room_number} cannot be booked until after 12:00 PM."
+                detail=f"Room {room_number} is already booked. Booking ID: {overlapping_booking.id}",
             )
 
-    # -------------------------------
-    # Attachment handling
-    # -------------------------------
-    attachment_path = None
+        # -------------------------------
+        # 8️⃣ Calculate stay
+        # -------------------------------
+        number_of_days = (departure_date - arrival_date).days
 
-    if attachment_file and attachment_file.filename:
-        upload_dir = "uploads/attachments/"
-        os.makedirs(upload_dir, exist_ok=True)
+        # -------------------------------
+        # 9️⃣ Pricing logic
+        # -------------------------------
+        if booking_type == "complimentary":
+            booking_cost = 0
+            payment_status = "complimentary"
+            booking_status = "complimentary"
+        else:
+            booking_cost = room.amount * number_of_days
+            payment_status = "pending"
+            booking_status = "reserved" if booking_type == "reservation" else "checked-in"
 
-        file_location = os.path.join(upload_dir, attachment_file.filename)
-
-        with open(file_location, "wb") as buffer:
-            shutil.copyfileobj(attachment_file.file, buffer)
-
-        attachment_path = f"/uploads/attachments/{attachment_file.filename}"
-
-    elif attachment_str:
-        attachment_path = attachment_str
-
-    today = date.today()
-
-    # -------------------------------
-    # Validate booking type
-    # -------------------------------
-    if departure_date <= arrival_date:
-        raise HTTPException(
-            status_code=400,
-            detail="Departure date must be later than arrival date."
-        )
-
-    if booking_type == "checked-in" and arrival_date != today:
-        raise HTTPException(
-            status_code=400,
-            detail="Checked-in bookings must start today."
-        )
-
-    if booking_type == "reservation" and arrival_date <= today:
-        raise HTTPException(
-            status_code=400,
-            detail="Reservation must be a future date."
-        )
-
-    if booking_type == "complimentary" and arrival_date != today:
-        raise HTTPException(
-            status_code=400,
-            detail="Complimentary booking must start today."
-        )
-
-    # -------------------------------
-    # Overlapping booking check
-    # -------------------------------
-    overlapping_booking = (
-        db.query(booking_models.Booking)
-        .filter(
-            func.lower(booking_models.Booking.room_number) == normalized_room_number,
-            booking_models.Booking.business_id == effective_business_id,
-            booking_models.Booking.status.notin_(["checked-out", "cancelled"]),
-            and_(
-                booking_models.Booking.arrival_date < departure_date,
-                booking_models.Booking.departure_date > arrival_date
-            )
-        )
-        .first()
-    )
-
-    if overlapping_booking:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Room {room.room_number} already booked. Booking ID: {overlapping_booking.id}"
-        )
-
-    # -------------------------------
-    # Calculate pricing
-    # -------------------------------
-    number_of_days = (departure_date - arrival_date).days
-
-    if booking_type == "complimentary":
-        booking_cost = 0
-        payment_status = "complimentary"
-        booking_status = "complimentary"
-    else:
-        booking_cost = room.amount * number_of_days
-        payment_status = "pending"
-        booking_status = "reserved" if booking_type == "reservation" else "checked-in"
-
-    # -------------------------------
-    # Create booking
-    # -------------------------------
-    try:
-
+        # -------------------------------
+        # 🔟 Create booking
+        # -------------------------------
         new_booking = booking_models.Booking(
-            business_id=effective_business_id,
+            business_id=effective_business_id,  # ✅ CRITICAL
             room_id=room.id,
-            room_number=room.room_number,  # ✅ FIXED
+            room_number=room.room_number,
             guest_name=guest_name,
             gender=gender,
             mode_of_identification=mode_of_identification,
@@ -221,6 +226,8 @@ def create_booking(
             created_by=current_user.username,
             vehicle_no=vehicle_no,
             attachment=attachment_path,
+            booking_date=datetime.combine(booking_date, now.time())
+
         )
 
         db.add(new_booking)
@@ -228,11 +235,14 @@ def create_booking(
         db.refresh(new_booking)
 
         # -------------------------------
-        # Update room status
+        # 1️⃣1️⃣ Update room status
         # -------------------------------
         room.status = booking_status
         db.commit()
 
+        # -------------------------------
+        # 1️⃣2️⃣ Response
+        # -------------------------------
         return {
             "message": f"Booking created successfully for room {room.room_number}.",
             "booking_details": {
@@ -240,13 +250,24 @@ def create_booking(
                 "business_id": new_booking.business_id,
                 "room_number": new_booking.room_number,
                 "guest_name": new_booking.guest_name,
+                "gender": new_booking.gender,
+                "address": new_booking.address,
+                "mode_of_identification": new_booking.mode_of_identification,
+                "identification_number": new_booking.identification_number,
+                "room_price": new_booking.room_price,
                 "arrival_date": new_booking.arrival_date,
                 "departure_date": new_booking.departure_date,
+                "booking_type": new_booking.booking_type,
+                "phone_number": new_booking.phone_number,
+                "booking_date": new_booking.booking_date.isoformat(),
+                "number_of_days": new_booking.number_of_days,
                 "status": new_booking.status,
                 "booking_cost": new_booking.booking_cost,
                 "payment_status": new_booking.payment_status,
                 "created_by": new_booking.created_by,
-            }
+                "vehicle_no": new_booking.vehicle_no,
+                "attachment": new_booking.attachment,
+            },
         }
 
     except Exception as e:
@@ -255,6 +276,7 @@ def create_booking(
             status_code=500,
             detail=f"An error occurred: {str(e)}"
         )
+
 
 
 
@@ -359,111 +381,110 @@ def get_reservation_alerts(
 
 
 
+
 @router.get("/list")
 def list_bookings(
-    start_date: Optional[date] = Query(None, description="date format-yyyy-mm-dd"),
-    end_date: Optional[date] = Query(None, description="date format-yyyy-mm-dd"),
-    business_id: Optional[int] = None,
+    start_date: Optional[date] = Query(None, description="yyyy-mm-dd"),
+    end_date: Optional[date] = Query(None, description="yyyy-mm-dd"),
+    business_id: Optional[int] = Query(None),
+
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     try:
+        from app.core.timezone import now_wat, to_wat
 
-        # -----------------------------------
-        # Determine business scope
-        # -----------------------------------
+        now = now_wat()
+        today = now.date()
+
+        # -------------------------------
+        # 1️⃣ Business Scope (MATCH CREATE)
+        # -------------------------------
         if "super_admin" in current_user.roles:
             effective_business_id = business_id
+            if not effective_business_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Super admin must provide business_id."
+                )
         else:
             effective_business_id = current_user.business_id
 
-        # -----------------------------------
-        # Validate date range
-        # -----------------------------------
+        # -------------------------------
+        # 2️⃣ Validate date range
+        # -------------------------------
         if start_date and end_date and start_date > end_date:
             raise HTTPException(
                 status_code=400,
                 detail="Start date cannot be later than end date"
             )
 
-        start_datetime = datetime.combine(start_date, datetime.min.time()) if start_date else None
-        end_datetime = datetime.combine(end_date, datetime.max.time()) if end_date else None
-
-        # -----------------------------------
-        # Base query
-        # -----------------------------------
+        # -------------------------------
+        # 3️⃣ Base query (tenant scoped)
+        # -------------------------------
         query = db.query(booking_models.Booking).filter(
-            booking_models.Booking.status != "cancel",
+            booking_models.Booking.business_id == effective_business_id,
+            booking_models.Booking.status.notin_(["cancelled"]),
             booking_models.Booking.deleted == False
         )
 
-        # -----------------------------------
-        # Multi-tenant filter
-        # -----------------------------------
-        if effective_business_id:
+        # -------------------------------
+        # 4️⃣ Apply filters (arrival-based)
+        # -------------------------------
+        if start_date:
             query = query.filter(
-                booking_models.Booking.business_id == effective_business_id
+                booking_models.Booking.arrival_date >= start_date
             )
 
-        # -----------------------------------
-        # Date filters
-        # -----------------------------------
-        if start_datetime:
+        if end_date:
             query = query.filter(
-                booking_models.Booking.booking_date >= start_datetime
+                booking_models.Booking.arrival_date <= end_date
             )
 
-        if end_datetime:
-            query = query.filter(
-                booking_models.Booking.booking_date <= end_datetime
-            )
-
-        # -----------------------------------
-        # Fetch bookings
-        # -----------------------------------
         bookings = query.order_by(
-            booking_models.Booking.booking_date.desc()
+            booking_models.Booking.arrival_date.desc()
         ).all()
 
-        # -----------------------------------
-        # Cost calculation
-        # -----------------------------------
-        valid_bookings = [
-            booking for booking in bookings
-            if booking.status in ["checked-in", "checked-out", "reserved"]
-        ]
-
+        # -------------------------------
+        # 5️⃣ Total cost
+        # -------------------------------
         total_booking_cost = sum(
-            booking.booking_cost for booking in valid_bookings
+            b.booking_cost or 0
+            for b in bookings
+            if b.status in ["checked-in", "checked-out", "reserved", "complimentary"]
         )
 
-        # -----------------------------------
-        # Format response
-        # -----------------------------------
-        formatted_bookings = [
-            {
-                "id": booking.id,
-                "room_number": booking.room_number,
-                "guest_name": booking.guest_name,
-                "gender": booking.gender,
-                "arrival_date": booking.arrival_date,
-                "departure_date": booking.departure_date,
-                "number_of_days": booking.number_of_days,
-                "booking_type": booking.booking_type,
-                "phone_number": booking.phone_number,
-                "booking_date": booking.booking_date,
-                "status": booking.status,
-                "payment_status": booking.payment_status,
-                "mode_of_identification": booking.mode_of_identification,
-                "identification_number": booking.identification_number,
-                "address": booking.address,
-                "booking_cost": booking.booking_cost,
-                "created_by": booking.created_by,
-                "vehicle_no": booking.vehicle_no,
-                "attachment": booking.attachment
-            }
-            for booking in bookings
-        ]
+        # -------------------------------
+        # 6️⃣ Format response (FIX TIMEZONE)
+        # -------------------------------
+        formatted_bookings = []
+
+        for b in bookings:
+            # ✅ Convert booking_date to WAT
+            wat_booking_date = to_wat(b.booking_date) if b.booking_date else None
+
+            formatted_bookings.append({
+                "id": b.id,
+                "business_id": b.business_id,
+                "room_number": b.room_number,
+                "guest_name": b.guest_name,
+                "gender": b.gender,
+                "arrival_date": b.arrival_date,
+                "departure_date": b.departure_date,
+                "number_of_days": b.number_of_days,
+                "booking_type": b.booking_type,
+                "phone_number": b.phone_number,
+                "booking_date": wat_booking_date.isoformat() if wat_booking_date else None,
+                "status": b.status,
+                "payment_status": b.payment_status,
+                "mode_of_identification": b.mode_of_identification,
+                "identification_number": b.identification_number,
+                "address": b.address,
+                "booking_cost": b.booking_cost,
+                "created_by": b.created_by,
+                "vehicle_no": b.vehicle_no,
+                "attachment": b.attachment
+            })
 
         return {
             "total_bookings": len(formatted_bookings),
@@ -473,11 +494,202 @@ def list_bookings(
 
     except Exception as e:
         logger.error(f"Error retrieving bookings: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
+
+
+
+@router.get("/summary-report", response_model=BookingSummaryReport)
+def get_summary_report(
+    start_date: date = Query(..., description="yyyy-mm-dd"),
+    end_date: date = Query(..., description="yyyy-mm-dd"),
+    business_id: Optional[int] = Query(None),
+
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+):
+    try:
+        # -------------------------------
+        # 1️⃣ Determine business scope
+        # -------------------------------
+        if "super_admin" in current_user.roles:
+            effective_business_id = business_id
+            if not effective_business_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Super admin must provide business_id."
+                )
+        else:
+            effective_business_id = current_user.business_id
+
+        # -------------------------------
+        # 2️⃣ Validate date range
+        # -------------------------------
+        if start_date > end_date:
+            raise HTTPException(
+                status_code=400,
+                detail="Start date cannot be later than end date"
+            )
+
+        # -------------------------------
+        # 3️⃣ Fetch bookings
+        # -------------------------------
+        bookings = (
+            db.query(booking_models.Booking)
+            .filter(
+                booking_models.Booking.business_id == effective_business_id,
+                booking_models.Booking.arrival_date.between(start_date, end_date),
+                booking_models.Booking.status.notin_(["cancelled"]),
+                booking_models.Booking.deleted == False
+            )
+            .order_by(booking_models.Booking.arrival_date.desc())
+            .all()
         )
+
+        booking_ids = [b.id for b in bookings]
+
+        # -------------------------------
+        # 4️⃣ Fetch payments
+        # -------------------------------
+        payments = []
+        if booking_ids:
+            payments = (
+                db.query(payment_models.Payment)
+                .filter(
+                    payment_models.Payment.business_id == effective_business_id,
+                    payment_models.Payment.booking_id.in_(booking_ids),
+                    ~payment_models.Payment.status.in_(["voided", "cancelled"])
+                )
+                .order_by(payment_models.Payment.id.desc())
+                .all()
+            )
+
+        # Latest payment per booking
+        payments_by_booking = {}
+        for p in payments:
+            if p.booking_id not in payments_by_booking:
+                payments_by_booking[p.booking_id] = p
+
+        # -------------------------------
+        # 5️⃣ Format bookings (MATCH SCHEMA)
+        # -------------------------------
+        formatted_bookings = []
+
+        for b in bookings:
+            payment = payments_by_booking.get(b.id)
+
+            method_map = {
+                "pos_card": "POS",
+                "pos": "POS",
+                "bank_transfer": "Transfer",
+                "transfer": "Transfer",
+                "cash": "Cash"
+            }
+
+            raw_method = (payment.payment_method.lower() if payment and payment.payment_method else "")
+            mode_of_payment = method_map.get(raw_method, raw_method.upper()) if payment else "N/A"
+            bank_name = payment.bank.name if payment and payment.bank else "N/A"
+
+            formatted_bookings.append({
+                "id": b.id,
+                "room_number": b.room_number,
+                "guest_name": b.guest_name,
+                "number_of_days": b.number_of_days,
+                "booking_type": b.booking_type,
+                "phone_number": b.phone_number,
+
+                # ✅ REQUIRED FIELD
+                "booking_date": b.booking_date,
+
+                "mode_of_payment": mode_of_payment,
+                "bank": bank_name,
+                "booking_cost": b.booking_cost,
+                "created_by": b.created_by,
+                "amount_paid": float(payment.amount_paid) if payment and payment.amount_paid else 0.0,
+            })
+
+        # -------------------------------
+        # 6️⃣ Total booking cost
+        # -------------------------------
+        total_booking_cost = float(sum(
+            b.booking_cost or 0
+            for b in bookings
+            if b.status in ["checked-in", "checked-out", "reserved", "complimentary"]
+        ))
+
+        # -------------------------------
+        # 7️⃣ Payments summary
+        # -------------------------------
+        payments_all = (
+            db.query(payment_models.Payment)
+            .filter(
+                payment_models.Payment.business_id == effective_business_id,
+                payment_models.Payment.payment_date.between(start_date, end_date)
+            )
+            .all()
+        )
+
+        total_cash = total_pos = total_transfer = 0.0
+        total_paid = total_discount = 0.0
+        bank_totals = {}
+
+        for p in payments_all:
+            if p.status in ["voided", "cancelled"]:
+                continue
+
+            amount = float(p.amount_paid or 0)
+            discount = float(p.discount_allowed or 0)
+            method = (p.payment_method or "").lower()
+
+            total_paid += amount
+            total_discount += discount
+
+            if method == "cash":
+                total_cash += amount
+            elif method in ["pos", "pos_card"]:
+                total_pos += amount
+            elif method in ["bank_transfer", "transfer"]:
+                total_transfer += amount
+
+            if p.bank and method in ["pos", "pos_card", "bank_transfer", "transfer"]:
+                bank_name = p.bank.name
+
+                if bank_name not in bank_totals:
+                    bank_totals[bank_name] = {"pos": 0.0, "transfer": 0.0}
+
+                if method in ["pos", "pos_card"]:
+                    bank_totals[bank_name]["pos"] += amount
+                elif method in ["bank_transfer", "transfer"]:
+                    bank_totals[bank_name]["transfer"] += amount
+
+        # -------------------------------
+        # 8️⃣ Balance
+        # -------------------------------
+        total_balance_due = float(total_booking_cost - (total_paid + total_discount))
+
+        # -------------------------------
+        # 9️⃣ Final response
+        # -------------------------------
+        return {
+            "total_bookings": len(formatted_bookings),
+            "total_booking_cost": total_booking_cost,
+            "total_amount_paid": total_paid,
+            "total_discount_allowed": total_discount,
+            "total_balance_due": total_balance_due,
+            "bookings": formatted_bookings,
+            "payment_summary": {
+                "cash": total_cash,
+                "pos": total_pos,
+                "transfer": total_transfer,
+                "total": total_cash + total_pos + total_transfer,
+            },
+            "bank_breakdown": bank_totals
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
     
     
@@ -1015,15 +1227,20 @@ def update_booking(
     vehicle_no: Optional[str] = Form(None),
     attachment: Optional[UploadFile] = File(None),
     attachment_str: Optional[str] = Form(None),
-    business_id: Optional[int] = Form(None),  # optional for super_admin
+    booking_date: Optional[date] = Form(None),
+    business_id: Optional[int] = Form(None),
+
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
 ):
     try:
-        today = date.today()
+        from app.core.timezone import now_wat, to_wat
+
+        now = now_wat()
+        today = now.date()
 
         # -------------------------------
-        # Business Scope
+        # 1️⃣ Business Scope
         # -------------------------------
         if "super_admin" in current_user.roles:
             effective_business_id = business_id
@@ -1036,22 +1253,45 @@ def update_booking(
             effective_business_id = current_user.business_id
 
         # -------------------------------
-        # Validate dates & booking type
+        # 2️⃣ Fix booking_date
+        # -------------------------------
+        booking_date = booking_date or today
+
+        if booking_date > today:
+            raise HTTPException(
+                status_code=400,
+                detail="Booking date cannot be in the future."
+            )
+
+        # -------------------------------
+        # 3️⃣ Validate dates
         # -------------------------------
         if departure_date <= arrival_date:
-            raise HTTPException(status_code=400, detail="Departure date must be after arrival date.")
+            raise HTTPException(
+                status_code=400,
+                detail="Departure date must be after arrival date."
+            )
 
         if booking_type == "checked-in" and arrival_date != today:
-            raise HTTPException(status_code=400, detail="Checked-in bookings can only be for today.")
+            raise HTTPException(
+                status_code=400,
+                detail="Checked-in bookings can only be for today."
+            )
 
         if booking_type == "reservation" and arrival_date <= today:
-            raise HTTPException(status_code=400, detail="Reservations must be for a future date.")
+            raise HTTPException(
+                status_code=400,
+                detail="Reservations must be for a future date."
+            )
 
         if booking_type == "complimentary" and arrival_date != today:
-            raise HTTPException(status_code=400, detail="Complimentary bookings can only be for today.")
+            raise HTTPException(
+                status_code=400,
+                detail="Complimentary bookings can only be for today."
+            )
 
         # -------------------------------
-        # Fetch booking to update
+        # 4️⃣ Fetch booking
         # -------------------------------
         booking = db.query(booking_models.Booking).filter(
             booking_models.Booking.id == booking_id,
@@ -1060,21 +1300,29 @@ def update_booking(
         ).first()
 
         if not booking:
-            raise HTTPException(status_code=404, detail=f"Booking ID {booking_id} not found.")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Booking ID {booking_id} not found."
+            )
 
         # -------------------------------
-        # Validate room
+        # 5️⃣ Validate room
         # -------------------------------
         normalized_room_number = room_number.strip().lower()
+
         room = db.query(room_models.Room).filter(
             func.lower(room_models.Room.room_number) == normalized_room_number,
             room_models.Room.business_id == effective_business_id
         ).first()
+
         if not room:
-            raise HTTPException(status_code=404, detail=f"Room {room_number} not found in this business.")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Room {room_number} not found in this business."
+            )
 
         # -------------------------------
-        # Check overlapping bookings
+        # 6️⃣ Check overlapping bookings
         # -------------------------------
         overlapping_booking = db.query(booking_models.Booking).filter(
             func.lower(booking_models.Booking.room_number) == normalized_room_number,
@@ -1091,44 +1339,60 @@ def update_booking(
         if overlapping_booking:
             raise HTTPException(
                 status_code=400,
-                detail=f"Room {room_number} is already booked for the requested dates. Check Booking ID: {overlapping_booking.id}"
+                detail=f"Room {room_number} already booked. Booking ID: {overlapping_booking.id}"
             )
 
         # -------------------------------
-        # Compute number of days & cost
+        # 7️⃣ Compute stay & pricing
         # -------------------------------
         number_of_days = (departure_date - arrival_date).days
-        if number_of_days <= 0:
-            raise HTTPException(status_code=400, detail="Number of days must be greater than zero.")
 
-        # Determine status and cost
+        if number_of_days <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Number of days must be greater than zero."
+            )
+
         if booking_type == "complimentary":
             booking_cost = 0
             payment_status = "complimentary"
-            status = "checked-in"
+            status = "complimentary"
         else:
             booking_cost = room.amount * number_of_days
             payment_status = booking.payment_status or "pending"
             status = "reserved" if booking_type == "reservation" else "checked-in"
 
         # -------------------------------
-        # Handle attachment
+        # 8️⃣ Handle attachment
         # -------------------------------
-        attachment_path = booking.attachment  # keep existing
+        attachment_path = booking.attachment
+
         if attachment and attachment.filename:
             upload_dir = "uploads/attachments/"
             os.makedirs(upload_dir, exist_ok=True)
+
             file_path = os.path.join(upload_dir, attachment.filename)
+
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(attachment.file, buffer)
+
             attachment_path = f"/uploads/attachments/{attachment.filename}"
+
         elif attachment_str:
             attachment_path = attachment_str
-        else:
-            attachment_path = None
 
         # -------------------------------
-        # Update booking fields
+        # 9️⃣ Fix booking_date (preserve time)
+        # -------------------------------
+        existing_time = (
+            booking.booking_date.time()
+            if booking.booking_date else now.time()
+        )
+
+        booking.booking_date = datetime.combine(booking_date, existing_time)
+
+        # -------------------------------
+        # 🔟 Update fields
         # -------------------------------
         booking.room_number = room.room_number
         booking.guest_name = guest_name
@@ -1152,10 +1416,16 @@ def update_booking(
         db.commit()
         db.refresh(booking)
 
+        # -------------------------------
+        # 1️⃣1️⃣ Convert booking_date to WAT for response
+        # -------------------------------
+        wat_booking_date = to_wat(booking.booking_date) if booking.booking_date else None
+
         return {
             "message": f"Booking updated successfully for room {room.room_number}.",
-            "updated_booking": {
+            "booking_details": {
                 "id": booking.id,
+                "business_id": booking.business_id,
                 "room_number": booking.room_number,
                 "guest_name": booking.guest_name,
                 "gender": booking.gender,
@@ -1167,10 +1437,12 @@ def update_booking(
                 "departure_date": booking.departure_date,
                 "booking_type": booking.booking_type,
                 "phone_number": booking.phone_number,
+                "booking_date": wat_booking_date.isoformat() if wat_booking_date else None,
                 "number_of_days": booking.number_of_days,
                 "status": booking.status,
                 "booking_cost": booking.booking_cost,
                 "payment_status": booking.payment_status,
+                "created_by": booking.created_by,
                 "vehicle_no": booking.vehicle_no,
                 "attachment": booking.attachment,
             },
@@ -1179,7 +1451,11 @@ def update_booking(
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating booking ID {booking_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal Server Error: {str(e)}"
+        )
 
 
 
@@ -1249,47 +1525,68 @@ def get_booking_by_id(
 @router.put("/{room_number}/checkout")
 def guest_checkout(
     room_number: str,
+    business_id: Optional[int] = Query(None),
+
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     """
-    Check out a guest by room number. 
-    Only allows checkout if the booking is active today (current date is within arrival and departure).
-    Respects multi-tenant access for normal admins.
+    Check out a guest by room number.
+    Multi-tenant safe version.
     """
+
     try:
         today = date.today()
         normalized_room_number = room_number.strip().lower()
 
-        # Step 1: Verify room exists
-        room = db.query(room_models.Room).filter(
-            func.lower(room_models.Room.room_number) == normalized_room_number
-        ).first()
-        if not room:
-            raise HTTPException(status_code=404, detail=f"Room number {room_number} not found.")
+        # -------------------------------
+        # 1️⃣ Determine business scope
+        # -------------------------------
+        if "super_admin" in current_user.roles:
+            effective_business_id = business_id
+            if not effective_business_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Super admin must provide business_id."
+                )
+        else:
+            effective_business_id = current_user.business_id
 
-        # Step 2: Fetch active booking for this room
-        booking_query = db.query(booking_models.Booking).filter(
+        # -------------------------------
+        # 2️⃣ Verify room (TENANT SAFE)
+        # -------------------------------
+        room = db.query(room_models.Room).filter(
+            func.lower(room_models.Room.room_number) == normalized_room_number,
+            room_models.Room.business_id == effective_business_id
+        ).first()
+
+        if not room:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Room {room_number} not found for this business."
+            )
+
+        # -------------------------------
+        # 3️⃣ Fetch active booking
+        # -------------------------------
+        booking = db.query(booking_models.Booking).filter(
             func.lower(booking_models.Booking.room_number) == normalized_room_number,
+            booking_models.Booking.business_id == effective_business_id,
             booking_models.Booking.status.in_(["checked-in", "reserved", "complimentary"]),
             booking_models.Booking.arrival_date <= today,
             booking_models.Booking.departure_date >= today,
             booking_models.Booking.deleted == False
-        )
-
-        # Restrict by business for non-super_admin
-        if "super_admin" not in current_user.roles:
-            booking_query = booking_query.filter(booking_models.Booking.business_id == current_user.business_id)
-
-        booking = booking_query.first()
+        ).first()
 
         if not booking:
             raise HTTPException(
                 status_code=404,
-                detail=f"No active booking found for room {room_number} valid for today."
+                detail=f"No active booking found for room {room_number}."
             )
 
-        # Step 3: Update statuses
+        # -------------------------------
+        # 4️⃣ Update statuses
+        # -------------------------------
         booking.status = "checked-out"
         room.status = "available"
 
@@ -1297,28 +1594,29 @@ def guest_checkout(
         db.refresh(booking)
         db.refresh(room)
 
-        # Step 4: Format response
-        formatted_booking = {
-            "id": booking.id,
-            "room_number": booking.room_number,
-            "guest_name": booking.guest_name,
-            "status": booking.status,
-            "arrival_date": booking.arrival_date,
-            "departure_date": booking.departure_date,
-            "booking_type": booking.booking_type,
-            "payment_status": booking.payment_status,
-            "booking_cost": booking.booking_cost,
-            "created_by": booking.created_by,
-        }
-
+        # -------------------------------
+        # 5️⃣ Response
+        # -------------------------------
         return {
-            "message": f"Guest checked out successfully for room {room_number}.",
+            "message": f"Guest checked out successfully for room {room.room_number}.",
             "room_status": room.status,
-            "booking": formatted_booking
+            "booking": {
+                "id": booking.id,
+                "room_number": booking.room_number,
+                "guest_name": booking.guest_name,
+                "status": booking.status,
+                "arrival_date": booking.arrival_date,
+                "departure_date": booking.departure_date,
+                "booking_type": booking.booking_type,
+                "payment_status": booking.payment_status,
+                "booking_cost": booking.booking_cost,
+                "created_by": booking.created_by,
+            }
         }
 
     except HTTPException as e:
         raise e
+
     except Exception as e:
         db.rollback()
         raise HTTPException(

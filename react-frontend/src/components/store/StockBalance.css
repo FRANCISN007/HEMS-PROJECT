@@ -1,93 +1,136 @@
-.stock-balance-container {
-  padding: 20px;
+/* ================= CONTAINER ================= */
+.stock-balance-container3 {
+  padding: 8px;
+  font-family: Arial, sans-serif;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  background: #fafafa;
+  border-radius: 6px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
 }
 
-.stock-balance-container h2 {
-  margin-bottom: 15px;
+/* ================= HEADER ================= */
+.stock-balance-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
 }
 
-.stock-balance-container table {
+.stock-balance-header h2 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: #2c3e50;
+}
+
+/* ================= FILTER FRAME ================= */
+.filter-frame3 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 6px 8px;
+  background: #ffffff;
+  border-radius: 6px;
+  box-shadow: 0px 1px 4px rgba(0,0,0,0.08);
+  width: 100%;
+  align-items: center;
+}
+
+/* Each filter group */
+.filter-group3 {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 120px;
+}
+
+.filter-group3 label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+}
+
+.filter-group3 input,
+.filter-group3 select {
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 12px;
+  background: #fafafa;
+  width: 100%;
+}
+
+.filter-group3 input:focus,
+.filter-group3 select:focus {
+  border-color: #007bff;
+  outline: none;
+  background: #fff;
+}
+
+/* Individual filter overrides */
+.category-filter { min-width: 140px; }
+.type-filter { min-width: 120px; }
+.search-filter { min-width: 150px; }
+.item-filter { min-width: 130px; }
+
+/* ================= TOTAL ================= */
+.total-stock3 {
+  display: flex;
+  gap: 10px;
+  font-size: 14px;
+  color: #2d572c;
+  background: #e6f4ea;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-top: 6px;
+  align-self: flex-start;
+}
+
+/* ================= TABLE ================= */
+.stock-balance-container3 table {
   width: 100%;
   border-collapse: collapse;
+  margin-top: 6px;
+  table-layout: auto;
 }
 
-.stock-balance-container th,
-.stock-balance-container td {
-  padding: 4px;
+.stock-balance-container3 th,
+.stock-balance-container3 td {
+  padding: 4px 6px;
   border: 1px solid #ccc;
-  border-radius: px;
+  font-size: 12px;
   text-align: left;
 }
 
-.stock-balance-container th {
-background-color: #293552; /* deep dark navy */
-  color: #ffffff;
-  text-transform: uppercase;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  border: 1px solid #bdbdbd; /* consistent border with data cells */
-  padding: 7px;
+.stock-balance-container3 th {
+  background-color: #293552;
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
   text-align: center;
+  letter-spacing: 0.3px;
 }
 
+.even-row { background-color: #f9f9f9; }
+.odd-row { background-color: #fff; }
 
-
-.even-row {
-  background-color: #f9f9f9;
-}
-
-.odd-row {
-  background-color: #ffffff;
-}
-
+/* ================= MESSAGE ================= */
 .message {
   background-color: #e7f5e9;
-  color: green;
-  padding: 8px;
-  margin-bottom: 10px;
-  border-radius: 4px;
-}
-
-.stock-balance-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
-
-.total-stock {
-  font-size: 16px;
   color: #2d572c;
-  background: #e6f4ea;
-  padding: 5px 10px;
-  border-radius: 5px;
-}
-
-
-
-
-
-
-.filter-frame {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: #ffffff;
-  padding: 8px 10px;
-  border-radius: 6px;
-  box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
-  max-width: 300px;
-}
-
-.filter-frame label {
-  font-weight: 500;
-}
-
-.filter-frame select {
-  flex: 1;
-  padding: 5px 10px;
+  padding: 5px 8px;
+  margin-bottom: 6px;
   border-radius: 4px;
-  border: 1px solid #ccc;
+  font-size: 12px;
 }
 
+/* ================= RESPONSIVE ================= */
+@media (max-width: 992px) {
+  .stock-balance-container3 { width: 98%; }
+  .filter-frame3 { flex-direction: column; align-items: stretch; }
+  .filter-group3 input,
+  .filter-group3 select { width: 100%; }
+}

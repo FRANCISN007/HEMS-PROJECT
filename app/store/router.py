@@ -485,18 +485,14 @@ def list_items_simple_search(
 # List Bar Items (simple)
 # --------------------------------------------------
 @router.get("/bar-items/simple", response_model=List[store_schemas.StoreItemOut])
-def list_bar_items_simple(
-    business_id: Optional[int] = Query(None),
-    db: Session = Depends(db_dependency),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "restaurant"]))
-):
+def list_bar_items_simple(db: Session = Depends(get_db)):
     """
-    Fetch all store items specific to Bar (item_type='bar')
-    along with their latest unit price from StoreStockEntry.
+    Fetch all bar items (item_type='bar') along with:
+    - latest unit price from StoreStockEntry
+    - selling price from StoreItem
     """
     try:
-        business_id = resolve_business_id(current_user, business_id)
-
+        # Subquery to get latest stock entry per item
         latest_entry_subquery = (
             db.query(
                 store_models.StoreStockEntry.item_id,
@@ -506,12 +502,15 @@ def list_bar_items_simple(
             .subquery()
         )
 
+        # Alias for latest stock entry
         latest_entry = aliased(store_models.StoreStockEntry)
 
+        # Main query
         query = (
             db.query(
                 store_models.StoreItem,
-                latest_entry.unit_price
+                latest_entry.unit_price,
+                store_models.StoreItem.selling_price
             )
             .outerjoin(
                 latest_entry_subquery,
@@ -521,10 +520,7 @@ def list_bar_items_simple(
                 latest_entry,
                 latest_entry.id == latest_entry_subquery.c.latest_entry_id
             )
-            .filter(
-                store_models.StoreItem.item_type == "bar",
-                store_models.StoreItem.business_id == business_id
-            )
+            .filter(store_models.StoreItem.item_type == "bar")
             .order_by(store_models.StoreItem.name.asc())
         )
 
@@ -536,18 +532,22 @@ def list_bar_items_simple(
                 name=item.name,
                 unit=item.unit,
                 unit_price=unit_price or 0.0,
-                selling_price=item.selling_price or 0.0,
+                selling_price=selling_price or 0.0,
                 category_id=item.category_id,
                 item_type=item.item_type
             )
-            for item, unit_price in results
+            for item, unit_price, selling_price in results
         ]
 
         return items
 
     except Exception as e:
-        print("❌ Error in /bar-items/simple:", e)
-        raise HTTPException(status_code=500, detail="Failed to fetch bar items.")
+        print("? Error in /bar/bar-items/simple:", e)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to fetch bar items."
+        )
+
 
 
 # --------------------------------------------------

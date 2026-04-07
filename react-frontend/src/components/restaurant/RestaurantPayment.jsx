@@ -12,7 +12,7 @@ const RestaurantPayment = () => {
   const [banks, setBanks] = useState([]);
   const [banksLoading, setBanksLoading] = useState(true);
 
-  // User roles
+  // Check user roles
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = Array.isArray(storedUser.roles)
     ? storedUser.roles
@@ -21,7 +21,7 @@ const RestaurantPayment = () => {
     : [];
   roles = roles.map((r) => r.toLowerCase());
 
-  if (!(roles.includes("admin") || roles.includes("restaurant"))) {
+  if (!roles.includes("admin") && !roles.includes("restaurant")) {
     return (
       <div className="unauthorized">
         <h2>🚫 Access Denied</h2>
@@ -30,16 +30,17 @@ const RestaurantPayment = () => {
     );
   }
 
+  // Payment form state
   const [paymentData, setPaymentData] = useState({
     amount: "",
-    payment_mode: "", 
+    payment_mode: "",
     paid_by: "",
     bank: "",
+    payment_date: new Date().toISOString().split("T")[0], // default today
   });
 
   // Fetch locations
   useEffect(() => {
-    
     axiosWithAuth()
       .get("/restaurant/locations")
       .then((res) => setLocations(Array.isArray(res.data) ? res.data : []))
@@ -59,7 +60,7 @@ const RestaurantPayment = () => {
       .finally(() => setBanksLoading(false));
   }, []);
 
-  // Fetch sales
+  // Fetch outstanding sales for a location
   const fetchSales = async (locationId) => {
     if (!locationId) {
       setSales([]);
@@ -83,66 +84,61 @@ const RestaurantPayment = () => {
     fetchSales(locationId);
   };
 
+  // Open payment modal
   const openPaymentModal = (sale) => {
     setCurrentSale(sale);
     setPaymentData({
       amount: "",
-      payment_mode: "", // user must choose
+      payment_mode: "",
       paid_by: sale.guest_name || "",
       bank: "",
+      payment_date: new Date().toISOString().split("T")[0],
     });
     setShowPaymentModal(true);
   };
 
-
+  // Close payment modal
   const closePaymentModal = () => {
     setShowPaymentModal(false);
     setCurrentSale(null);
-    setPaymentData({ amount: "", payment_mode: "cash", paid_by: "", bank: "" });
+    setPaymentData({
+      amount: "",
+      payment_mode: "",
+      paid_by: "",
+      bank: "",
+      payment_date: new Date().toISOString().split("T")[0],
+    });
   };
 
+  // Submit payment
   const handlePaymentSubmit = async () => {
     if (!paymentData.amount || parseFloat(paymentData.amount) <= 0) {
       alert("⚠️ Enter a valid amount");
       return;
     }
 
-    // ✅ Default to CASH if nothing selected
-    const finalPaymentMode = paymentData.payment_mode || "CASH";
+    const finalPaymentMode = (paymentData.payment_mode || "CASH").toUpperCase();
 
-    // ✅ Bank validation
-    if (
-      (finalPaymentMode === "POS" || finalPaymentMode === "TRANSFER") &&
-      !paymentData.bank
-    ) {
+    if ((finalPaymentMode === "POS" || finalPaymentMode === "TRANSFER") && !paymentData.bank) {
       alert("⚠️ Select a bank for POS/Transfer payments");
       return;
     }
 
     try {
-      await axiosWithAuth().post(
-        `/restpayment/sales/${currentSale.id}/payments`,
-        {
-          amount: parseFloat(paymentData.amount),
-          payment_mode: finalPaymentMode, // ✅ normalized
-          paid_by: paymentData.paid_by,
-          bank:
-            finalPaymentMode === "CASH"
-              ? null
-              : paymentData.bank,
-        }
-      );
+      await axiosWithAuth().post(`/restpayment/sales/${currentSale.id}/payments`, {
+        amount: parseFloat(paymentData.amount),
+        payment_mode: finalPaymentMode,
+        paid_by: paymentData.paid_by,
+        bank: finalPaymentMode === "CASH" ? null : paymentData.bank,
+        payment_date: paymentData.payment_date, // backdated allowed
+      });
 
       alert("✅ Payment recorded successfully!");
-      fetchSales(selectedLocation);
+      fetchSales(selectedLocation); // refresh sales & balances
       closePaymentModal();
     } catch (err) {
       console.error("Payment failed:", err.response?.data || err);
-      alert(
-        `❌ Payment failed. ${
-          err.response?.data?.detail || "Please try again."
-        }`
-      );
+      alert(`❌ Payment failed: ${err.response?.data?.detail || "Please try again."}`);
     }
   };
 
@@ -163,7 +159,7 @@ const RestaurantPayment = () => {
         </select>
       </div>
 
-      {/* Summary */}
+      {/* Summary Cards */}
       {summary && (
         <div className="summary">
           <div className="summary-card">
@@ -187,6 +183,7 @@ const RestaurantPayment = () => {
           <thead>
             <tr>
               <th>Sale ID</th>
+              <th>Date</th>
               <th>Guest Name</th>
               <th>Total</th>
               <th>Paid</th>
@@ -198,6 +195,7 @@ const RestaurantPayment = () => {
             {sales.map((sale) => (
               <tr key={sale.id}>
                 <td>{sale.id}</td>
+                <td>{new Date(sale.created_at).toLocaleDateString()}</td>
                 <td>{sale.guest_name}</td>
                 <td>₦{Number(sale.total_amount).toLocaleString()}</td>
                 <td>₦{Number(sale.amount_paid).toLocaleString()}</td>
@@ -222,25 +220,25 @@ const RestaurantPayment = () => {
             <h3>💰 Make Payment for Sale #{currentSale.id}</h3>
             <div className="payment-modal-content">
               <div className="sale-summary">
-                <p>
-                  <strong>Total:</strong> ₦{Number(currentSale.total_amount).toLocaleString()}
-                </p>
-                <p>
-                  <strong>Already Paid:</strong> ₦{Number(currentSale.amount_paid).toLocaleString()}
-                </p>
-                <p>
-                  <strong>Balance:</strong> ₦{Number(currentSale.balance).toLocaleString()}
-                </p>
+                <p><strong>Total:</strong> ₦{Number(currentSale.total_amount).toLocaleString()}</p>
+                <p><strong>Already Paid:</strong> ₦{Number(currentSale.amount_paid).toLocaleString()}</p>
+                <p><strong>Balance:</strong> ₦{Number(currentSale.balance).toLocaleString()}</p>
               </div>
+
+              <label>Payment Date:</label>
+              <input
+                type="date"
+                max={new Date().toISOString().split("T")[0]}
+                value={paymentData.payment_date}
+                onChange={(e) => setPaymentData({ ...paymentData, payment_date: e.target.value })}
+              />
 
               <label>Amount:</label>
               <input
                 type="number"
                 placeholder="Enter amount"
                 value={paymentData.amount}
-                onChange={(e) =>
-                  setPaymentData({ ...paymentData, amount: e.target.value })
-                }
+                onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
               />
 
               <label>Payment Mode:</label>
@@ -260,7 +258,6 @@ const RestaurantPayment = () => {
                 <option value="POS">POS</option>
               </select>
 
-
               {/* Bank Dropdown */}
               {(paymentData.payment_mode === "TRANSFER" || paymentData.payment_mode === "POS") && (
                 <>
@@ -270,15 +267,11 @@ const RestaurantPayment = () => {
                   ) : (
                     <select
                       value={paymentData.bank}
-                      onChange={(e) =>
-                        setPaymentData({ ...paymentData, bank: e.target.value })
-                      }
+                      onChange={(e) => setPaymentData({ ...paymentData, bank: e.target.value })}
                     >
                       <option value="">-- Select Bank --</option>
                       {banks.map((b) => (
-                        <option key={b.id} value={b.name}>
-                          {b.name}
-                        </option>
+                        <option key={b.id} value={b.name}>{b.name}</option>
                       ))}
                     </select>
                   )}
@@ -290,9 +283,7 @@ const RestaurantPayment = () => {
                 type="text"
                 placeholder="Enter name"
                 value={paymentData.paid_by}
-                onChange={(e) =>
-                  setPaymentData({ ...paymentData, paid_by: e.target.value })
-                }
+                onChange={(e) => setPaymentData({ ...paymentData, paid_by: e.target.value })}
               />
 
               {/* Payment History */}
@@ -318,7 +309,14 @@ const RestaurantPayment = () => {
                           <td>{p.payment_mode}</td>
                           <td>{p.bank || "N/A"}</td>
                           <td>{p.paid_by || "N/A"}</td>
-                          <td>{new Date(p.created_at).toLocaleString()}</td>
+                          <td>
+                            {formatDate(p.payment_date)}
+
+                            <br />
+                            <small style={{ color: "#888" }}>
+                              posted: {new Date(p.created_at).toLocaleDateString()}
+                            </small>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -334,14 +332,12 @@ const RestaurantPayment = () => {
                 disabled={
                   !paymentData.amount ||
                   parseFloat(paymentData.amount) <= 0 ||
-                  ((paymentData.payment_mode === "POS" ||
-                    paymentData.payment_mode === "TRANSFER") &&
+                  ((paymentData.payment_mode === "POS" || paymentData.payment_mode === "TRANSFER") &&
                     !paymentData.bank)
                 }
               >
                 ✅ Submit
               </button>
-
               <button className="btn btn-secondary" onClick={closePaymentModal}>
                 ❌ Cancel
               </button>

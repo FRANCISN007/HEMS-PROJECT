@@ -296,6 +296,8 @@ const printContent = () => {
     { label: "📝 List Booking", path: "/dashboard/bookings/list" },
     { label: "✅ Checkout Guest", path: "/dashboard/bookings/checkout" },
     { label: "❌ Cancel Booking", path: "/dashboard/bookings/cancel" },
+    { label: "📊 Summary Report", path: "/dashboard/bookings/summary" },
+
   ];
 
   const paymentSubmenu = [

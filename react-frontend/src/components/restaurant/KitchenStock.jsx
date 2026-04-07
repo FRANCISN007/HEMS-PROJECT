@@ -2,27 +2,33 @@ import React, { useEffect, useState } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./KitchenStock.css";
 
-const KitchenStock = () => {
+const KitchenBalanceStock = () => {
   const [balances, setBalances] = useState([]);
   const [kitchens, setKitchens] = useState([]);
+
   const [selectedKitchen, setSelectedKitchen] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [loading, setLoading] = useState(true);
+
+  const [search, setSearch] = useState("");
+  const [selectedItemId, setSelectedItemId] = useState("");
+
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  // -----------------------------
-  // ROLE CHECK
-  // -----------------------------
+  const axios = axiosWithAuth();
+
+  /* ================= AUTH ================= */
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
-  let roles = [];
-  if (Array.isArray(storedUser.roles)) {
-    roles = storedUser.roles;
-  } else if (typeof storedUser.role === "string") {
-    roles = [storedUser.role];
-  }
+  let roles = Array.isArray(storedUser.roles)
+    ? storedUser.roles
+    : storedUser.role
+    ? [storedUser.role]
+    : [];
+
   roles = roles.map((r) => r.toLowerCase());
-  if (!(roles.includes("admin") || roles.includes("restaurant"))) {
+
+  if (!(roles.includes("admin") || roles.includes("store"))) {
     return (
       <div className="unauthorized">
         <h2>🚫 Access Denied</h2>
@@ -31,45 +37,46 @@ const KitchenStock = () => {
     );
   }
 
-  // -----------------------------
-  // Load Kitchens
-  // -----------------------------
+  /* ================= FETCH ================= */
   useEffect(() => {
     fetchKitchens();
   }, []);
 
+  useEffect(() => {
+    const delay = setTimeout(() => {
+      fetchStockBalances();
+    }, 300);
+
+    return () => clearTimeout(delay);
+  }, [selectedKitchen, startDate, endDate, search, selectedItemId]);
+
   const fetchKitchens = async () => {
     try {
-      const axios = axiosWithAuth();
       const res = await axios.get("/kitchen/simple");
       setKitchens(res.data || []);
     } catch (error) {
-      console.error("Error fetching kitchens:", error);
+      console.error(error);
       setKitchens([]);
     }
   };
 
-  // -----------------------------
-  // Load Stock Balances
-  // -----------------------------
-  useEffect(() => {
-    fetchStockBalances(selectedKitchen, startDate, endDate);
-  }, [selectedKitchen, startDate, endDate]);
-
-  const fetchStockBalances = async (kitchenId = "", start = "", end = "") => {
+  const fetchStockBalances = async () => {
     try {
       setLoading(true);
-      const axios = axiosWithAuth();
 
-      let url = `/store/kitchen-balance-stock?`;
-      if (kitchenId) url += `kitchen_id=${kitchenId}&`;
-      if (start) url += `start_date=${start}&`;
-      if (end) url += `end_date=${end}&`;
+      const res = await axios.get("/store/kitchen-balance-stock", {
+        params: {
+          kitchen_id: selectedKitchen || undefined,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          item_id: selectedItemId || undefined,
+          search: search || undefined,
+        },
+      });
 
-      const res = await axios.get(url);
       setBalances(res.data || []);
     } catch (error) {
-      console.error("Error fetching kitchen balances:", error);
+      console.error(error);
       setMessage("❌ Failed to load kitchen stock balances");
       setTimeout(() => setMessage(""), 3000);
     } finally {
@@ -77,136 +84,163 @@ const KitchenStock = () => {
     }
   };
 
-  const handleKitchenChange = (e) => {
-    setSelectedKitchen(e.target.value);
-  };
+  /* ================= TOTALS ================= */
+  const totalStockAmount = balances.reduce(
+    (sum, row) => sum + (row.balance_total_amount || 0),
+    0
+  );
 
-  // -----------------------------
-  // Calculations
-  // -----------------------------
-  const totalStockAmount = Array.isArray(balances)
-    ? balances.reduce(
-        (sum, item) => sum + (item.balance_total_amount || 0),
-        0
-      )
-    : 0;
+  const totalStockBalance = balances.reduce(
+    (sum, row) => sum + (row.balance || 0),
+    0
+  );
 
-  const totalStockBalance = Array.isArray(balances)
-    ? balances.reduce((sum, item) => sum + (item.balance || 0), 0)
-    : 0;
-
-  if (loading) return <p>Loading...</p>;
-
+  /* ================= UI ================= */
   return (
-    <div className="stock-balance-container">
+    <div className="stock-balance-container2">
       <div className="stock-balance-header">
         <h2>👨‍🍳 Kitchen Stock Balance Report</h2>
 
-        <div className="filter-frame">
-          <div className="filter-group">
-            <label htmlFor="kitchenFilter">Kitchen:</label>
-            <select
-              id="kitchenFilter"
-              value={selectedKitchen}
-              onChange={handleKitchenChange}
-            >
-              <option value="">All Kitchens</option>
-              {kitchens.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.name}
-                </option>
-              ))}
-            </select>
+        <div className="filter-frame2">
+
+          {/* ROW 1 → KITCHEN */}
+          <div className="filter-row2">
+            <div className="filter-group2">
+              <label>Kitchen:</label>
+              <select
+                value={selectedKitchen}
+                onChange={(e) => setSelectedKitchen(e.target.value)}
+              >
+                <option value="">All Kitchens</option>
+                {kitchens.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div className="filter-group">
-            <label>Start Date:</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
+          {/* ROW 2 → DATE */}
+          <div className="filter-row2">
+            <div className="filter-group2">
+              <label>Start:</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+
+            <div className="filter-group2">
+              <label>End:</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
           </div>
 
-          <div className="filter-group">
-            <label>End Date:</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
+          {/* ROW 3 → SEARCH + ITEM */}
+          <div className="filter-row2 search-group">
+            <div className="filter-group2">
+              <label>Search:</label>
+              <input
+                type="text"
+                placeholder="Search item..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setSelectedItemId("");
+                }}
+              />
+            </div>
+
+            <div className="filter-group2">
+              <label>Item:</label>
+              <select
+                value={selectedItemId}
+                onChange={(e) => {
+                  setSelectedItemId(e.target.value);
+                  setSearch("");
+                }}
+              >
+                <option value="">All Items</option>
+                {balances.map((item) => (
+                  <option key={item.item_id} value={item.item_id}>
+                    {item.item_name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+
         </div>
 
-
-        <div className="total-stock">
+        <div className="total-stock2">
           <div>
-            Total Stock Value:{" "}
-            <strong>₦{totalStockAmount.toLocaleString()}</strong>
+            Total Value: <strong>₦{totalStockAmount.toLocaleString()}</strong>
           </div>
           <div>
-            Stock Balance (Quantity):{" "}
-            <strong>{totalStockBalance.toLocaleString()}</strong>
+            Total Balance: <strong>{totalStockBalance.toLocaleString()}</strong>
           </div>
         </div>
       </div>
 
       {message && <div className="message">{message}</div>}
 
-      <table>
-        <thead>
-          <tr>
-            <th>Kitchen</th>
-            <th>Item</th>
-            <th>Unit</th>
-            <th>Category</th>
-            <th>Item Type</th>
-            <th>Total Received</th>
-            <th>Qty Sold</th>
-            <th>Balance</th>
-            <th>Unit Price</th>
-            <th>Balance Value</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {Array.isArray(balances) && balances.length > 0 ? (
-            balances.map((item, index) => (
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Kitchen</th>
+              <th>Item</th>
+              <th>Unit</th>
+              <th>Category</th>
+              <th>Type</th>
+              <th>Issued</th>
+              <th>Used</th>
+              <th>Adjusted</th>
+              <th>Balance</th>
+              <th>Unit Price</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {balances.map((row, index) => (
               <tr
-                key={`${item.item_id}-${item.kitchen_id}`}
+                key={`${row.kitchen_id}-${row.item_id}`}
                 className={index % 2 === 0 ? "even-row" : "odd-row"}
               >
-                <td>{item.kitchen_name}</td>
-                <td>{item.item_name}</td>
-                <td>{item.unit}</td>
-                <td>{item.category_name}</td>
-                <td>{item.item_type}</td>
-                <td>{item.total_issued}</td>
-                <td>{item.total_used}</td>
-                <td>{item.balance}</td>
+                <td>{row.kitchen_name}</td>
+                <td>{row.item_name}</td>
+                <td>{row.unit}</td>
+                <td>{row.category_name}</td>
+                <td>{row.item_type}</td>
+                <td>{row.total_issued}</td>
+                <td>{row.total_used}</td>
+                <td>{row.total_adjusted}</td>
+                <td><strong>{row.balance}</strong></td>
                 <td>
-                  {item.last_unit_price
-                    ? `₦${item.last_unit_price.toLocaleString()}`
+                  {row.last_unit_price
+                    ? `₦${row.last_unit_price.toLocaleString()}`
                     : "-"}
                 </td>
                 <td>
-                  {item.balance_total_amount
-                    ? `₦${item.balance_total_amount.toLocaleString()}`
+                  {row.balance_total_amount
+                    ? `₦${row.balance_total_amount.toLocaleString()}`
                     : "-"}
                 </td>
               </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan="9" style={{ textAlign: "center", padding: "20px" }}>
-                No stock records available.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 };
 
-export default KitchenStock;
+export default KitchenBalanceStock;

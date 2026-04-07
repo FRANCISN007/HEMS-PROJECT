@@ -1,8 +1,13 @@
+import os
+import sys
+from pathlib import Path
+from dotenv import load_dotenv
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from app.database import engine, Base
+
 
 
 
@@ -28,13 +33,10 @@ from app.restpayment.router import router as restpayment_router
 from app.superadmin.router import router as superadmin_router
 from app.business.router import router as business_router
 
-import os
-import sys
+
 import pytz
 from datetime import datetime
-from dotenv import load_dotenv
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from app.core.tenant_middleware import TenantMiddleware
 
@@ -56,6 +58,9 @@ for env_path in POSSIBLE_ENV_PATHS:
         load_dotenv(env_path, override=True)
         print(f"[INFO] Loaded .env from {env_path}")
         break
+
+from app.database import engine, Base
+
 
 SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
 print(f"[INFO] SERVER_IP = {SERVER_IP}")

@@ -57,17 +57,25 @@
 .sale-table th,
 .sale-table td {
   border: 1px solid #ddd;
-  padding: 6px;
+  padding: 8px;
   text-align: center;
 }
+
+
+.sale-table td {
+  border: 1px solid #ddd;
+  padding: 4px 8px;
+  text-align: center;
+}
+
 
 .sale-table th { background: #f4f4f4; }
 
 .sale-table input,
 .sale-table select {
   width: 100%;
-  padding: 4px 6px;
-  font-size: 12px;
+  padding: 6px 4px;
+  font-size: 14px;
   border-radius: 5px;
   border: 1px solid #ccc;
 }
@@ -95,4 +103,38 @@
 .grand-total-row td {
   font-weight: bold;
   background: #f9f9f9;
+  font-size: 17px;
+}
+
+
+
+.autocomplete {
+  position: relative; /* Important: parent for absolute dropdown */
+}
+
+.suggestions-list {
+  position: absolute;
+  top: 100%; /* right below the input */
+  left: 0;
+  width: 100%;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  max-height: 150px;
+  overflow-y: auto;
+  z-index: 1000;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.suggestions-list li {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.suggestions-list li:hover {
+  background: #f0f0f0;
 }

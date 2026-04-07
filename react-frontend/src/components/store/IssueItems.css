@@ -37,7 +37,8 @@
 }
 
 .add-row-btn {
-  background-color: #ddd;
+  background-color: #ced4ce;
+  color: rgb(0, 0, 0);
 }
 
 .submit-btn {
