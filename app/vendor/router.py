@@ -1,14 +1,15 @@
 # app/vendors/router.py
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List
+from typing import List, Optional
 
 from app.database import get_db
 from app.vendor import models, schemas
 from app.users.schemas import UserDisplaySchema
 from app.users.permissions import role_required
+from app.core.business import resolve_business_id
 
 router = APIRouter()
 
@@ -29,33 +30,49 @@ def get_business_vendor(db: Session, vendor_id: int, business_id: int):
 
 
 # ---------------------------------------------------
+# HELPER: Normalize Vendor Input
+# ---------------------------------------------------
+def normalize_vendor_data(vendor):
+    name = (vendor.business_name or "").strip()
+    address = (vendor.address or "").strip()
+    phone = (vendor.phone_number or "").strip()
+
+    if not name:
+        raise HTTPException(status_code=400, detail="Vendor name is required")
+
+    return name, address, phone, name.lower()
+
+
+# ---------------------------------------------------
 # CREATE VENDOR
 # ---------------------------------------------------
 @router.post("/", response_model=schemas.VendorOut)
 def create_vendor(
     vendor: schemas.VendorCreate,
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: UserDisplaySchema = Depends(role_required(["admin"]))
 ):
-    business_id = current_user.business_id
+    business_id = resolve_business_id(current_user, business_id)
 
-    normalized_name = vendor.business_name.strip().lower()
+    name, address, phone, normalized_name = normalize_vendor_data(vendor)
 
-    existing_vendor = db.query(models.Vendor).filter(
+    # ✅ Duplicate check
+    existing = db.query(models.Vendor).filter(
         models.Vendor.business_id == business_id,
         func.lower(models.Vendor.business_name) == normalized_name
     ).first()
 
-    if existing_vendor:
+    if existing:
         raise HTTPException(
             status_code=400,
             detail="Vendor name already exists for this business"
         )
 
     new_vendor = models.Vendor(
-        business_name=vendor.business_name.strip(),
-        address=vendor.address.strip(),
-        phone_number=vendor.phone_number.strip(),
+        business_name=name,
+        address=address,
+        phone_number=phone,
         business_id=business_id
     )
 
@@ -66,24 +83,27 @@ def create_vendor(
     return new_vendor
 
 
-
 # ---------------------------------------------------
 # SIMPLE LIST (FOR DROPDOWNS)
 # ---------------------------------------------------
 @router.get("/simple")
 def list_vendors_simple(
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: UserDisplaySchema = Depends(role_required(["dashboard", "admin"]))
 ):
+    business_id = resolve_business_id(current_user, business_id)
+
     vendors = db.query(
         models.Vendor.id,
         models.Vendor.business_name
     ).filter(
-        models.Vendor.business_id == current_user.business_id
-    ).order_by(models.Vendor.business_name).all()
+        models.Vendor.business_id == business_id
+    ).order_by(
+        models.Vendor.business_name.asc()
+    ).all()
 
     return [{"id": v.id, "name": v.business_name} for v in vendors]
-
 
 
 # ---------------------------------------------------
@@ -91,12 +111,17 @@ def list_vendors_simple(
 # ---------------------------------------------------
 @router.get("/", response_model=List[schemas.VendorOut])
 def list_vendors(
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: UserDisplaySchema = Depends(role_required(["dashboard", "admin"]))
 ):
+    business_id = resolve_business_id(current_user, business_id)
+
     return db.query(models.Vendor).filter(
-        models.Vendor.business_id == current_user.business_id
-    ).order_by(models.Vendor.business_name).all()
+        models.Vendor.business_id == business_id
+    ).order_by(
+        models.Vendor.business_name.asc()
+    ).all()
 
 
 # ---------------------------------------------------
@@ -105,11 +130,12 @@ def list_vendors(
 @router.get("/{vendor_id}", response_model=schemas.VendorOut)
 def get_vendor(
     vendor_id: int,
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: UserDisplaySchema = Depends(role_required(["dashboard", "admin"]))
 ):
-    return get_business_vendor(db, vendor_id, current_user.business_id)
-
+    business_id = resolve_business_id(current_user, business_id)
+    return get_business_vendor(db, vendor_id, business_id)
 
 
 # ---------------------------------------------------
@@ -119,15 +145,17 @@ def get_vendor(
 def update_vendor(
     vendor_id: int,
     updated_data: schemas.VendorCreate,
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: UserDisplaySchema = Depends(role_required(["admin"]))
 ):
-    business_id = current_user.business_id
+    business_id = resolve_business_id(current_user, business_id)
 
     vendor = get_business_vendor(db, vendor_id, business_id)
 
-    normalized_name = updated_data.business_name.strip().lower()
+    name, address, phone, normalized_name = normalize_vendor_data(updated_data)
 
+    # ✅ Duplicate check (excluding current vendor)
     duplicate = db.query(models.Vendor).filter(
         models.Vendor.business_id == business_id,
         func.lower(models.Vendor.business_name) == normalized_name,
@@ -140,9 +168,9 @@ def update_vendor(
             detail="Vendor name already exists for this business"
         )
 
-    vendor.business_name = updated_data.business_name.strip()
-    vendor.address = updated_data.address.strip()
-    vendor.phone_number = updated_data.phone_number.strip()
+    vendor.business_name = name
+    vendor.address = address
+    vendor.phone_number = phone
 
     db.commit()
     db.refresh(vendor)
@@ -156,12 +184,14 @@ def update_vendor(
 @router.delete("/{vendor_id}")
 def delete_vendor(
     vendor_id: int,
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: UserDisplaySchema = Depends(role_required(["admin"]))
 ):
-    vendor = get_business_vendor(db, vendor_id, current_user.business_id)
+    business_id = resolve_business_id(current_user, business_id)
 
-    # Prevent deleting vendor used in purchases
+    vendor = get_business_vendor(db, vendor_id, business_id)
+
     if vendor.purchases:
         raise HTTPException(
             status_code=400,

@@ -3,17 +3,9 @@ from fastapi import HTTPException
 
 
 def resolve_business_id(current_user, business_id: Optional[int]) -> int:
-    """
-    Resolves the correct business_id for the request.
-
-    Rules:
-    - Super admin must explicitly provide business_id
-    - Business users automatically use their assigned business_id
-    """
-
     roles = [r.strip().lower() for r in current_user.roles] if current_user.roles else []
 
-    # Super admin must provide business_id
+    # ✅ SUPER ADMIN
     if "super_admin" in roles:
         if business_id is None:
             raise HTTPException(
@@ -22,11 +14,19 @@ def resolve_business_id(current_user, business_id: Optional[int]) -> int:
             )
         return business_id
 
-    # Normal users must have a business
+    # ✅ NORMAL USER MUST HAVE BUSINESS
     if not current_user.business_id:
         raise HTTPException(
             status_code=400,
             detail="User not assigned to a business"
         )
 
+    # ✅ IF business_id IS PROVIDED → VALIDATE IT
+    if business_id is not None and business_id != current_user.business_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You are not allowed to access this business"
+        )
+
+    # ✅ DEFAULT → USE USER BUSINESS
     return current_user.business_id

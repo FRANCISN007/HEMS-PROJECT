@@ -190,7 +190,7 @@ class UpdatePurchase(BaseModel):
     unit_price: float
     total_amount: float
     vendor_id: int
-    purchase_date: datetime = Field(default_factory=datetime.utcnow)
+    purchase_date: datetime 
     created_at: datetime
     created_by: Optional[str]
     attachment: Optional[str]  # ✅ include this

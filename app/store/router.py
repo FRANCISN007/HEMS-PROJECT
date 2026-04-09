@@ -17,6 +17,7 @@ from app.store import schemas as store_schemas
 from app.bar.models import BarInventory 
 from app.bar.models import Bar 
 
+
 from app.store.schemas import IssueCreate, IssueDisplay
 from app.kitchen.models import Kitchen, KitchenInventory
 from app.kitchen import models as kitchen_models
@@ -57,7 +58,6 @@ from app.core.timezone import now_wat, to_wat  # ✅ centralized WAT functions
 
 from zoneinfo import ZoneInfo
 
-from fastapi import Query, Depends, HTTPException
 
 
 
@@ -81,31 +81,40 @@ def create_category(
     db: Session = Depends(db_dependency),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
-
+    # ✅ Resolve + validate tenancy
     business_id = resolve_business_id(current_user, business_id)
 
+    # ✅ Normalize name (avoid "Food" vs "food")
+    category_name = category.name.strip().lower()
+
+    # ✅ Check duplicate within same business
     existing = (
         db.query(store_models.StoreCategory)
         .filter(
-            store_models.StoreCategory.name == category.name,
-            store_models.StoreCategory.business_id == business_id
+            store_models.StoreCategory.business_id == business_id,
+            store_models.StoreCategory.name.ilike(category_name)
         )
         .first()
     )
 
     if existing:
-        raise HTTPException(status_code=400, detail="Category already exists")
+        raise HTTPException(
+            status_code=400,
+            detail="Category already exists for this business"
+        )
 
-    new_cat = store_models.StoreCategory(
-        name=category.name,
+    # ✅ Create category
+    new_category = store_models.StoreCategory(
+        name=category_name,
         business_id=business_id
     )
 
-    db.add(new_cat)
+    db.add(new_category)
     db.commit()
-    db.refresh(new_cat)
+    db.refresh(new_category)
 
-    return new_cat
+    return new_category
+
 
 
 # ----------------------------
@@ -117,16 +126,19 @@ def list_categories(
     db: Session = Depends(db_dependency),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
-
+    # ✅ Resolve + validate tenancy
     business_id = resolve_business_id(current_user, business_id)
 
+    # ✅ Fetch only tenant data
     categories = (
         db.query(store_models.StoreCategory)
         .filter(store_models.StoreCategory.business_id == business_id)
+        .order_by(store_models.StoreCategory.name.asc())
         .all()
     )
 
     return categories
+
 
 
 # ----------------------------
@@ -482,30 +494,39 @@ def list_items_simple_search(
 
 
 # --------------------------------------------------
-# List Bar Items (simple)
+# List Bar Items (simple) - MULTI-TENANT SAFE
 # --------------------------------------------------
 @router.get("/bar-items/simple", response_model=List[store_schemas.StoreItemOut])
-def list_bar_items_simple(db: Session = Depends(get_db)):
+def list_bar_items_simple(
+    business_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
+):
     """
-    Fetch all bar items (item_type='bar') along with:
+    Fetch bar items for a specific business with:
     - latest unit price from StoreStockEntry
     - selling price from StoreItem
     """
+
     try:
-        # Subquery to get latest stock entry per item
+        # ✅ Resolve + enforce tenant isolation
+        business_id = resolve_business_id(current_user, business_id)
+
+        # ✅ Subquery: latest stock entry per item (SCOPED TO BUSINESS)
         latest_entry_subquery = (
             db.query(
                 store_models.StoreStockEntry.item_id,
                 func.max(store_models.StoreStockEntry.id).label("latest_entry_id")
             )
+            .filter(store_models.StoreStockEntry.business_id == business_id)  # 🔥 IMPORTANT
             .group_by(store_models.StoreStockEntry.item_id)
             .subquery()
         )
 
-        # Alias for latest stock entry
+        # ✅ Alias for latest stock entry
         latest_entry = aliased(store_models.StoreStockEntry)
 
-        # Main query
+        # ✅ Main query (SCOPED TO BUSINESS)
         query = (
             db.query(
                 store_models.StoreItem,
@@ -520,12 +541,16 @@ def list_bar_items_simple(db: Session = Depends(get_db)):
                 latest_entry,
                 latest_entry.id == latest_entry_subquery.c.latest_entry_id
             )
-            .filter(store_models.StoreItem.item_type == "bar")
+            .filter(
+                store_models.StoreItem.item_type == "bar",
+                store_models.StoreItem.business_id == business_id  # 🔥 CRITICAL
+            )
             .order_by(store_models.StoreItem.name.asc())
         )
 
         results = query.all()
 
+        # ✅ Format response safely
         items = [
             store_schemas.StoreItemOut(
                 id=item.id,
@@ -542,7 +567,7 @@ def list_bar_items_simple(db: Session = Depends(get_db)):
         return items
 
     except Exception as e:
-        print("? Error in /bar/bar-items/simple:", e)
+        print("❌ Error in /bar-items/simple:", e)
         raise HTTPException(
             status_code=500,
             detail="Failed to fetch bar items."
@@ -637,6 +662,9 @@ async def receive_inventory(
     db: Session = Depends(db_dependency),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
+    """
+    Receive inventory / Create purchase (stock entry)
+    """
     # Resolve business
     business_id = resolve_business_id(current_user, business_id)
 
@@ -653,15 +681,17 @@ async def receive_inventory(
         raise HTTPException(status_code=404, detail="Item not found for this business")
 
     # Compute total amount
-    total = entry.quantity * entry.unit_price if entry.unit_price else None
+    total_amount = entry.quantity * entry.unit_price if entry.unit_price else None
 
     # Save attachment if provided
     attachment_path = None
     if attachment:
         upload_dir = "uploads/store_invoices"
         os.makedirs(upload_dir, exist_ok=True)
-
-        filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{attachment.filename}"
+        
+        # Use WAT time for filename to avoid timezone issues
+        timestamp = now_wat().strftime("%Y%m%d%H%M%S")
+        filename = f"{timestamp}_{attachment.filename}"
         file_location = os.path.join(upload_dir, filename)
 
         with open(file_location, "wb") as f:
@@ -669,11 +699,16 @@ async def receive_inventory(
 
         attachment_path = file_location
 
-    # Normalize datetimes
-    purchase_date = entry.purchase_date.replace(tzinfo=None) if entry.purchase_date.tzinfo else entry.purchase_date
-    created_at = datetime.now().replace(tzinfo=None)
+    # Normalize datetimes using centralized WAT helpers
+    purchase_date = None
+    if entry.purchase_date:
+        # Convert to WAT and store as naive datetime (consistent with your DB)
+        purchase_date = to_wat(entry.purchase_date).replace(tzinfo=None)
 
-    # Create and save stock entry
+    # Use centralized now_wat() - This fixes the "1 hour behind" problem
+    created_at = now_wat().replace(tzinfo=None)
+
+    # Create stock entry
     stock_entry = store_models.StoreStockEntry(
         item_id=entry.item_id,
         item_name=entry.item_name,
@@ -681,7 +716,7 @@ async def receive_inventory(
         quantity=entry.quantity,
         original_quantity=entry.quantity,
         unit_price=entry.unit_price,
-        total_amount=total,
+        total_amount=total_amount,
         vendor_id=entry.vendor_id,
         business_id=business_id,
         purchase_date=purchase_date,
@@ -689,17 +724,20 @@ async def receive_inventory(
         created_at=created_at,
         attachment=attachment_path,
     )
+
     db.add(stock_entry)
     db.commit()
     db.refresh(stock_entry)
 
-    # Load full vendor and item info for frontend
-    stock_entry = db.query(store_models.StoreStockEntry) \
+    # Load related data for frontend response
+    stock_entry = (
+        db.query(store_models.StoreStockEntry)
         .options(
             selectinload(store_models.StoreStockEntry.vendor),
             selectinload(store_models.StoreStockEntry.item)
-        ) \
+        )
         .get(stock_entry.id)
+    )
 
     return stock_entry
 
@@ -804,7 +842,7 @@ async def update_purchase(
     item_id: int = Form(...),
     item_name: str = Form(...),
     invoice_number: str = Form(...),
-    quantity: float = Form(...),  # new original quantity
+    quantity: float = Form(...),          # new original quantity
     unit_price: float = Form(...),
     vendor_id: Optional[int] = Form(None),
     purchase_date: datetime = Form(...),
@@ -813,10 +851,13 @@ async def update_purchase(
     db: Session = Depends(db_dependency),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
 ):
+    """
+    Update an existing purchase/stock entry with proper WAT timezone handling
+    """
     # Resolve business
     business_id = resolve_business_id(current_user, business_id)
 
-    # Load the existing stock entry
+    # Load existing entry
     entry = (
         db.query(store_models.StoreStockEntry)
         .filter(
@@ -828,7 +869,7 @@ async def update_purchase(
     if not entry:
         raise HTTPException(status_code=404, detail="Purchase entry not found for this business")
 
-    # Ensure target item exists within same business
+    # Validate item belongs to the business
     item = (
         db.query(store_models.StoreItem)
         .filter(
@@ -840,33 +881,33 @@ async def update_purchase(
     if not item:
         raise HTTPException(status_code=404, detail="Item not found for this business")
 
-    # Calculate already issued units
+    # Calculate already issued quantity
     old_original = float(entry.original_quantity or 0)
     old_remaining = float(entry.quantity or 0)
     already_issued = max(old_original - old_remaining, 0)
 
-    # Prevent item change if some quantity already issued
+    # Business logic checks
     if item_id != entry.item_id and already_issued > 0:
         raise HTTPException(
             status_code=400,
-            detail="Cannot change item for a purchase that already has issued quantity. Create a new purchase instead."
+            detail="Cannot change item when quantity has already been issued."
         )
 
-    # Prevent reducing quantity below already issued
     if quantity < already_issued:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot reduce purchase quantity below amount already issued ({int(already_issued)}). Use inventory adjustment instead."
+            detail=f"Cannot reduce quantity below already issued amount ({int(already_issued)})."
         )
 
     new_remaining = quantity - already_issued
 
-    # Handle attachment upload
+    # Handle new attachment
     if attachment:
         upload_dir = "uploads/store_invoices"
         os.makedirs(upload_dir, exist_ok=True)
 
-        filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{attachment.filename}"
+        timestamp = now_wat().strftime("%Y%m%d%H%M%S")
+        filename = f"{timestamp}_{attachment.filename}"
         file_location = os.path.join(upload_dir, filename)
 
         with open(file_location, "wb") as f:
@@ -874,11 +915,11 @@ async def update_purchase(
 
         entry.attachment = file_location
 
-    # Normalize datetime
-    if hasattr(purchase_date, "tzinfo") and purchase_date.tzinfo is not None:
-        purchase_date = purchase_date.replace(tzinfo=None)
+    # === Proper WAT timezone normalization (same pattern as create) ===
+    if purchase_date:
+        purchase_date = to_wat(purchase_date).replace(tzinfo=None)
 
-    # Update entry
+    # Update fields
     entry.item_id = item_id
     entry.item_name = item_name
     entry.invoice_number = invoice_number
@@ -887,18 +928,18 @@ async def update_purchase(
     entry.unit_price = unit_price
     entry.vendor_id = vendor_id
     entry.purchase_date = purchase_date
-    entry.total_amount = (quantity * unit_price) if unit_price is not None else None
+    entry.total_amount = quantity * unit_price if unit_price is not None else None
 
+    # Audit fields
     if hasattr(entry, "updated_by"):
         entry.updated_by = current_user.username
     if hasattr(entry, "updated_at"):
-        entry.updated_at = datetime.now()
+        entry.updated_at = now_wat().replace(tzinfo=None)   # Use same as create
 
-    db.add(entry)
     db.commit()
     db.refresh(entry)
 
-    # Load related item & vendor
+    # Reload with relationships
     entry = (
         db.query(store_models.StoreStockEntry)
         .options(
@@ -908,28 +949,35 @@ async def update_purchase(
         .get(entry.id)
     )
 
-    attachment_url = (
-        f"/files/{os.path.relpath(entry.attachment, 'uploads').replace(os.sep, '/')}"
-        if entry.attachment else None
-    )
+    # Safe attachment URL
+    attachment_url = None
+    if entry.attachment:
+        try:
+            rel_path = os.path.relpath(entry.attachment, "uploads").replace(os.sep, "/")
+            attachment_url = f"/files/{rel_path}"
+        except Exception:
+            attachment_url = None
 
+    # === Return using manual construction (like your working list_items) ===
+    # This ensures datetimes are passed cleanly without Pydantic timezone misinterpretation
     return {
         "id": entry.id,
         "item_id": entry.item_id,
-        "item_name": entry.item.name if entry.item else "",
+        "item_name": getattr(entry.item, "name", entry.item_name or ""),
         "invoice_number": entry.invoice_number,
         "quantity": entry.original_quantity,
         "unit_price": entry.unit_price,
         "total_amount": entry.total_amount,
         "vendor_id": entry.vendor_id,
-        "vendor_name": entry.vendor.business_name if entry.vendor else "",
+        "vendor_name": getattr(entry.vendor, "business_name", ""),
         "purchase_date": entry.purchase_date,
         "created_by": entry.created_by,
-        "created_at": entry.created_at,
+        "created_at": entry.created_at,          # This will now be consistent
+        "updated_by": getattr(entry, "updated_by", None),
+        "updated_at": getattr(entry, "updated_at", None),
         "attachment": entry.attachment,
         "attachment_url": attachment_url,
     }
-
 
 # ----------------------------
 # DELETE PURCHASE
