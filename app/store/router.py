@@ -1501,67 +1501,87 @@ def list_kitchen_items(
 @router.delete("/kitchen/{issue_id}", response_model=dict)
 def delete_kitchen_issue(
     issue_id: int,
-    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "admin"]))
-):
-    # Resolve business/tenant
-    if "super_admin" in current_user.roles:
-        effective_business_id = business_id
-        if not effective_business_id:
-            raise HTTPException(status_code=400, detail="Super admin must provide business_id.")
-    else:
-        effective_business_id = current_user.business_id
-
-    # Fetch the issue
-    issue = (
-        db.query(store_models.StoreIssue)
-        .filter_by(id=issue_id, issue_to="kitchen", business_id=effective_business_id)
-        .first()
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["store", "admin", "super_admin"])
     )
-    if not issue:
-        raise HTTPException(status_code=404, detail="Kitchen issue not found")
+):
+    try:
+        # ------------------------------
+        # 1️⃣ Resolve business (STANDARD)
+        # ------------------------------
+        business_id = resolve_business_id(current_user, business_id)
 
-    # Restore store stock and kitchen inventory
-    for item in issue.issue_items:
-        # Restore stock FIFO
-        remaining = item.quantity
-        stock_entries = (
-            db.query(store_models.StoreStockEntry)
+        # ------------------------------
+        # 2️⃣ Fetch issue (tenant-safe)
+        # ------------------------------
+        issue = (
+            db.query(store_models.StoreIssue)
             .filter(
-                store_models.StoreStockEntry.item_id == item.item_id,
-                store_models.StoreStockEntry.business_id == effective_business_id
-            )
-            .order_by(store_models.StoreStockEntry.purchase_date.asc())
-            .all()
-        )
-        for entry in stock_entries:
-            entry.quantity += remaining
-            remaining = 0
-            if remaining <= 0:
-                break
-
-        # Reduce kitchen inventory
-        kitchen_inv = (
-            db.query(kitchen_models.KitchenInventory)
-            .filter(
-                kitchen_models.KitchenInventory.kitchen_id == issue.kitchen_id,
-                kitchen_models.KitchenInventory.item_id == item.item_id,
-                kitchen_models.KitchenInventory.business_id == effective_business_id
+                store_models.StoreIssue.id == issue_id,
+                store_models.StoreIssue.issue_to == "kitchen",
+                store_models.StoreIssue.business_id == business_id
             )
             .first()
         )
-        if kitchen_inv:
-            kitchen_inv.quantity -= item.quantity
 
-        # Delete issue items
-        db.delete(item)
+        if not issue:
+            raise HTTPException(status_code=404, detail="Kitchen issue not found")
 
-    # Delete the issue itself
-    db.delete(issue)
-    db.commit()
+        # ------------------------------
+        # 3️⃣ Restore stock + kitchen inventory
+        # ------------------------------
+        for item in issue.issue_items:
 
-    return {"detail": "Kitchen issue deleted successfully"}
+            # Restore stock (FIFO)
+            remaining = item.quantity
+
+            stock_entries = (
+                db.query(store_models.StoreStockEntry)
+                .filter(
+                    store_models.StoreStockEntry.item_id == item.item_id,
+                    store_models.StoreStockEntry.business_id == business_id
+                )
+                .order_by(store_models.StoreStockEntry.purchase_date.asc())
+                .all()
+            )
+
+            for entry in stock_entries:
+                entry.quantity += remaining
+                remaining = 0
+                if remaining <= 0:
+                    break
+
+            # Reduce kitchen inventory (tenant-safe)
+            kitchen_inv = (
+                db.query(kitchen_models.KitchenInventory)
+                .filter(
+                    kitchen_models.KitchenInventory.kitchen_id == issue.kitchen_id,
+                    kitchen_models.KitchenInventory.item_id == item.item_id,
+                    kitchen_models.KitchenInventory.business_id == business_id
+                )
+                .first()
+            )
+
+            if kitchen_inv:
+                kitchen_inv.quantity -= item.quantity
+
+            db.delete(item)
+
+        # ------------------------------
+        # 4️⃣ Delete issue
+        # ------------------------------
+        db.delete(issue)
+        db.commit()
+
+        return {"detail": "Kitchen issue deleted successfully"}
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete kitchen issue: {str(e)}"
+        )
 
 
 
@@ -1749,12 +1769,15 @@ def issue_to_bar(
 
 
 
+# ----------------------------
+# Get Issues to Bar (Multi-Tenant Safe)
+# ----------------------------
 @router.get("/bar", response_model=List[store_schemas.IssueDisplay])
 def list_issues_to_bar(
-    bar_id: Optional[int] = Query(None, description="Filter by bar"),
-    start_date: Optional[date] = Query(None, description="Start issue date"),
-    end_date: Optional[date] = Query(None, description="End issue date"),
-    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
+    bar_id: Optional[int] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(
         role_required(["store", "admin"])
@@ -1762,24 +1785,17 @@ def list_issues_to_bar(
 ):
     try:
         # ------------------------------
-        # 1️⃣ Determine effective business
+        # 1️⃣ Resolve business
         # ------------------------------
-        if "super_admin" in current_user.roles:
-            if not business_id:
-                raise HTTPException(status_code=400, detail="Super admin must provide business_id")
-            effective_business_id = business_id
-        else:
-            effective_business_id = current_user.business_id
+        business_id = resolve_business_id(current_user, business_id)
 
         # ------------------------------
-        # 2️⃣ Base query
+        # 2️⃣ Base query (TENANT SAFE)
         # ------------------------------
-        query = (
-            db.query(store_models.StoreIssue)
-            .filter(
-                store_models.StoreIssue.issue_to == "bar",
-                store_models.StoreIssue.business_id == effective_business_id
-            )
+        query = db.query(store_models.StoreIssue).filter(
+            store_models.StoreIssue.issue_to == "bar",
+            store_models.StoreIssue.business_id == business_id,
+            store_models.StoreIssue.bar_id.isnot(None)   # ✅ FIX CRASH HERE
         )
 
         if bar_id:
@@ -1791,58 +1807,69 @@ def list_issues_to_bar(
         if end_date:
             query = query.filter(store_models.StoreIssue.issue_date <= end_date)
 
-        issues = query.order_by(store_models.StoreIssue.issue_date.desc()).all()
-        result: List[store_schemas.IssueDisplay] = []
+        issues = query.order_by(
+            store_models.StoreIssue.issue_date.desc()
+        ).all()
+
+        result = []
 
         # ------------------------------
-        # 3️⃣ Build response
+        # 3️⃣ Build response safely
         # ------------------------------
         for issue in issues:
-            issue_items_display: List[store_schemas.IssueItemDisplay] = []
+
+            if not issue.bar_id:
+                continue  # 🔥 extra safety
+
+            bar_obj = db.query(bar_models.Bar).filter(
+                bar_models.Bar.id == issue.bar_id,
+                bar_models.Bar.business_id == business_id
+            ).first()
+
+            if not bar_obj:
+                continue  # 🔥 prevent bad FK issues
+
+            issue_items_display = []
 
             for issue_item in issue.issue_items:
-                item_obj = (
-                    db.query(store_models.StoreItem)
-                    .filter_by(id=issue_item.item_id, business_id=effective_business_id)
-                    .first()
-                )
+
+                item_obj = db.query(store_models.StoreItem).filter(
+                    store_models.StoreItem.id == issue_item.item_id,
+                    store_models.StoreItem.business_id == business_id
+                ).first()
+
                 if not item_obj:
                     continue
 
-                display_item = store_schemas.IssueItemDisplay(
-                    id=issue_item.id,
-                    item=store_schemas.StoreItemDisplay(
-                        id=item_obj.id,
-                        name=item_obj.name,
-                        unit=item_obj.unit,
-                        category=(
-                            store_schemas.StoreCategoryDisplay(
-                                id=item_obj.category.id,
-                                name=item_obj.category.name,
-                                created_at=item_obj.category.created_at
-                            ) if item_obj.category else None
+                issue_items_display.append(
+                    store_schemas.IssueItemDisplay(
+                        id=issue_item.id,
+                        item=store_schemas.StoreItemDisplay(
+                            id=item_obj.id,
+                            name=item_obj.name,
+                            unit=item_obj.unit,
+                            category=(
+                                store_schemas.StoreCategoryDisplay(
+                                    id=item_obj.category.id,
+                                    name=item_obj.category.name,
+                                    created_at=item_obj.category.created_at
+                                ) if item_obj.category else None
+                            ),
+                            unit_price=item_obj.unit_price,
+                            selling_price=item_obj.selling_price,
+                            created_at=item_obj.created_at
                         ),
-                        unit_price=item_obj.unit_price,
-                        selling_price=item_obj.selling_price,
-                        created_at=item_obj.created_at
-                    ),
-                    quantity=issue_item.quantity
+                        quantity=issue_item.quantity
+                    )
                 )
-                issue_items_display.append(display_item)
-
-            bar_obj = (
-                db.query(bar_models.Bar)
-                .filter_by(id=issue.bar_id, business_id=effective_business_id)
-                .first()
-            )
 
             result.append(
                 store_schemas.IssueDisplay(
                     id=issue.id,
                     issue_to="bar",
-                    issued_to_id=issue.bar_id,
+                    issued_to_id=issue.bar_id or 0,  # ✅ SAFE fallback
                     issued_to=bar_obj,
-                    issue_date=to_wat(issue.issue_date),  # ✅ convert to WAT
+                    issue_date=to_wat(issue.issue_date),
                     issue_items=issue_items_display
                 )
             )
@@ -1854,6 +1881,7 @@ def list_issues_to_bar(
             status_code=500,
             detail=f"Failed to retrieve bar issues: {str(e)}"
         )
+
 
                                             
 
@@ -2375,87 +2403,101 @@ def adjust_store_inventory(
 
 @router.get("/adjustments", response_model=list[store_schemas.StoreInventoryAdjustmentDisplay])
 def list_store_inventory_adjustments(
-    item_id: Optional[int] = Query(None, description="Filter by item"),
-    start_date: Optional[datetime] = Query(None, description="Filter from date"),
-    end_date: Optional[datetime] = Query(None, description="Filter to date"),
-    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
+    item_id: Optional[int] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store","admin","super_admin"]))
-):
-
-    roles = [r.lower() for r in current_user.roles]
-
-    # ------------------------------
-    # Resolve business
-    # ------------------------------
-    if "super_admin" in roles:
-        effective_business_id = business_id if business_id else current_user.business_id
-    else:
-        effective_business_id = current_user.business_id
-
-    # ------------------------------
-    # Base query
-    # ------------------------------
-    query = db.query(store_models.StoreInventoryAdjustment).filter(
-        store_models.StoreInventoryAdjustment.business_id == effective_business_id
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["store", "admin", "super_admin"])
     )
+):
+    try:
+        # ------------------------------
+        # 1️⃣ Resolve business (CLEAN ✅)
+        # ------------------------------
+        business_id = resolve_business_id(current_user, business_id)
 
-    if item_id:
-        query = query.filter(store_models.StoreInventoryAdjustment.item_id == item_id)
-
-    if start_date:
-        query = query.filter(store_models.StoreInventoryAdjustment.adjusted_at >= start_date)
-
-    if end_date:
-        query = query.filter(store_models.StoreInventoryAdjustment.adjusted_at <= end_date)
-
-    adjustments = query.order_by(
-        store_models.StoreInventoryAdjustment.adjusted_at.desc()
-    ).all()
-
-    results = []
-
-    for adj in adjustments:
-
-        item_obj = db.query(store_models.StoreItem).filter(
-            store_models.StoreItem.id == adj.item_id,
-            store_models.StoreItem.business_id == effective_business_id
-        ).first()
-
-        if not item_obj:
-            continue
-
-        category_display = None
-        if item_obj.category:
-            category_display = store_schemas.StoreCategoryDisplay(
-                id=item_obj.category.id,
-                name=item_obj.category.name,
-                category_name=item_obj.category.name or "Unknown",
-                created_at=item_obj.category.created_at
-            )
-
-        item_display = store_schemas.StoreItemDisplay(
-            id=item_obj.id,
-            name=item_obj.name,
-            unit=item_obj.unit,
-            category=category_display,
-            unit_price=item_obj.unit_price,
-            selling_price=item_obj.selling_price,
-            created_at=item_obj.created_at
+        # ------------------------------
+        # 2️⃣ Base query
+        # ------------------------------
+        query = db.query(store_models.StoreInventoryAdjustment).filter(
+            store_models.StoreInventoryAdjustment.business_id == business_id
         )
 
-        results.append(
-            store_schemas.StoreInventoryAdjustmentDisplay(
-                id=adj.id,
-                item=item_display,
-                quantity_adjusted=adj.quantity_adjusted,
-                reason=adj.reason,
-                adjusted_by=adj.adjusted_by,
-                adjusted_at=adj.adjusted_at
+        if item_id:
+            query = query.filter(
+                store_models.StoreInventoryAdjustment.item_id == item_id
             )
-        )
 
-    return results
+        if start_date:
+            query = query.filter(
+                store_models.StoreInventoryAdjustment.adjusted_at >= start_date
+            )
+
+        if end_date:
+            query = query.filter(
+                store_models.StoreInventoryAdjustment.adjusted_at <= end_date
+            )
+
+        adjustments = query.order_by(
+            store_models.StoreInventoryAdjustment.adjusted_at.desc()
+        ).all()
+
+        results: list[store_schemas.StoreInventoryAdjustmentDisplay] = []
+
+        # ------------------------------
+        # 3️⃣ Build response
+        # ------------------------------
+        for adj in adjustments:
+
+            # ✅ Tenant-safe item fetch
+            item_obj = db.query(store_models.StoreItem).filter(
+                store_models.StoreItem.id == adj.item_id,
+                store_models.StoreItem.business_id == business_id
+            ).first()
+
+            if not item_obj:
+                continue
+
+            category_display = (
+                store_schemas.StoreCategoryDisplay(
+                    id=item_obj.category.id,
+                    name=item_obj.category.name,
+                    category_name=item_obj.category.name or "Unknown",
+                    created_at=item_obj.category.created_at
+                )
+                if item_obj.category else None
+            )
+
+            item_display = store_schemas.StoreItemDisplay(
+                id=item_obj.id,
+                name=item_obj.name,
+                unit=item_obj.unit,
+                category=category_display,
+                unit_price=item_obj.unit_price,
+                selling_price=item_obj.selling_price,
+                created_at=item_obj.created_at
+            )
+
+            results.append(
+                store_schemas.StoreInventoryAdjustmentDisplay(
+                    id=adj.id,
+                    item=item_display,
+                    quantity_adjusted=adj.quantity_adjusted,
+                    reason=adj.reason,
+                    adjusted_by=adj.adjusted_by,
+                    adjusted_at=adj.adjusted_at
+                )
+            )
+
+        return results
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve inventory adjustments: {str(e)}"
+        )
 
 
 
@@ -2582,59 +2624,69 @@ def update_adjustment(
 @router.delete("/adjustments/{adjustment_id}")
 def delete_adjustment(
     adjustment_id: int,
-    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin","super_admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["admin", "super_admin"])
+    )
 ):
+    try:
+        # ------------------------------
+        # 1️⃣ Resolve business (CLEAN ✅)
+        # ------------------------------
+        business_id = resolve_business_id(current_user, business_id)
 
-    roles = [r.lower() for r in current_user.roles]
+        # ------------------------------
+        # 2️⃣ Get adjustment (tenant-safe)
+        # ------------------------------
+        adjustment = db.query(StoreInventoryAdjustment).filter(
+            StoreInventoryAdjustment.id == adjustment_id,
+            StoreInventoryAdjustment.business_id == business_id
+        ).first()
 
-    # ------------------------------
-    # Resolve business
-    # ------------------------------
-    if "super_admin" in roles:
-        effective_business_id = business_id if business_id else current_user.business_id
-    else:
-        effective_business_id = current_user.business_id
+        if not adjustment:
+            raise HTTPException(status_code=404, detail="Adjustment not found")
 
-    # ------------------------------
-    # Get adjustment
-    # ------------------------------
-    adjustment = db.query(StoreInventoryAdjustment).filter(
-        StoreInventoryAdjustment.id == adjustment_id,
-        StoreInventoryAdjustment.business_id == effective_business_id
-    ).first()
+        # ------------------------------
+        # 3️⃣ Get latest stock entry
+        # ------------------------------
+        stock_entry = db.query(StoreStockEntry).filter(
+            StoreStockEntry.item_id == adjustment.item_id,
+            StoreStockEntry.business_id == business_id
+        ).order_by(StoreStockEntry.purchase_date.desc()).first()
 
-    if not adjustment:
-        raise HTTPException(status_code=404, detail="Adjustment not found")
+        if not stock_entry:
+            raise HTTPException(status_code=404, detail="Stock entry not found")
 
-    # ------------------------------
-    # Get latest stock entry
-    # ------------------------------
-    stock_entry = db.query(StoreStockEntry).filter(
-        StoreStockEntry.item_id == adjustment.item_id,
-        StoreStockEntry.business_id == effective_business_id
-    ).order_by(StoreStockEntry.purchase_date.desc()).first()
+        # ------------------------------
+        # 4️⃣ Restore stock
+        # ------------------------------
+        stock_entry.quantity += adjustment.quantity_adjusted
+        db.add(stock_entry)
 
-    if not stock_entry:
-        raise HTTPException(status_code=404, detail="Stock entry not found")
+        # ------------------------------
+        # 5️⃣ Delete adjustment
+        # ------------------------------
+        db.delete(adjustment)
 
-    # Restore quantity
-    stock_entry.quantity += adjustment.quantity_adjusted
-    db.add(stock_entry)
+        # ------------------------------
+        # 6️⃣ Commit transaction
+        # ------------------------------
+        db.commit()
 
-    # Delete adjustment
-    db.delete(adjustment)
+        return {
+            "message": "Adjustment deleted successfully",
+            "item_id": adjustment.item_id,
+            "restored_quantity": adjustment.quantity_adjusted,
+            "current_stock": stock_entry.quantity
+        }
 
-    db.commit()
-
-    return {
-        "message": "Adjustment deleted successfully",
-        "item_id": adjustment.item_id,
-        "restored_quantity": adjustment.quantity_adjusted,
-        "current_stock": stock_entry.quantity
-    }
-
+    except Exception as e:
+        db.rollback()  # ✅ VERY IMPORTANT for safety
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete adjustment: {str(e)}"
+        )
 
 
 
@@ -2645,93 +2697,80 @@ def get_bar_stock_balance(
     bar_id: Optional[int] = Query(None, description="Filter by bar"),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
-    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
+    search: Optional[str] = Query(None, description="Search by item name or category"),
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "bar", "admin", "super_admin"]))
 ):
     try:
-
-        roles = [r.lower() for r in current_user.roles]
-
-        # Resolve business
-        if "super_admin" in roles:
-            effective_business_id = business_id if business_id else current_user.business_id
-        else:
-            effective_business_id = current_user.business_id
+        # ------------------------------
+        # 1️⃣ Resolve business
+        # ------------------------------
+        business_id = resolve_business_id(current_user, business_id)
 
         # =============================================================
-        # 1️⃣ ISSUED ITEMS (Store → Bar)
+        # 1️⃣ TOTAL RECEIVED (Store → Bar)
         # =============================================================
-        issued_query = (
+        received_query = (
             db.query(
                 store_models.StoreIssueItem.item_id,
                 store_models.StoreIssue.bar_id.label("bar_id"),
-                func.sum(store_models.StoreIssueItem.quantity).label("total_received"),
+                func.sum(store_models.StoreIssueItem.quantity).label("total_received")
             )
             .join(store_models.StoreIssue)
-            .join(store_models.StoreItem)
             .filter(
                 store_models.StoreIssue.issue_to == "bar",
-                store_models.StoreIssue.business_id == effective_business_id,
-                store_models.StoreItem.business_id == effective_business_id
+                store_models.StoreIssue.business_id == business_id  # ✅ added
             )
         )
 
         if item_id:
-            issued_query = issued_query.filter(store_models.StoreItem.id == item_id)
-
+            received_query = received_query.filter(store_models.StoreIssueItem.item_id == item_id)
         if bar_id:
-            issued_query = issued_query.filter(store_models.StoreIssue.bar_id == bar_id)
-
+            received_query = received_query.filter(store_models.StoreIssue.bar_id == bar_id)
         if start_date:
-            issued_query = issued_query.filter(store_models.StoreIssue.issue_date >= start_date)
-
+            received_query = received_query.filter(store_models.StoreIssue.issue_date >= start_date)
         if end_date:
-            issued_query = issued_query.filter(store_models.StoreIssue.issue_date <= end_date)
+            received_query = received_query.filter(store_models.StoreIssue.issue_date <= end_date)
 
-        issued_query = issued_query.group_by(
+        received_query = received_query.group_by(
             store_models.StoreIssueItem.item_id,
-            store_models.StoreIssue.bar_id,
+            store_models.StoreIssue.bar_id
         )
 
-        issued_data = {
+        received_data = {
             (row.item_id, row.bar_id): float(row.total_received or 0)
-            for row in issued_query.all()
+            for row in received_query.all()
         }
 
         # =============================================================
-        # 2️⃣ SOLD ITEMS (Bar Sales)
+        # 2️⃣ TOTAL SOLD (Bar Sales)
         # =============================================================
         sold_query = (
             db.query(
                 bar_models.BarInventory.item_id,
                 bar_models.BarSale.bar_id,
-                func.sum(bar_models.BarSaleItem.quantity).label("total_sold"),
+                func.sum(bar_models.BarSaleItem.quantity).label("total_sold")
             )
             .join(bar_models.BarSaleItem.bar_inventory)
             .join(bar_models.BarSaleItem.sale)
-            .join(store_models.StoreItem, bar_models.BarInventory.item_id == store_models.StoreItem.id)
             .filter(
-                bar_models.BarSale.business_id == effective_business_id,
-                store_models.StoreItem.business_id == effective_business_id
+                bar_models.BarSale.business_id == business_id  # ✅ added
             )
         )
 
         if item_id:
-            sold_query = sold_query.filter(store_models.StoreItem.id == item_id)
-
+            sold_query = sold_query.filter(bar_models.BarInventory.item_id == item_id)
         if bar_id:
             sold_query = sold_query.filter(bar_models.BarSale.bar_id == bar_id)
-
         if start_date:
             sold_query = sold_query.filter(bar_models.BarSale.sale_date >= start_date)
-
         if end_date:
             sold_query = sold_query.filter(bar_models.BarSale.sale_date <= end_date)
 
         sold_query = sold_query.group_by(
             bar_models.BarInventory.item_id,
-            bar_models.BarSale.bar_id,
+            bar_models.BarSale.bar_id
         )
 
         sold_data = {
@@ -2740,40 +2779,31 @@ def get_bar_stock_balance(
         }
 
         # =============================================================
-        # 3️⃣ ADJUSTED ITEMS (Bar Inventory Adjustments)
+        # 3️⃣ TOTAL ADJUSTED (Inventory Adjustments)
         # =============================================================
         adjusted_query = (
             db.query(
                 bar_models.BarInventoryAdjustment.item_id,
                 bar_models.BarInventoryAdjustment.bar_id,
-                func.sum(bar_models.BarInventoryAdjustment.quantity_adjusted)
-                .label("total_adjusted"),
-            )
-            .join(
-                store_models.StoreItem,
-                bar_models.BarInventoryAdjustment.item_id == store_models.StoreItem.id
+                func.sum(bar_models.BarInventoryAdjustment.quantity_adjusted).label("total_adjusted")
             )
             .filter(
-                bar_models.BarInventoryAdjustment.business_id == effective_business_id,
-                store_models.StoreItem.business_id == effective_business_id
+                bar_models.BarInventoryAdjustment.business_id == business_id  # ✅ added
             )
         )
 
         if item_id:
             adjusted_query = adjusted_query.filter(bar_models.BarInventoryAdjustment.item_id == item_id)
-
         if bar_id:
             adjusted_query = adjusted_query.filter(bar_models.BarInventoryAdjustment.bar_id == bar_id)
-
         if start_date:
             adjusted_query = adjusted_query.filter(bar_models.BarInventoryAdjustment.adjusted_at >= start_date)
-
         if end_date:
             adjusted_query = adjusted_query.filter(bar_models.BarInventoryAdjustment.adjusted_at <= end_date)
 
         adjusted_query = adjusted_query.group_by(
             bar_models.BarInventoryAdjustment.item_id,
-            bar_models.BarInventoryAdjustment.bar_id,
+            bar_models.BarInventoryAdjustment.bar_id
         )
 
         adjusted_data = {
@@ -2782,40 +2812,50 @@ def get_bar_stock_balance(
         }
 
         # =============================================================
-        # 4️⃣ MERGE + CALCULATE BALANCE
+        # 4️⃣ MERGE + CALCULATE
         # =============================================================
-        all_keys = set(issued_data.keys()) | set(sold_data.keys()) | set(adjusted_data.keys())
+        all_keys = set(received_data.keys()) | set(sold_data.keys()) | set(adjusted_data.keys())
         results = []
 
         for (i_id, b_id) in all_keys:
-
             if b_id is None:
                 continue
 
-            issued = issued_data.get((i_id, b_id), 0)
-            sold = sold_data.get((i_id, b_id), 0)
-            adjusted = adjusted_data.get((i_id, b_id), 0)
+            total_received = received_data.get((i_id, b_id), 0)
+            total_sold = sold_data.get((i_id, b_id), 0)
+            total_adjusted = adjusted_data.get((i_id, b_id), 0)
 
-            balance = issued - sold - adjusted
+            balance = total_received - total_sold - total_adjusted
 
-            item = db.query(store_models.StoreItem).filter(
-                store_models.StoreItem.id == i_id,
-                store_models.StoreItem.business_id == effective_business_id
+            # ✅ tenant-safe item
+            item = db.query(store_models.StoreItem).filter_by(
+                id=i_id,
+                business_id=business_id
             ).first()
 
             if not item or item.item_type != "bar":
                 continue
 
-            bar = db.query(bar_models.Bar).filter(
-                bar_models.Bar.id == b_id,
-                bar_models.Bar.business_id == effective_business_id
+            # ✅ tenant-safe bar
+            bar = db.query(bar_models.Bar).filter_by(
+                id=b_id,
+                business_id=business_id
             ).first()
 
-            latest_entry = (
+            # Search filter (unchanged)
+            if search:
+                search_lower = search.lower()
+                if search_lower not in item.name.lower() and (
+                    not item.category or search_lower not in item.category.name.lower()
+                ):
+                    continue
+
+            # Latest unit price (tenant-safe)
+            latest_stock = (
                 db.query(store_models.StoreStockEntry)
                 .filter(
                     store_models.StoreStockEntry.item_id == i_id,
-                    store_models.StoreStockEntry.business_id == effective_business_id
+                    store_models.StoreStockEntry.business_id == business_id
                 )
                 .order_by(
                     store_models.StoreStockEntry.purchase_date.desc(),
@@ -2824,7 +2864,7 @@ def get_bar_stock_balance(
                 .first()
             )
 
-            unit_price = float(latest_entry.unit_price) if latest_entry and latest_entry.unit_price else None
+            unit_price = float(latest_stock.unit_price) if latest_stock and latest_stock.unit_price else None
             balance_total_amount = round(balance * unit_price, 2) if unit_price else None
 
             results.append(
@@ -2836,9 +2876,9 @@ def get_bar_stock_balance(
                     category_name=item.category.name if item.category else "Uncategorized",
                     item_type=item.item_type,
                     unit=item.unit,
-                    total_received=issued,
-                    total_sold=sold,
-                    total_adjusted=adjusted,
+                    total_received=total_received,
+                    total_sold=total_sold,
+                    total_adjusted=total_adjusted,
                     balance=balance,
                     last_unit_price=unit_price,
                     balance_total_amount=balance_total_amount,
@@ -2859,39 +2899,48 @@ def get_bar_stock_balance(
 
 
 
+
 @router.get("/kitchen-balance-stock", response_model=List[kitchen_schemas.KitchenStockBalance])
 def get_kitchen_stock_balance(
     item_id: Optional[int] = Query(None),
     kitchen_id: Optional[int] = Query(None),
+    search: Optional[str] = Query(None),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
-    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "restaurant", "admin", "super_admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["store", "restaurant", "admin", "super_admin"])
+    )
 ):
     try:
-
-        roles = [r.lower() for r in current_user.roles]
-
-        # ============================================
-        # Resolve business
-        # ============================================
-        if "super_admin" in roles:
-            effective_business_id = business_id if business_id else current_user.business_id
-        else:
-            effective_business_id = current_user.business_id
+        # ------------------------------
+        # 1️⃣ Resolve business (same as bar)
+        # ------------------------------
+        business_id = resolve_business_id(current_user, business_id)
 
         # ============================================
-        # Validate kitchen_id
+        # 🔍 GET FILTERED ITEM IDs
         # ============================================
-        if kitchen_id:
-            try:
-                kitchen_id = int(kitchen_id)
-            except ValueError:
-                raise HTTPException(400, "kitchen_id must be an integer")
+        item_query = db.query(store_models.StoreItem.id).filter(
+            store_models.StoreItem.business_id == business_id
+        )
+
+        if item_id:
+            item_query = item_query.filter(store_models.StoreItem.id == item_id)
+
+        if search:
+            item_query = item_query.filter(
+                store_models.StoreItem.name.ilike(f"%{search}%")
+            )
+
+        filtered_item_ids = [row.id for row in item_query.all()]
+
+        if search and not filtered_item_ids:
+            return []
 
         # ============================================
-        # 1️⃣ TOTAL ISSUED TO KITCHEN
+        # 1️⃣ TOTAL ISSUED (Store → Kitchen)
         # ============================================
         issued_query = (
             db.query(
@@ -2900,23 +2949,21 @@ def get_kitchen_stock_balance(
                 func.sum(store_models.StoreIssueItem.quantity).label("total_issued")
             )
             .join(store_models.StoreIssue)
-            .join(store_models.StoreItem)
             .filter(
                 store_models.StoreIssue.issue_to == "kitchen",
-                store_models.StoreIssue.business_id == effective_business_id,
-                store_models.StoreItem.business_id == effective_business_id
+                store_models.StoreIssue.business_id == business_id
             )
         )
 
-        if item_id:
-            issued_query = issued_query.filter(store_models.StoreIssueItem.item_id == item_id)
+        if filtered_item_ids:
+            issued_query = issued_query.filter(
+                store_models.StoreIssueItem.item_id.in_(filtered_item_ids)
+            )
 
         if kitchen_id:
             issued_query = issued_query.filter(store_models.StoreIssue.kitchen_id == kitchen_id)
-
         if start_date:
             issued_query = issued_query.filter(store_models.StoreIssue.issue_date >= start_date)
-
         if end_date:
             issued_query = issued_query.filter(store_models.StoreIssue.issue_date <= end_date)
 
@@ -2931,7 +2978,7 @@ def get_kitchen_stock_balance(
         }
 
         # ============================================
-        # 2️⃣ TOTAL USED BY KITCHEN (Meal Orders)
+        # 2️⃣ TOTAL USED (Meal Orders)
         # ============================================
         used_query = (
             db.query(
@@ -2944,19 +2991,19 @@ def get_kitchen_stock_balance(
                 restaurant_models.MealOrder.id == restaurant_models.MealOrderItem.order_id
             )
             .filter(
-                restaurant_models.MealOrder.business_id == effective_business_id
+                restaurant_models.MealOrder.business_id == business_id
             )
         )
 
-        if item_id:
-            used_query = used_query.filter(restaurant_models.MealOrderItem.store_item_id == item_id)
+        if filtered_item_ids:
+            used_query = used_query.filter(
+                restaurant_models.MealOrderItem.store_item_id.in_(filtered_item_ids)
+            )
 
         if kitchen_id:
             used_query = used_query.filter(restaurant_models.MealOrder.kitchen_id == kitchen_id)
-
         if start_date:
             used_query = used_query.filter(restaurant_models.MealOrder.created_at >= start_date)
-
         if end_date:
             used_query = used_query.filter(restaurant_models.MealOrder.created_at <= end_date)
 
@@ -2980,19 +3027,19 @@ def get_kitchen_stock_balance(
                 func.sum(kitchen_models.KitchenInventoryAdjustment.quantity_adjusted).label("total_adjusted")
             )
             .filter(
-                kitchen_models.KitchenInventoryAdjustment.business_id == effective_business_id
+                kitchen_models.KitchenInventoryAdjustment.business_id == business_id
             )
         )
 
-        if item_id:
-            adjusted_query = adjusted_query.filter(kitchen_models.KitchenInventoryAdjustment.item_id == item_id)
+        if filtered_item_ids:
+            adjusted_query = adjusted_query.filter(
+                kitchen_models.KitchenInventoryAdjustment.item_id.in_(filtered_item_ids)
+            )
 
         if kitchen_id:
             adjusted_query = adjusted_query.filter(kitchen_models.KitchenInventoryAdjustment.kitchen_id == kitchen_id)
-
         if start_date:
             adjusted_query = adjusted_query.filter(kitchen_models.KitchenInventoryAdjustment.adjusted_at >= start_date)
-
         if end_date:
             adjusted_query = adjusted_query.filter(kitchen_models.KitchenInventoryAdjustment.adjusted_at <= end_date)
 
@@ -3007,13 +3054,14 @@ def get_kitchen_stock_balance(
         }
 
         # ============================================
-        # 4️⃣ MERGE + CALCULATE BALANCE
+        # 4️⃣ MERGE (same as bar)
         # ============================================
         all_keys = set(issued_data.keys()) | set(used_data.keys()) | set(adjusted_data.keys())
-
         results = []
 
         for (i_id, k_id) in all_keys:
+            if k_id is None:
+                continue
 
             total_issued = issued_data.get((i_id, k_id), 0)
             total_used = used_data.get((i_id, k_id), 0)
@@ -3021,24 +3069,34 @@ def get_kitchen_stock_balance(
 
             balance = total_issued - total_used - total_adjusted
 
-            item = db.query(store_models.StoreItem).filter(
-                store_models.StoreItem.id == i_id,
-                store_models.StoreItem.business_id == effective_business_id
+            item = db.query(store_models.StoreItem).filter_by(
+                id=i_id,
+                business_id=business_id
             ).first()
 
-            kitchen = db.query(kitchen_models.Kitchen).filter(
-                kitchen_models.Kitchen.id == k_id,
-                kitchen_models.Kitchen.business_id == effective_business_id
-            ).first()
-
-            if not item or not kitchen:
+            if not item:
                 continue
+
+            kitchen = db.query(kitchen_models.Kitchen).filter_by(
+                id=k_id,
+                business_id=business_id
+            ).first()
+
+            if not kitchen:
+                continue
+
+            if search:
+                search_lower = search.lower()
+                if search_lower not in item.name.lower() and (
+                    not item.category or search_lower not in item.category.name.lower()
+                ):
+                    continue
 
             latest_entry = (
                 db.query(store_models.StoreStockEntry)
                 .filter(
                     store_models.StoreStockEntry.item_id == i_id,
-                    store_models.StoreStockEntry.business_id == effective_business_id
+                    store_models.StoreStockEntry.business_id == business_id
                 )
                 .order_by(
                     store_models.StoreStockEntry.purchase_date.desc(),
@@ -3069,7 +3127,6 @@ def get_kitchen_stock_balance(
             )
 
         results.sort(key=lambda x: (x.kitchen_name.lower(), x.item_name.lower()))
-
         return results
 
     except Exception as e:
@@ -3078,58 +3135,57 @@ def get_kitchen_stock_balance(
             detail=f"Failed to retrieve kitchen stock balance: {str(e)}"
         )
 
+
+
 # ----------------------------
 
 
 @router.get("/balance-stock", response_model=list[store_schemas.StoreStockBalance])
 def get_store_balances(
     category_id: Optional[int] = Query(None),
-    item_type: Optional[str] = Query(None),   # ✔ Filter by item type
-    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
+    item_type: Optional[str] = Query(None),
+    item_id: Optional[int] = Query(None),
+    search: Optional[str] = Query(None),
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "admin", "super_admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["store", "admin", "super_admin"])
+    )
 ):
-    # --------------------------------------------------
-    # Determine effective business
-    # --------------------------------------------------
-    roles = [r.lower() for r in current_user.roles]
-    effective_business_id = current_user.business_id
-    if "super_admin" in roles and business_id:
-        effective_business_id = business_id
+    # ------------------------------
+    # 1️⃣ Resolve business (same pattern)
+    # ------------------------------
+    business_id = resolve_business_id(current_user, business_id)
 
-    # --------------------------------------------------
-    # 1️⃣ Historical Adjustments
-    # --------------------------------------------------
+    # 1) Historical Adjustments
     adjustments_q = (
         db.query(
             store_models.StoreInventoryAdjustment.item_id,
             func.coalesce(func.sum(store_models.StoreInventoryAdjustment.quantity_adjusted), 0)
             .label("total_adjusted")
         )
-        .filter(store_models.StoreInventoryAdjustment.business_id == effective_business_id)
+        .filter(store_models.StoreInventoryAdjustment.business_id == business_id)  # ✅ added
         .group_by(store_models.StoreInventoryAdjustment.item_id)
         .all()
     )
+
     adjustment_map = {row.item_id: float(row.total_adjusted) for row in adjustments_q}
 
-    # --------------------------------------------------
-    # 2️⃣ Store Issues
-    # --------------------------------------------------
+    # 2) Issues from StoreIssueItem
     issued_q = (
         db.query(
             store_models.StoreIssueItem.item_id,
             func.coalesce(func.sum(store_models.StoreIssueItem.quantity), 0).label("total_issued")
         )
         .join(store_models.StoreIssue)
-        .filter(store_models.StoreIssue.business_id == effective_business_id)
+        .filter(store_models.StoreIssue.business_id == business_id)  # ✅ added
         .group_by(store_models.StoreIssueItem.item_id)
         .all()
     )
+
     issued_map = {row.item_id: float(row.total_issued) for row in issued_q}
 
-    # --------------------------------------------------
-    # 3️⃣ Restaurant usage
-    # --------------------------------------------------
+    # 3) Restaurant usage
     restaurant_issued_q = (
         db.query(
             restaurant_models.MealOrderItem.store_item_id.label("item_id"),
@@ -3141,18 +3197,17 @@ def get_store_balances(
             restaurant_models.MealOrder.id == restaurant_models.MealOrderItem.order_id
         )
         .filter(
-            restaurant_models.MealOrder.business_id == effective_business_id,
-            restaurant_models.MealOrder.status == "closed"
+            restaurant_models.MealOrder.status == "closed",
+            restaurant_models.MealOrder.business_id == business_id  # ✅ added
         )
         .group_by(restaurant_models.MealOrderItem.store_item_id)
         .all()
     )
+
     for row in restaurant_issued_q:
         issued_map[row.item_id] = issued_map.get(row.item_id, 0) + float(row.restaurant_issued)
 
-    # --------------------------------------------------
-    # 4️⃣ Store Items + Stock Received
-    # --------------------------------------------------
+    # 4) PURCHASES & STOCK
     query = (
         db.query(
             store_models.StoreItem.id.label("item_id"),
@@ -3161,52 +3216,74 @@ def get_store_balances(
             store_models.StoreItem.item_type.label("item_type"),
             store_models.StoreCategory.name.label("category_name"),
             func.coalesce(func.sum(store_models.StoreStockEntry.original_quantity), 0)
-            .label("total_received")
+            .label("total_received"),
         )
-        .join(store_models.StoreStockEntry, store_models.StoreItem.id == store_models.StoreStockEntry.item_id)
-        .join(store_models.StoreCategory, store_models.StoreItem.category_id == store_models.StoreCategory.id)
-        .filter(store_models.StoreItem.business_id == effective_business_id)
-        .group_by(
-            store_models.StoreItem.id,
-            store_models.StoreItem.name,
-            store_models.StoreItem.unit,
-            store_models.StoreItem.item_type,
-            store_models.StoreCategory.name
+        .join(
+            store_models.StoreStockEntry,
+            store_models.StoreItem.id == store_models.StoreStockEntry.item_id
         )
-        .order_by(store_models.StoreItem.name.asc())
+        .join(
+            store_models.StoreCategory,
+            store_models.StoreItem.category_id == store_models.StoreCategory.id
+        )
+        .filter(store_models.StoreItem.business_id == business_id)  # ✅ added
     )
+
+    # ================= FILTERS (UNCHANGED) =================
 
     if category_id:
         query = query.filter(store_models.StoreItem.category_id == category_id)
 
     if item_type:
-        query = query.filter(func.lower(store_models.StoreItem.item_type) == item_type.lower())
+        query = query.filter(
+            func.lower(store_models.StoreItem.item_type) == item_type.lower()
+        )
+
+    if item_id:
+        query = query.filter(store_models.StoreItem.id == item_id)
+
+    if search:
+        query = query.filter(
+            store_models.StoreItem.name.ilike(f"%{search}%")
+        )
+
+    # ================= GROUPING =================
+    query = query.group_by(
+        store_models.StoreItem.id,
+        store_models.StoreItem.name,
+        store_models.StoreItem.unit,
+        store_models.StoreItem.item_type,
+        store_models.StoreCategory.name
+    ).order_by(store_models.StoreItem.name.asc())
 
     items_q = query.all()
 
-    # --------------------------------------------------
-    # 5️⃣ Build response
-    # --------------------------------------------------
+    # ================= RESPONSE =================
     response = []
 
-    # Fetch all latest stock entries once
-    latest_entries = (
-        db.query(
-            store_models.StoreStockEntry.item_id,
-            store_models.StoreStockEntry.unit_price
-        )
-        .filter(store_models.StoreStockEntry.business_id == effective_business_id)
-        .order_by(store_models.StoreStockEntry.item_id, store_models.StoreStockEntry.purchase_date.desc())
-        .distinct(store_models.StoreStockEntry.item_id)
-        .all()
-    )
-    latest_price_map = {entry.item_id: float(entry.unit_price or 0) for entry in latest_entries}
-
     for item in items_q:
+        latest_entry = (
+            db.query(store_models.StoreStockEntry)
+            .filter(
+                store_models.StoreStockEntry.item_id == item.item_id,
+                store_models.StoreStockEntry.business_id == business_id  # ✅ added
+            )
+            .order_by(
+                store_models.StoreStockEntry.purchase_date.desc(),
+                store_models.StoreStockEntry.id.desc()
+            )
+            .first()
+        )
+
+        current_unit_price = float(latest_entry.unit_price) if latest_entry else 0.0
+
         total_adjusted = adjustment_map.get(item.item_id, 0)
         total_issued = issued_map.get(item.item_id, 0)
-        balance_qty = max(float(item.total_received or 0) - total_issued - total_adjusted, 0)
-        current_unit_price = latest_price_map.get(item.item_id, 0)
+
+        balance_qty = float(item.total_received or 0) - total_issued - total_adjusted
+        if balance_qty < 0:
+            balance_qty = 0
+
         balance_value = round(balance_qty * current_unit_price, 2)
 
         response.append(
@@ -3221,7 +3298,7 @@ def get_store_balances(
                 total_adjusted=total_adjusted,
                 balance=balance_qty,
                 current_unit_price=current_unit_price,
-                balance_total_amount=balance_value
+                balance_total_amount=balance_value,
             )
         )
 
