@@ -11,9 +11,11 @@ from app.users.permissions import role_required  # 👈 permission helper
 from . import models, schemas
 from app.bar.models import BarSale
 from app.barpayment.models import  BarPayment
+from app.barpayment import models as barpayment_models
 from app.barpayment import schemas as barpayment_schemas
 from app.users import schemas as user_schemas
 from app.bar import models as bar_models
+from app.core.business import resolve_business_id
 
 
 
@@ -21,200 +23,330 @@ from app.bar import models as bar_models
 
 router = APIRouter()
 
+# ----------------------------
+# Create Bar Payment (Multi-Tenant)
+# ----------------------------
 @router.post("/", response_model=schemas.BarPaymentDisplay)
 def create_bar_payment(
     payment: schemas.BarPaymentCreate,
+    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["bar", "admin", "super_admin"])
+    )
 ):
-    sale = db.query(BarSale).filter(BarSale.id == payment.bar_sale_id).first()
-    if not sale:
-        raise HTTPException(status_code=404, detail="Bar sale not found")
+    try:
+        # ------------------------------
+        # 1️⃣ Resolve business
+        # ------------------------------
+        business_id = resolve_business_id(current_user, business_id)
 
-    db_payment = models.BarPayment(
-        bar_sale_id=payment.bar_sale_id,
-        amount_paid=payment.amount_paid,
-        payment_method=payment.payment_method,
-        bank=payment.bank,       # 👈 NEW
-        note=payment.note,
-        created_by=current_user.username,
-        status="active"
-    )
-    db.add(db_payment)
-    db.commit()
-    db.refresh(db_payment)
+        # ------------------------------
+        # 2️⃣ Fetch sale (tenant-safe)
+        # ------------------------------
+        sale = (
+            db.query(bar_models.BarSale)
+            .filter(
+                bar_models.BarSale.id == payment.bar_sale_id,
+                bar_models.BarSale.business_id == business_id
+            )
+            .first()
+        )
 
-    total_paid = (
-        db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
-        .filter(models.BarPayment.bar_sale_id == payment.bar_sale_id)
-        .filter(models.BarPayment.status == "active")
-        .scalar()
-    )
+        if not sale:
+            raise HTTPException(status_code=404, detail="Bar sale not found")
 
-    balance_due = float(sale.total_amount) - float(total_paid)
+        # ------------------------------
+        # 3️⃣ Validate payment date
+        # ------------------------------
+        payment_date = payment.date_paid or date.today()
 
-    if total_paid == 0:
-        status = "unpaid"
-    elif total_paid < sale.total_amount:
-        status = "part payment"
-    else:
-        status = "fully paid"
+        if isinstance(payment_date, str):
+            try:
+                payment_date = datetime.fromisoformat(payment_date).date()
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid payment date format"
+                )
 
-    return {
-        "id": db_payment.id,
-        "bar_sale_id": db_payment.bar_sale_id,
-        "sale_amount": float(sale.total_amount),
-        "amount_paid": float(db_payment.amount_paid),
-        "balance_due": float(balance_due),
-        "payment_method": db_payment.payment_method,
-        "bank": db_payment.bank,         # 👈 NEW
-        "note": db_payment.note,
-        "date_paid": db_payment.date_paid,
-        "created_by": db_payment.created_by,
-        "status": status,
-    }
+        if payment_date > date.today():
+            raise HTTPException(
+                status_code=400,
+                detail="Payment date cannot be in the future"
+            )
+
+        # ------------------------------
+        # 4️⃣ Validate amount
+        # ------------------------------
+        if payment.amount_paid <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Amount must be greater than zero"
+            )
+
+        # ------------------------------
+        # 5️⃣ Create payment (tenant-safe)
+        # ------------------------------
+        db_payment = barpayment_models.BarPayment(
+            bar_sale_id=payment.bar_sale_id,
+            amount_paid=payment.amount_paid,
+            payment_method=payment.payment_method,
+            bank=payment.bank,
+            note=payment.note,
+            date_paid=payment_date,
+            created_by=current_user.username,
+            status="active",
+            business_id=business_id   # ✅ CRITICAL
+        )
+
+        db.add(db_payment)
+        db.flush()
+
+        # ------------------------------
+        # 6️⃣ Recalculate totals (tenant-safe)
+        # ------------------------------
+        total_paid = (
+            db.query(func.coalesce(func.sum(barpayment_models.BarPayment.amount_paid), 0))
+            .filter(
+                barpayment_models.BarPayment.bar_sale_id == payment.bar_sale_id,
+                barpayment_models.BarPayment.business_id == business_id,
+                barpayment_models.BarPayment.status == "active"
+            )
+            .scalar()
+        )
+
+        total_amount = float(sale.total_amount or 0)
+        balance_due = total_amount - float(total_paid or 0)
+
+        # ------------------------------
+        # 7️⃣ Determine status
+        # ------------------------------
+        if total_paid == 0:
+            status = "unpaid"
+        elif total_paid < total_amount:
+            status = "part payment"
+        else:
+            status = "fully paid"
+
+        # ✅ keep sale status in sync
+        sale.status = status
+
+        db.commit()
+        db.refresh(db_payment)
+
+        # ------------------------------
+        # 8️⃣ Response
+        # ------------------------------
+        return {
+            "id": db_payment.id,
+            "bar_sale_id": db_payment.bar_sale_id,
+            "sale_amount": total_amount,
+            "amount_paid": float(db_payment.amount_paid),
+            "balance_due": float(balance_due),
+            "payment_method": db_payment.payment_method,
+            "bank": db_payment.bank,
+            "note": db_payment.note,
+            "date_paid": db_payment.date_paid,
+            "created_by": db_payment.created_by,
+            "status": status,
+        }
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create bar payment: {str(e)}"
+        )
+
 
 
 
 @router.get("/")
 def list_bar_payments(
-    bar_id: int | None = None,
-    start_date: date | None = None,
-    end_date: date | None = None,
+    bar_id: Optional[int] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["bar", "admin", "super_admin"])
+    )
 ):
-    query = db.query(models.BarPayment).order_by(models.BarPayment.date_paid.desc())
+    try:
+        # ------------------------------
+        # 1️⃣ Resolve business (STANDARD ✅)
+        # ------------------------------
+        business_id = resolve_business_id(current_user, business_id)
 
-    # Filter by bar
-    if bar_id:
-        query = query.join(BarSale).filter(BarSale.bar_id == bar_id)
-
-    # If only start_date is provided → default end_date = today
-    if start_date and not end_date:
-        end_date = date.today()
-
-    # Date filters
-    if start_date:
-        query = query.filter(models.BarPayment.date_paid >= start_date)
-    if end_date:
-        query = query.filter(models.BarPayment.date_paid < end_date + timedelta(days=1))
-
-    payments = query.all()
-
-    response = []
-
-    # Main Summary
-    total_sales = 0
-    total_paid_all = 0
-    total_due_all = 0
-    total_cash = 0
-    total_pos = 0
-    total_transfer = 0
-
-    processed_sales = set()
-
-    # NEW BANK SUMMARY
-    bank_summary = {}
-
-    for p in payments:
-        sale = db.query(BarSale).filter(BarSale.id == p.bar_sale_id).first()
-        if not sale:
-            continue
-
-        # Total paid for sale (active only)
-        total_paid_for_sale = (
-            db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
-            .filter(
-                models.BarPayment.bar_sale_id == sale.id,
-                models.BarPayment.status == "active"
-            )
-            .scalar()
+        # ------------------------------
+        # 2️⃣ Base query (tenant-safe)
+        # ------------------------------
+        query = (
+            db.query(barpayment_models.BarPayment)
+            .join(bar_models.BarSale,
+                  bar_models.BarSale.id == barpayment_models.BarPayment.bar_sale_id)
+            .filter(barpayment_models.BarPayment.business_id == business_id)
+            .order_by(barpayment_models.BarPayment.date_paid.desc())
         )
 
-        balance_due = float(sale.total_amount) - float(total_paid_for_sale)
+        # ------------------------------
+        # 3️⃣ Filters
+        # ------------------------------
+        if bar_id:
+            query = query.filter(bar_models.BarSale.bar_id == bar_id)
 
-        # Add sale totals once
-        if sale.id not in processed_sales:
-            total_sales += float(sale.total_amount)
-            total_due_all += balance_due
-            processed_sales.add(sale.id)
+        if start_date and not end_date:
+            end_date = date.today()
 
-        # Only active payments count towards summary
-        if p.status == "active":
-            amt = float(p.amount_paid)
-            total_paid_all += amt
+        if start_date:
+            query = query.filter(
+                func.date(barpayment_models.BarPayment.date_paid) >= start_date
+            )
 
-            method = p.payment_method.lower()
+        if end_date:
+            query = query.filter(
+                func.date(barpayment_models.BarPayment.date_paid) <= end_date
+            )
 
-            if method == "cash":
-                total_cash += amt
-            elif method in ["pos", "card"]:
-                total_pos += amt
-            elif method == "transfer":
-                total_transfer += amt
+        payments = query.all()
 
-            # BANK CATEGORY SUMMARY
-            bank = (p.bank or "").strip().upper()  # remove default NO BANK
-            if not bank:
-                continue  # skip if bank is empty
+        # ------------------------------
+        # 4️⃣ Preload sales (tenant-safe)
+        # ------------------------------
+        sale_ids = {p.bar_sale_id for p in payments}
 
-            if bank not in bank_summary:
-                bank_summary[bank] = {"pos": 0, "transfer": 0}
-
-            if method in ["pos", "card"]:
-                bank_summary[bank]["pos"] += amt
-            elif method == "transfer":
-                bank_summary[bank]["transfer"] += amt
-
-
-        # Payment-level status
-        if total_paid_for_sale == 0:
-            sale_status = "unpaid"
-        elif total_paid_for_sale < sale.total_amount:
-            sale_status = "part payment"
-        else:
-            sale_status = "fully paid"
-
-        row_status = "voided payment" if p.status == "voided" else sale_status
-
-        response.append({
-            "id": p.id,
-            "bar_sale_id": p.bar_sale_id,
-            "sale_amount": float(sale.total_amount),
-            "amount_paid": float(p.amount_paid),
-            "cumulative_paid": float(total_paid_for_sale),
-            "balance_due": float(balance_due),
-            "payment_method": p.payment_method,
-            "bank": p.bank,
-            "note": p.note,
-            "date_paid": p.date_paid,
-            "created_by": p.created_by,
-            "status": row_status
-        })
-
-    return {
-        "payments": response,
-
-        # MAIN SUMMARY FIRST
-        "summary": {
-            "total_sales": total_sales,
-            "total_paid": total_paid_all,
-            "total_due": total_due_all,
-            "total_cash": total_cash,
-            "total_pos": total_pos,
-            "total_transfer": total_transfer,
-
-            # BANK SUMMARY INCLUDED HERE
-            "banks": bank_summary
-        },
-
-        "filters": {
-            "bar_id": bar_id,
-            "start_date": start_date,
-            "end_date": end_date,
+        sales_map = {
+            s.id: s for s in db.query(bar_models.BarSale).filter(
+                bar_models.BarSale.id.in_(sale_ids),
+                bar_models.BarSale.business_id == business_id
+            ).all()
         }
-    }
+
+        # ------------------------------
+        # 5️⃣ Aggregations
+        # ------------------------------
+        response = []
+
+        total_sales = 0.0
+        total_paid_all = 0.0
+        total_due_all = 0.0
+
+        total_cash = 0.0
+        total_pos = 0.0
+        total_transfer = 0.0
+
+        processed_sales = set()
+        bank_summary = {}
+
+        # ------------------------------
+        # 6️⃣ Loop
+        # ------------------------------
+        for p in payments:
+            sale = sales_map.get(p.bar_sale_id)
+            if not sale:
+                continue
+
+            # 🔹 total paid per sale (tenant-safe)
+            total_paid_for_sale = (
+                db.query(func.coalesce(func.sum(barpayment_models.BarPayment.amount_paid), 0))
+                .filter(
+                    barpayment_models.BarPayment.bar_sale_id == sale.id,
+                    barpayment_models.BarPayment.business_id == business_id,
+                    barpayment_models.BarPayment.status == "active"
+                )
+                .scalar()
+            )
+
+            sale_total = float(sale.total_amount or 0)
+            balance_due = sale_total - float(total_paid_for_sale or 0)
+
+            # 🔹 Count sale once
+            if sale.id not in processed_sales:
+                total_sales += sale_total
+                total_due_all += balance_due
+                processed_sales.add(sale.id)
+
+            # 🔹 Active payments only
+            if p.status == "active":
+                amt = float(p.amount_paid or 0)
+                total_paid_all += amt
+
+                method = (p.payment_method or "").lower()
+
+                if method == "cash":
+                    total_cash += amt
+                elif method in ["pos", "card"]:
+                    total_pos += amt
+                elif method == "transfer":
+                    total_transfer += amt
+
+                # 🔹 Bank summary
+                bank = (p.bank or "").strip().upper()
+                if bank:
+                    if bank not in bank_summary:
+                        bank_summary[bank] = {"pos": 0.0, "transfer": 0.0}
+
+                    if method in ["pos", "card"]:
+                        bank_summary[bank]["pos"] += amt
+                    elif method == "transfer":
+                        bank_summary[bank]["transfer"] += amt
+
+            # 🔹 Sale status
+            if total_paid_for_sale == 0:
+                sale_status = "unpaid"
+            elif total_paid_for_sale < sale_total:
+                sale_status = "part payment"
+            else:
+                sale_status = "fully paid"
+
+            row_status = "voided payment" if p.status == "voided" else sale_status
+
+            response.append({
+                "id": p.id,
+                "bar_sale_id": p.bar_sale_id,
+                "sale_amount": sale_total,
+                "amount_paid": float(p.amount_paid or 0),
+                "cumulative_paid": float(total_paid_for_sale or 0),
+                "balance_due": balance_due,
+                "payment_method": p.payment_method,
+                "bank": p.bank,
+                "note": p.note,
+                "date_paid": p.date_paid,
+                "created_by": p.created_by,
+                "status": row_status
+            })
+
+        # ------------------------------
+        # 7️⃣ Final response
+        # ------------------------------
+        return {
+            "payments": response,
+            "summary": {
+                "total_sales": total_sales,
+                "total_paid": total_paid_all,
+                "total_due": total_due_all,
+                "total_cash": total_cash,
+                "total_pos": total_pos,
+                "total_transfer": total_transfer,
+                "banks": bank_summary
+            },
+            "filters": {
+                "bar_id": bar_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve bar payments: {str(e)}"
+        )
+
 
 
 from fastapi import Query
@@ -222,53 +354,87 @@ from fastapi import Query
 @router.get("/outstanding", response_model=schemas.BarOutstandingSummary)
 def list_outstanding_payments(
     bar_id: Optional[int] = Query(None),
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["bar", "admin", "super_admin"])
+    )
 ):
-    sales_query = db.query(BarSale)
+    try:
+        # ------------------------------
+        # 1️⃣ Resolve business (STANDARD ✅)
+        # ------------------------------
+        business_id = resolve_business_id(current_user, business_id)
 
-    if bar_id:
-        sales_query = sales_query.filter(BarSale.bar_id == bar_id)
-
-    sales = sales_query.all()
-    results = []
-    total_due = 0.0
-
-    for sale in sales:
-        total_paid = (
-            db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
-            .filter(
-                models.BarPayment.bar_sale_id == sale.id,
-                models.BarPayment.status == "active"
-            )
-            .scalar()
+        # ------------------------------
+        # 2️⃣ Fetch sales (tenant-safe)
+        # ------------------------------
+        sales_query = db.query(bar_models.BarSale).filter(
+            bar_models.BarSale.business_id == business_id
         )
 
-        balance_due = float(sale.total_amount) - float(total_paid)
+        if bar_id:
+            sales_query = sales_query.filter(
+                bar_models.BarSale.bar_id == bar_id
+            )
 
-        if balance_due > 0:
-            if total_paid == 0:
-                payment_status = "unpaid"
-            elif total_paid < sale.total_amount:
-                payment_status = "part payment"
-            else:
-                payment_status = "fully paid"
+        sales = sales_query.all()
 
-            results.append({
-                "bar_sale_id": sale.id,
-                "sale_amount": float(sale.total_amount),
-                "amount_paid": float(total_paid),
-                "balance_due": float(balance_due),
-                "status": payment_status
-            })
+        # ------------------------------
+        # 3️⃣ Process outstanding
+        # ------------------------------
+        results = []
+        total_due = 0.0
 
-            total_due += balance_due
+        for sale in sales:
+            total_paid = (
+                db.query(func.coalesce(func.sum(barpayment_models.BarPayment.amount_paid), 0))
+                .filter(
+                    barpayment_models.BarPayment.bar_sale_id == sale.id,
+                    barpayment_models.BarPayment.business_id == business_id,
+                    barpayment_models.BarPayment.status == "active"
+                )
+                .scalar()
+            )
 
-    return {
-        "total_entries": len(results),
-        "total_due": total_due,
-        "results": results
-    }
+            sale_total = float(sale.total_amount or 0)
+            total_paid = float(total_paid or 0)
+            balance_due = sale_total - total_paid
+
+            if balance_due > 0:
+                # 🔹 Determine status
+                if total_paid == 0:
+                    payment_status = "unpaid"
+                elif total_paid < sale_total:
+                    payment_status = "part payment"
+                else:
+                    payment_status = "fully paid"
+
+                results.append({
+                    "bar_sale_id": sale.id,
+                    "bar_id": sale.bar_id,
+                    "sale_amount": sale_total,
+                    "amount_paid": total_paid,
+                    "balance_due": balance_due,
+                    "status": payment_status
+                })
+
+                total_due += balance_due
+
+        # ------------------------------
+        # 4️⃣ Response
+        # ------------------------------
+        return {
+            "total_entries": len(results),
+            "total_due": total_due,
+            "results": results
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch outstanding payments: {str(e)}"
+        )
 
 
 
@@ -277,198 +443,352 @@ def list_outstanding_payments(
 def update_bar_payment(
     payment_id: int,
     update_data: schemas.BarPaymentUpdate,
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["bar", "admin", "super_admin"])
+    )
 ):
-    payment = (
-        db.query(models.BarPayment)
-        .filter(models.BarPayment.id == payment_id, models.BarPayment.status == "active")
-        .first()
-    )
-    if not payment:
-        raise HTTPException(status_code=404, detail="Active payment not found")
+    try:
+        # ------------------------------
+        # 1️⃣ Resolve business
+        # ------------------------------
+        business_id = resolve_business_id(current_user, business_id)
 
-    # ✅ Apply updates
-    if update_data.amount_paid is not None:
-        payment.amount_paid = update_data.amount_paid
-    if update_data.payment_method is not None:
-        payment.payment_method = update_data.payment_method
-    if update_data.bank is not None:           # 👈 NEW
-        payment.bank = update_data.bank
-    if update_data.note is not None:
-        payment.note = update_data.note
-
-    db.commit()
-    db.refresh(payment)
-
-    # ✅ Recalculate balance
-    sale = db.query(BarSale).filter(BarSale.id == payment.bar_sale_id).first()
-    if not sale:
-        raise HTTPException(status_code=404, detail="Bar sale not found")
-
-    total_paid = (
-        db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
-        .filter(
-            models.BarPayment.bar_sale_id == sale.id,
-            models.BarPayment.status == "active"
+        # ------------------------------
+        # 2️⃣ Fetch payment (tenant-safe)
+        # ------------------------------
+        payment = (
+            db.query(barpayment_models.BarPayment)
+            .filter(
+                barpayment_models.BarPayment.id == payment_id,
+                barpayment_models.BarPayment.business_id == business_id,
+                barpayment_models.BarPayment.status == "active"
+            )
+            .first()
         )
-        .scalar()
-    )
 
-    balance_due = float(sale.total_amount) - float(total_paid)
+        if not payment:
+            raise HTTPException(status_code=404, detail="Active payment not found")
 
-    # ✅ Determine status
-    if total_paid == 0:
-        status = "unpaid"
-    elif total_paid < sale.total_amount:
-        status = "part payment"
-    else:
-        status = "fully paid"
+        # ------------------------------
+        # 3️⃣ Apply updates
+        # ------------------------------
+        if update_data.amount_paid is not None:
+            payment.amount_paid = update_data.amount_paid
 
-    return {
-        "id": payment.id,
-        "bar_sale_id": payment.bar_sale_id,
-        "sale_amount": float(sale.total_amount),
-        "amount_paid": float(payment.amount_paid),
-        "balance_due": float(balance_due),
-        "payment_method": payment.payment_method,
-        "bank": payment.bank,                # 👈 NEW FIELD RETURNED
-        "note": payment.note,
-        "date_paid": payment.date_paid,
-        "created_by": payment.created_by,
-        "status": status,
-    }
+        if update_data.payment_method is not None:
+            payment.payment_method = update_data.payment_method
+
+        if update_data.bank is not None:
+            payment.bank = update_data.bank
+
+        if update_data.note is not None:
+            payment.note = update_data.note
+
+        db.commit()
+        db.refresh(payment)
+
+        # ------------------------------
+        # 4️⃣ Fetch sale (tenant-safe)
+        # ------------------------------
+        sale = (
+            db.query(bar_models.BarSale)
+            .filter(
+                bar_models.BarSale.id == payment.bar_sale_id,
+                bar_models.BarSale.business_id == business_id
+            )
+            .first()
+        )
+
+        if not sale:
+            raise HTTPException(status_code=404, detail="Bar sale not found")
+
+        # ------------------------------
+        # 5️⃣ Recalculate totals
+        # ------------------------------
+        total_paid = (
+            db.query(func.coalesce(func.sum(barpayment_models.BarPayment.amount_paid), 0))
+            .filter(
+                barpayment_models.BarPayment.bar_sale_id == sale.id,
+                barpayment_models.BarPayment.business_id == business_id,
+                barpayment_models.BarPayment.status == "active"
+            )
+            .scalar()
+        )
+
+        sale_total = float(sale.total_amount or 0)
+        total_paid = float(total_paid or 0)
+        balance_due = sale_total - total_paid
+
+        # ------------------------------
+        # 6️⃣ Determine status
+        # ------------------------------
+        if total_paid == 0:
+            status = "unpaid"
+        elif total_paid < sale_total:
+            status = "part payment"
+        else:
+            status = "fully paid"
+
+        # ------------------------------
+        # 7️⃣ Response
+        # ------------------------------
+        return {
+            "id": payment.id,
+            "bar_sale_id": payment.bar_sale_id,
+            "sale_amount": sale_total,
+            "amount_paid": float(payment.amount_paid or 0),
+            "balance_due": balance_due,
+            "payment_method": payment.payment_method,
+            "bank": payment.bank,
+            "note": payment.note,
+            "date_paid": payment.date_paid,
+            "created_by": payment.created_by,
+            "status": status,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update payment: {str(e)}"
+        )
+
 
 
 @router.put("/{payment_id}/void", response_model=schemas.BarPaymentDisplay)
 def void_bar_payment(
     payment_id: int,
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
-):
-    # ✅ Get payment
-    payment = db.query(models.BarPayment).filter(
-        models.BarPayment.id == payment_id,
-        models.BarPayment.status == "active"
-    ).first()
-
-    if not payment:
-        raise HTTPException(status_code=404, detail="Active payment not found")
-
-    # ✅ Mark as voided
-    payment.status = "voided"
-    db.commit()
-    db.refresh(payment)
-
-    # ✅ Get related sale
-    sale = db.query(BarSale).filter(BarSale.id == payment.bar_sale_id).first()
-    if not sale:
-        raise HTTPException(status_code=404, detail="Related bar sale not found")
-
-    # ✅ Recompute total paid for this sale (excluding voided)
-    total_paid = (
-        db.query(func.coalesce(func.sum(models.BarPayment.amount_paid), 0))
-        .filter(
-            models.BarPayment.bar_sale_id == sale.id,
-            models.BarPayment.status == "active"   # exclude voided
-        )
-        .scalar()
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["admin", "super_admin"])
     )
+):
+    try:
+        # ------------------------------
+        # 1️⃣ Resolve business
+        # ------------------------------
+        business_id = resolve_business_id(current_user, business_id)
 
-    balance_due = float(sale.total_amount) - float(total_paid)
+        # ------------------------------
+        # 2️⃣ Fetch payment (tenant-safe)
+        # ------------------------------
+        payment = (
+            db.query(barpayment_models.BarPayment)
+            .filter(
+                barpayment_models.BarPayment.id == payment_id,
+                barpayment_models.BarPayment.business_id == business_id,
+                barpayment_models.BarPayment.status == "active"
+            )
+            .first()
+        )
 
-    # ✅ Determine sale status
-    if total_paid == 0:
-        payment_status = "unpaid"
-    elif total_paid < sale.total_amount:
-        payment_status = "part payment"
-    else:
-        payment_status = "fully paid"
+        if not payment:
+            raise HTTPException(status_code=404, detail="Active payment not found")
 
-    return {
-        "id": payment.id,
-        "bar_sale_id": payment.bar_sale_id,
-        "sale_amount": float(sale.total_amount),
-        "amount_paid": float(payment.amount_paid),     # this specific payment (voided)
-        "balance_due": float(balance_due),
-        "payment_method": payment.payment_method,
-        "bank": payment.bank,                          # 👈 NEW
-        "note": payment.note,
-        "date_paid": payment.date_paid,
-        "created_by": payment.created_by,
-        "status": "voided"                             # explicitly voided
-    }
+        # ------------------------------
+        # 3️⃣ Void payment
+        # ------------------------------
+        payment.status = "voided"
+        db.commit()
+        db.refresh(payment)
+
+        # ------------------------------
+        # 4️⃣ Fetch related sale (tenant-safe)
+        # ------------------------------
+        sale = (
+            db.query(bar_models.BarSale)
+            .filter(
+                bar_models.BarSale.id == payment.bar_sale_id,
+                bar_models.BarSale.business_id == business_id
+            )
+            .first()
+        )
+
+        if not sale:
+            raise HTTPException(status_code=404, detail="Related bar sale not found")
+
+        # ------------------------------
+        # 5️⃣ Recalculate totals (exclude voided)
+        # ------------------------------
+        total_paid = (
+            db.query(func.coalesce(func.sum(barpayment_models.BarPayment.amount_paid), 0))
+            .filter(
+                barpayment_models.BarPayment.bar_sale_id == sale.id,
+                barpayment_models.BarPayment.business_id == business_id,
+                barpayment_models.BarPayment.status == "active"
+            )
+            .scalar()
+        )
+
+        sale_total = float(sale.total_amount or 0)
+        total_paid = float(total_paid or 0)
+        balance_due = sale_total - total_paid
+
+        # ------------------------------
+        # 6️⃣ Determine sale status
+        # ------------------------------
+        if total_paid == 0:
+            payment_status = "unpaid"
+        elif total_paid < sale_total:
+            payment_status = "part payment"
+        else:
+            payment_status = "fully paid"
+
+        # ------------------------------
+        # 7️⃣ Response
+        # ------------------------------
+        return {
+            "id": payment.id,
+            "bar_sale_id": payment.bar_sale_id,
+            "sale_amount": sale_total,
+            "amount_paid": float(payment.amount_paid or 0),  # this voided payment
+            "balance_due": balance_due,
+            "payment_method": payment.payment_method,
+            "bank": payment.bank,
+            "note": payment.note,
+            "date_paid": payment.date_paid,
+            "created_by": payment.created_by,
+            "status": "voided"  # explicit
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to void payment: {str(e)}"
+        )
+
 
 
 
 @router.get("/payment-status")
 def get_bar_payment_status(
     bar_id: Optional[int] = Query(None, description="Filter by bar ID"),
-    status: Optional[str] = Query(None, description="Filter by status: fully paid, part payment, pending, voided payment"),
+    status: Optional[str] = Query(
+        None,
+        description="Filter by status: fully paid, part payment, pending, voided payment"
+    ),
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["bar", "admin", "super_admin"])
+    )
 ):
-    """
-    Fetch bar payments with optional filters:
-    - bar_id
-    - status (fully paid, part payment, pending, voided payment)
-    - start_date, end_date
-    """
+    try:
+        # ------------------------------
+        # 1️⃣ Resolve business
+        # ------------------------------
+        business_id = resolve_business_id(current_user, business_id)
 
-    # Query all payments and join with BarSale
-    query = db.query(models.BarPayment).join(bar_models.BarSale)
+        # ------------------------------
+        # 2️⃣ Base query (tenant-safe)
+        # ------------------------------
+        query = (
+            db.query(barpayment_models.BarPayment)
+            .join(bar_models.BarSale,
+                  bar_models.BarSale.id == barpayment_models.BarPayment.bar_sale_id)
+            .filter(barpayment_models.BarPayment.business_id == business_id)
+        )
 
-    # Filter by bar_id if provided
-    if bar_id:
-        query = query.filter(bar_models.BarSale.bar_id == bar_id)
+        # ------------------------------
+        # 3️⃣ Filters
+        # ------------------------------
+        if bar_id:
+            query = query.filter(bar_models.BarSale.bar_id == bar_id)
 
-    # Filter by sale date
-    if start_date:
-        query = query.filter(bar_models.BarSale.sale_date >= start_date)
-    if end_date:
-        query = query.filter(bar_models.BarSale.sale_date <= end_date)
+        if start_date:
+            query = query.filter(
+                bar_models.BarSale.sale_date >= start_date
+            )
 
-    payments = query.all()
-    results = []
+        if end_date:
+            query = query.filter(
+                bar_models.BarSale.sale_date <= end_date
+            )
 
-    for payment in payments:
-        sale = payment.bar_sale  # Related BarSale
-        amount_due = sale.total_amount if sale else 0
+        payments = query.all()
 
-        # Total of all non-voided payments for this sale
-        active_payments = [p.amount_paid for p in sale.payments if p.status == "active"] if sale else []
-        total_paid = sum(active_payments)
+        # ------------------------------
+        # 4️⃣ Preload sales (tenant-safe)
+        # ------------------------------
+        sale_ids = {p.bar_sale_id for p in payments}
 
-        # Determine payment status
-        if payment.status == "voided":
-            payment_status = "voided payment"
-        elif not active_payments or total_paid == 0:
-            payment_status = "pending"
-        elif total_paid < amount_due:
-            payment_status = "part payment"
-        elif total_paid >= amount_due:
-            payment_status = "fully paid"
-        else:
-            payment_status = "unknown"
+        sales_map = {
+            s.id: s for s in db.query(bar_models.BarSale).filter(
+                bar_models.BarSale.id.in_(sale_ids),
+                bar_models.BarSale.business_id == business_id
+            ).all()
+        }
 
-        # Apply status filter if provided
-        if status and payment_status.lower() != status.lower():
-            continue
+        # ------------------------------
+        # 5️⃣ Process results
+        # ------------------------------
+        results = []
 
-        results.append({
-            "payment_id": payment.id,
-            "bar_sale_id": sale.id if sale else None,
-            "amount_due": amount_due,
-            "amount_paid": payment.amount_paid,
-            "payment_status": payment_status,
-            "date_paid": payment.date_paid,
-            "payment_method": payment.payment_method,
-            "created_by": payment.created_by,
-        })
+        for payment in payments:
+            sale = sales_map.get(payment.bar_sale_id)
+            if not sale:
+                continue
 
-    return results
+            sale_total = float(sale.total_amount or 0)
+
+            # 🔹 total active payments for this sale
+            total_paid = (
+                db.query(func.coalesce(func.sum(barpayment_models.BarPayment.amount_paid), 0))
+                .filter(
+                    barpayment_models.BarPayment.bar_sale_id == sale.id,
+                    barpayment_models.BarPayment.business_id == business_id,
+                    barpayment_models.BarPayment.status == "active"
+                )
+                .scalar()
+            )
+
+            total_paid = float(total_paid or 0)
+
+            # 🔹 determine status
+            if payment.status == "voided":
+                payment_status = "voided payment"
+            elif total_paid == 0:
+                payment_status = "pending"
+            elif total_paid < sale_total:
+                payment_status = "part payment"
+            else:
+                payment_status = "fully paid"
+
+            # 🔹 apply filter
+            if status and payment_status.lower() != status.lower():
+                continue
+
+            results.append({
+                "payment_id": payment.id,
+                "bar_sale_id": sale.id,
+                "bar_id": sale.bar_id,
+                "amount_due": sale_total,
+                "amount_paid": float(payment.amount_paid or 0),
+                "cumulative_paid": total_paid,
+                "balance_due": sale_total - total_paid,
+                "payment_status": payment_status,
+                "date_paid": payment.date_paid,
+                "payment_method": payment.payment_method,
+                "created_by": payment.created_by,
+            })
+
+        return results
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch payment status: {str(e)}"
+        )
 
 
 
@@ -477,22 +797,48 @@ def get_bar_payment_status(
 @router.delete("/{payment_id}", response_model=dict)
 def delete_bar_payment(
     payment_id: int,
+    business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["admin", "super_admin"])
+    )
 ):
-    ## ✅ Allow only admins
-    #if current_user.role != "admin":
-        #raise HTTPException(status_code=403, detail="Only admins can delete payments")
+    try:
+        # ------------------------------
+        # 1️⃣ Resolve business
+        # ------------------------------
+        business_id = resolve_business_id(current_user, business_id)
 
-    payment = db.query(models.BarPayment).filter(models.BarPayment.id == payment_id).first()
-    
-    if not payment:
-        raise HTTPException(status_code=404, detail="Payment not found")
+        # ------------------------------
+        # 2️⃣ Fetch payment (tenant-safe)
+        # ------------------------------
+        payment = (
+            db.query(barpayment_models.BarPayment)
+            .filter(
+                barpayment_models.BarPayment.id == payment_id,
+                barpayment_models.BarPayment.business_id == business_id
+            )
+            .first()
+        )
 
-    db.delete(payment)
-    db.commit()
+        if not payment:
+            raise HTTPException(status_code=404, detail="Payment not found")
 
-    #return {"message": "Payment deleted successfully"}
+        # ------------------------------
+        # 3️⃣ Delete payment
+        # ------------------------------
+        db.delete(payment)
+        db.commit()
 
-    return {"detail": f"Payment with ID {payment_id} has been deleted"}
+        return {
+            "detail": f"Payment with ID {payment_id} has been deleted",
+            "payment_id": payment_id,
+            "business_id": business_id
+        }
 
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete payment: {str(e)}"
+        )

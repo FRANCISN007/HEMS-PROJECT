@@ -2,8 +2,8 @@
 
 from pydantic import BaseModel
 from typing import Optional, Literal
-from datetime import datetime
 from typing import Optional
+from datetime import date, datetime
 
 
 # schemas.py
@@ -14,6 +14,7 @@ class BarPaymentCreate(BaseModel):
     payment_method: Literal["cash", "transfer", "pos"]
     bank: Optional[str] = None  # 👈 NEW
     note: Optional[str] = None
+    date_paid: Optional[date] = None  # ✅ match model
 
 
 class BarPaymentDisplay(BaseModel):
