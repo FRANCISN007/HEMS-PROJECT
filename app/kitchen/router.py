@@ -17,6 +17,7 @@ from app.store import models as store_models
 
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
+from app.core.timezone import now_wat, to_wat
 
 from app.users import schemas as user_schemas
 
@@ -34,78 +35,160 @@ router = APIRouter()
 
 
 # ----------------------------
-# Create Kitchen
+# Create Kitchen (FINAL CLEAN)
 # ----------------------------
 @router.post("/", response_model=KitchenDisplaySimple)
 def create_kitchen(
     data: KitchenCreate,
-    business_id: Optional[int] = Query(None),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id",
+        example=1
+    ),
     db: Session = Depends(db_dependency),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["admin", "super_admin"])
+    )
 ):
-    business_id = resolve_business_id(current_user, business_id)
+    try:
+        # ------------------------------
+        # 1️⃣ Resolve business (VALIDATION ONLY)
+        # ------------------------------
+        business_id = resolve_business_id(current_user, business_id)
 
-    existing = db.query(kitchen_models.Kitchen).filter(
-        kitchen_models.Kitchen.name == data.name,
-        kitchen_models.Kitchen.business_id == business_id
-    ).first()
-
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Kitchen '{data.name}' already exists."
+        # ------------------------------
+        # 2️⃣ Check duplicate (tenant-safe via ORM filter)
+        # ------------------------------
+        existing = (
+            db.query(kitchen_models.Kitchen)
+            .filter(kitchen_models.Kitchen.name == data.name)
+            .first()
         )
 
-    kitchen = kitchen_models.Kitchen(
-        name=data.name,
-        business_id=business_id
-    )
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Kitchen '{data.name}' already exists."
+            )
 
-    db.add(kitchen)
-    db.commit()
-    db.refresh(kitchen)
+        # ------------------------------
+        # 3️⃣ Create kitchen (EXPLICIT business_id 🔥)
+        # ------------------------------
+        kitchen = kitchen_models.Kitchen(
+            name=data.name,
+            business_id=business_id
+        )
 
-    return kitchen
+        db.add(kitchen)
+        db.commit()
+        db.refresh(kitchen)
+
+        return kitchen
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create kitchen: {str(e)}"
+        )
+
 
 
 # ----------------------------
-# List Kitchens
+# List Kitchens (FINAL CLEAN VERSION)
 # ----------------------------
 @router.get("/", response_model=List[KitchenDisplaySimple])
 def list_kitchens(
-    business_id: Optional[int] = Query(None),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id",
+        example=1
+    ),
     db: Session = Depends(db_dependency),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["store", "admin", "super_admin"])
+    )
 ):
-    business_id = resolve_business_id(current_user, business_id)
+    # ✅ Only resolves tenant (DO NOT use in filter)
+    resolve_business_id(current_user, business_id)
 
-    kitchens = db.query(kitchen_models.Kitchen).filter(
-        kitchen_models.Kitchen.business_id == business_id
-    ).order_by(
-        kitchen_models.Kitchen.id.asc()
-    ).all()
+    kitchens = (
+        db.query(kitchen_models.Kitchen)
+        .order_by(kitchen_models.Kitchen.id.asc())
+        .all()
+    )
 
     return kitchens
 
 
+# kitchen/router.py
+
 # ----------------------------
-# Simple Kitchen List (Dropdown)
+# Kitchen Inventory Simple (FIXED - SAME PATTERN AS list_kitchens)
 # ----------------------------
-@router.get("/simple", response_model=List[KitchenDisplaySimple])
-def list_kitchens_simple(
-    business_id: Optional[int] = Query(None),
-    db: Session = Depends(db_dependency),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "admin"]))
+@router.get(
+    "/inventory/simple",
+    response_model=List[kitchen_schemas.KitchenInventorySimple]
+)
+def list_kitchen_inventory_simple(
+    kitchen_id: int = Query(
+        ...,
+        description="Kitchen ID"
+    ),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
+    db: Session = Depends(db_dependency),  # 🔥 MUST use this (NOT get_db)
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["admin", "store", "kitchen", "super_admin"])
+    )
 ):
-    business_id = resolve_business_id(current_user, business_id)
+    # ------------------------------
+    # 1️⃣ Resolve business (same pattern as list_kitchens)
+    # ------------------------------
+    resolve_business_id(current_user, business_id)
 
-    kitchens = db.query(kitchen_models.Kitchen).filter(
-        kitchen_models.Kitchen.business_id == business_id
-    ).order_by(
-        kitchen_models.Kitchen.id.asc()
-    ).all()
+    # ------------------------------
+    # 2️⃣ Fetch kitchen (no manual tenant filtering here)
+    # ------------------------------
+    kitchen = (
+        db.query(kitchen_models.Kitchen)
+        .filter(kitchen_models.Kitchen.id == kitchen_id)
+        .first()
+    )
 
-    return kitchens
+    if not kitchen:
+        raise HTTPException(status_code=404, detail="Kitchen not found")
+
+    # ------------------------------
+    # 3️⃣ Fetch inventory (tenant handled globally)
+    # ------------------------------
+    inventory = (
+        db.query(kitchen_models.KitchenInventory)
+        .filter(kitchen_models.KitchenInventory.kitchen_id == kitchen_id)
+        .order_by(kitchen_models.KitchenInventory.id.asc())
+        .all()
+    )
+
+    # ------------------------------
+    # 4️⃣ Response
+    # ------------------------------
+    return [
+        kitchen_schemas.KitchenInventorySimple(
+            id=inv.item_id,
+            name=inv.item.name if inv.item else "",
+            unit=inv.item.unit if inv.item else "",
+            quantity=float(inv.quantity or 0)
+        )
+        for inv in inventory
+    ]
+
+
+
+
 
 
 # ----------------------------
@@ -193,157 +276,211 @@ def delete_kitchen(
 
 
 
-# kitchen/router.py
-@router.get("/inventory/simple", response_model=List[kitchen_schemas.KitchenInventorySimple])
-def list_kitchen_inventory_simple(
-    kitchen_id: int = Query(...),
-    db: Session = Depends(get_db),
-    #current_user: user_schemas.UserDisplaySchema = Depends(
-        #role_required(["admin", "store"])
-    #)
-):
-    inventory = (
-        db.query(kitchen_models.KitchenInventory)
-        .filter(kitchen_models.KitchenInventory.kitchen_id == kitchen_id)
-        .all()
-    )
-
-    return [
-        kitchen_schemas.KitchenInventorySimple(
-            id=inv.item.id,
-            name=inv.item.name,
-            unit=inv.item.unit,
-            quantity=inv.quantity
-        )
-        for inv in inventory
-    ]
 
 
 # -------------------------
-# Create kitchen adjustment
+# Create kitchen adjustment (SIGN-BASED SYSTEM)
 # -------------------------
-
-@router.post("/adjust", response_model=kitchen_schemas.KitchenInventoryAdjustmentDisplay)
+@router.post(
+    "/adjust",
+    response_model=kitchen_schemas.KitchenInventoryAdjustmentDisplay
+)
 def adjust_kitchen_inventory(
     adjustment_data: kitchen_schemas.KitchenInventoryAdjustmentCreate,
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
-):
-    """
-    Adjust stock in a kitchen:
-    - Deduct from KitchenInventory.quantity
-    - Log adjustment in KitchenInventoryAdjustment
-    - Update KitchenStock.total_used for historical tracking
-    """
-    # 1️⃣ Get current inventory record
-    inventory = db.query(kitchen_models.KitchenInventory).filter(
-        kitchen_models.KitchenInventory.kitchen_id == adjustment_data.kitchen_id,
-        kitchen_models.KitchenInventory.item_id == adjustment_data.item_id
-    ).first()
-
-    if not inventory:
-        raise HTTPException(404, detail="Item not found in kitchen inventory.")
-
-    if adjustment_data.quantity_adjusted > inventory.quantity:
-        raise HTTPException(400, detail="Adjustment exceeds available inventory.")
-
-    # 2️⃣ Deduct from inventory
-    inventory.quantity -= adjustment_data.quantity_adjusted
-    db.add(inventory)
-
-    # 3️⃣ Log adjustment
-    adjustment = kitchen_models.KitchenInventoryAdjustment(
-        kitchen_id=adjustment_data.kitchen_id,
-        item_id=adjustment_data.item_id,
-        quantity_adjusted=adjustment_data.quantity_adjusted,
-        reason=adjustment_data.reason,
-        adjusted_by=current_user.username,
-        adjusted_at=datetime.utcnow()
+    business_id: Optional[int] = Query(None),
+    db: Session = Depends(db_dependency),
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["admin", "store", "kitchen", "super_admin"])
     )
-    db.add(adjustment)
+):
+    try:
+        # ------------------------------
+        # 1️⃣ Resolve business
+        # ------------------------------
+        business_id = resolve_business_id(current_user, business_id)
 
-    # 4️⃣ Update historical KitchenStock
-    stock = db.query(kitchen_models.KitchenStock).filter(
-        kitchen_models.KitchenStock.kitchen_id == adjustment_data.kitchen_id,
-        kitchen_models.KitchenStock.item_id == adjustment_data.item_id
-    ).first()
+        # ------------------------------
+        # 2️⃣ Validate inventory
+        # ------------------------------
+        inventory = (
+            db.query(kitchen_models.KitchenInventory)
+            .filter(
+                kitchen_models.KitchenInventory.kitchen_id == adjustment_data.kitchen_id,
+                kitchen_models.KitchenInventory.item_id == adjustment_data.item_id,
+                kitchen_models.KitchenInventory.business_id == business_id
+            )
+            .first()
+        )
 
-    if not stock:
-        # create record if it doesn't exist
-        stock = kitchen_models.KitchenStock(
+        if not inventory:
+            raise HTTPException(
+                status_code=404,
+                detail="Item not found in kitchen inventory"
+            )
+
+        qty = float(adjustment_data.quantity_adjusted)
+
+        # ------------------------------
+        # 3️⃣ APPLY SIGN LOGIC
+        # ------------------------------
+        new_quantity = inventory.quantity + qty
+
+        # prevent negative stock
+        if new_quantity < 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Insufficient stock for this adjustment"
+            )
+
+        inventory.quantity = new_quantity
+
+        # ------------------------------
+        # 4️⃣ LOG ADJUSTMENT
+        # ------------------------------
+        adjustment = kitchen_models.KitchenInventoryAdjustment(
             kitchen_id=adjustment_data.kitchen_id,
             item_id=adjustment_data.item_id,
-            total_issued=0,
-            total_used=0
+            quantity_adjusted=qty,  # keep signed value
+            reason=adjustment_data.reason,
+            adjusted_by=current_user.username,
+            adjusted_at=now_wat(),
+            business_id=business_id
         )
-    stock.total_used += adjustment_data.quantity_adjusted
-    db.add(stock)
 
-    db.commit()
-    db.refresh(adjustment)
+        db.add(adjustment)
 
-    # 5️⃣ Prepare item display
-    item_display = kitchen_schemas.KitchenItemMinimalDisplay(
-        id=inventory.item.id,
-        name=inventory.item.name
-    )
+        # ------------------------------
+        # 5️⃣ UPDATE STOCK SUMMARY
+        # ------------------------------
+        stock = (
+            db.query(kitchen_models.KitchenStock)
+            .filter(
+                kitchen_models.KitchenStock.kitchen_id == adjustment_data.kitchen_id,
+                kitchen_models.KitchenStock.item_id == adjustment_data.item_id,
+                kitchen_models.KitchenStock.business_id == business_id
+            )
+            .first()
+        )
 
-    return kitchen_schemas.KitchenInventoryAdjustmentDisplay(
-        id=adjustment.id,
-        kitchen_id=adjustment.kitchen_id,
-        item=item_display,
-        quantity_adjusted=adjustment.quantity_adjusted,
-        reason=adjustment.reason,
-        adjusted_by=adjustment.adjusted_by,
-        adjusted_at=adjustment.adjusted_at
-    )
+        if not stock:
+            stock = kitchen_models.KitchenStock(
+                kitchen_id=adjustment_data.kitchen_id,
+                item_id=adjustment_data.item_id,
+                total_issued=0,
+                total_used=0,
+                business_id=business_id
+            )
+            db.add(stock)
+
+        # ------------------------------
+        # 6️⃣ SIGN-BASED STOCK TRACKING
+        # ------------------------------
+        if qty < 0:
+            # negative = used stock
+            stock.total_used += abs(qty)
+        else:
+            # positive = returned/restocked
+            stock.total_used -= qty
+            if stock.total_used < 0:
+                stock.total_used = 0
+
+        # ------------------------------
+        # 7️⃣ COMMIT
+        # ------------------------------
+        db.commit()
+        db.refresh(adjustment)
+
+        # ------------------------------
+        # 8️⃣ RESPONSE
+        # ------------------------------
+        return kitchen_schemas.KitchenInventoryAdjustmentDisplay(
+            id=adjustment.id,
+            kitchen_id=adjustment.kitchen_id,
+            item=kitchen_schemas.KitchenItemMinimalDisplay(
+                id=inventory.item.id,
+                name=inventory.item.name
+            ),
+            quantity_adjusted=adjustment.quantity_adjusted,
+            reason=adjustment.reason,
+            adjusted_by=adjustment.adjusted_by,
+            adjusted_at=adjustment.adjusted_at
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Kitchen adjustment failed: {str(e)}"
+        )
+
+
+
+
 # -------------------------
-# List kitchen adjustments
+# List kitchen adjustments (MULTI-TENANT SAFE)
 # -------------------------
-@router.get("/adjustments", response_model=List[kitchen_schemas.KitchenInventoryAdjustmentDisplay])
+@router.get(
+    "/adjustments",
+    response_model=List[kitchen_schemas.KitchenInventoryAdjustmentDisplay]
+)
 def list_kitchen_inventory_adjustments(
     kitchen_id: Optional[int] = Query(None),
     item_id: Optional[int] = Query(None),
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "admin"]))
+    business_id: Optional[int] = Query(None),
+    db: Session = Depends(db_dependency),
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["store", "admin", "super_admin"])
+    )
 ):
-    query = db.query(kitchen_models.KitchenInventoryAdjustment)
+    business_id = resolve_business_id(current_user, business_id)
+
+    query = (
+        db.query(kitchen_models.KitchenInventoryAdjustment)
+        .filter(kitchen_models.KitchenInventoryAdjustment.business_id == business_id)
+        .order_by(kitchen_models.KitchenInventoryAdjustment.adjusted_at.desc())
+    )
 
     if kitchen_id:
         query = query.filter(kitchen_models.KitchenInventoryAdjustment.kitchen_id == kitchen_id)
+
     if item_id:
         query = query.filter(kitchen_models.KitchenInventoryAdjustment.item_id == item_id)
+
     if start_date:
         query = query.filter(kitchen_models.KitchenInventoryAdjustment.adjusted_at >= start_date)
+
     if end_date:
         query = query.filter(kitchen_models.KitchenInventoryAdjustment.adjusted_at <= end_date)
 
-    adjustments = query.order_by(kitchen_models.KitchenInventoryAdjustment.adjusted_at.desc()).all()
-    results = []
+    adjustments = query.all()
 
-    for adj in adjustments:
-        item_obj = db.query(store_models.StoreItem).filter_by(id=adj.item_id).first()
-        item_display = kitchen_schemas.KitchenItemMinimalDisplay(
-            id=item_obj.id,
-            name=item_obj.name
-        )
-        results.append(kitchen_schemas.KitchenInventoryAdjustmentDisplay(
+    return [
+        kitchen_schemas.KitchenInventoryAdjustmentDisplay(
             id=adj.id,
             kitchen_id=adj.kitchen_id,
-            item=item_display,
+            item=kitchen_schemas.KitchenItemMinimalDisplay(
+                id=adj.item_id,
+                name=adj.item.name if adj.item else ""
+            ),
             quantity_adjusted=adj.quantity_adjusted,
             reason=adj.reason,
             adjusted_by=adj.adjusted_by,
             adjusted_at=adj.adjusted_at
-        ))
-
-    return results
-
-
+        )
+        for adj in adjustments
+    ]
 
 
+
+
+
+# -------------------------
+# Update kitchen adjustment (SIGN SAFE)
+# -------------------------
 @router.put(
     "/adjustments/{adjustment_id}",
     response_model=kitchen_schemas.KitchenInventoryAdjustmentDisplay
@@ -351,161 +488,125 @@ def list_kitchen_inventory_adjustments(
 def update_kitchen_adjustment(
     adjustment_id: int,
     data: kitchen_schemas.KitchenInventoryAdjustmentCreate,
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
+    business_id: Optional[int] = Query(None),
+    db: Session = Depends(db_dependency),
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["admin", "store", "super_admin"])
+    )
 ):
-    # 1️⃣ Fetch existing adjustment
+    business_id = resolve_business_id(current_user, business_id)
+
     adjustment = (
         db.query(kitchen_models.KitchenInventoryAdjustment)
-        .filter(kitchen_models.KitchenInventoryAdjustment.id == adjustment_id)
+        .filter(
+            kitchen_models.KitchenInventoryAdjustment.id == adjustment_id,
+            kitchen_models.KitchenInventoryAdjustment.business_id == business_id
+        )
         .first()
     )
+
     if not adjustment:
-        raise HTTPException(status_code=404, detail="Adjustment not found.")
+        raise HTTPException(status_code=404, detail="Adjustment not found")
 
-    old_item_id = adjustment.item_id
-    old_quantity = adjustment.quantity_adjusted
-    kitchen_id = adjustment.kitchen_id
-
-    # 2️⃣ Restore OLD inventory
-    old_inventory = (
+    inventory = (
         db.query(kitchen_models.KitchenInventory)
         .filter(
-            kitchen_models.KitchenInventory.kitchen_id == kitchen_id,
-            kitchen_models.KitchenInventory.item_id == old_item_id,
+            kitchen_models.KitchenInventory.kitchen_id == adjustment.kitchen_id,
+            kitchen_models.KitchenInventory.item_id == adjustment.item_id,
+            kitchen_models.KitchenInventory.business_id == business_id
         )
         .first()
     )
-    if not old_inventory:
-        raise HTTPException(status_code=404, detail="Old inventory record not found.")
 
-    old_inventory.quantity += old_quantity
-    db.add(old_inventory)
+    if not inventory:
+        raise HTTPException(status_code=404, detail="Inventory not found")
 
-    # 3️⃣ Restore OLD KitchenStock
-    old_stock = (
-        db.query(kitchen_models.KitchenStock)
-        .filter(
-            kitchen_models.KitchenStock.kitchen_id == kitchen_id,
-            kitchen_models.KitchenStock.item_id == old_item_id,
-        )
-        .first()
-    )
-    if not old_stock:
-        old_stock = kitchen_models.KitchenStock(
-            kitchen_id=kitchen_id,
-            item_id=old_item_id,
-            total_issued=0,
-            total_used=0,
-        )
+    old_qty = float(adjustment.quantity_adjusted)
+    new_qty = float(data.quantity_adjusted)
 
-    old_stock.total_used -= old_quantity
-    db.add(old_stock)
+    # 🔁 REVERT OLD
+    inventory.quantity -= old_qty
 
-    # 4️⃣ Fetch NEW inventory
-    new_inventory = (
-        db.query(kitchen_models.KitchenInventory)
-        .filter(
-            kitchen_models.KitchenInventory.kitchen_id == kitchen_id,
-            kitchen_models.KitchenInventory.item_id == data.item_id,
-        )
-        .first()
-    )
-    if not new_inventory:
-        raise HTTPException(
-            status_code=404,
-            detail="Selected item does not exist in this kitchen."
-        )
+    # 🔁 APPLY NEW
+    new_inventory = inventory
 
-    # 5️⃣ Validate NEW adjustment
-    if data.quantity_adjusted > new_inventory.quantity:
-        raise HTTPException(
-            status_code=400,
-            detail="Adjustment exceeds available inventory."
-        )
+    # validate stock
+    if new_inventory.quantity + new_qty < 0:
+        raise HTTPException(status_code=400, detail="Insufficient stock")
 
-    # 6️⃣ Apply NEW inventory deduction
-    new_inventory.quantity -= data.quantity_adjusted
-    db.add(new_inventory)
+    new_inventory.quantity += new_qty
 
-    # 7️⃣ Update NEW KitchenStock
-    new_stock = (
-        db.query(kitchen_models.KitchenStock)
-        .filter(
-            kitchen_models.KitchenStock.kitchen_id == kitchen_id,
-            kitchen_models.KitchenStock.item_id == data.item_id,
-        )
-        .first()
-    )
-    if not new_stock:
-        new_stock = kitchen_models.KitchenStock(
-            kitchen_id=kitchen_id,
-            item_id=data.item_id,
-            total_issued=0,
-            total_used=0,
-        )
-
-    new_stock.total_used += data.quantity_adjusted
-    db.add(new_stock)
-
-    # 8️⃣ Update adjustment record
-    adjustment.item_id = data.item_id
-    adjustment.quantity_adjusted = data.quantity_adjusted
+    # update adjustment
+    adjustment.quantity_adjusted = new_qty
     adjustment.reason = data.reason
     adjustment.adjusted_by = current_user.username
-    adjustment.adjusted_at = datetime.utcnow()
-    db.add(adjustment)
+    adjustment.adjusted_at = now_wat()
 
-    # 9️⃣ Commit atomically
     db.commit()
     db.refresh(adjustment)
 
-    # 🔟 Response
-    item = new_inventory.item
     return kitchen_schemas.KitchenInventoryAdjustmentDisplay(
         id=adjustment.id,
-        kitchen_id=kitchen_id,
+        kitchen_id=adjustment.kitchen_id,
         item=kitchen_schemas.KitchenItemMinimalDisplay(
-            id=item.id,
-            name=item.name,
+            id=adjustment.item_id,
+            name=inventory.item.name if inventory.item else ""
         ),
         quantity_adjusted=adjustment.quantity_adjusted,
         reason=adjustment.reason,
         adjusted_by=adjustment.adjusted_by,
-        adjusted_at=adjustment.adjusted_at,
+        adjusted_at=adjustment.adjusted_at
     )
 
 
 # -------------------------
-# Delete kitchen adjustment
+# Delete kitchen adjustment (SIGN SAFE)
 # -------------------------
 @router.delete("/adjustments/{adjustment_id}")
 def delete_kitchen_adjustment(
     adjustment_id: int,
-    db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
+    business_id: Optional[int] = Query(None),
+    db: Session = Depends(db_dependency),
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["admin", "super_admin"])
+    )
 ):
-    adjustment = db.query(kitchen_models.KitchenInventoryAdjustment).filter(
-        kitchen_models.KitchenInventoryAdjustment.id == adjustment_id
-    ).first()
+    business_id = resolve_business_id(current_user, business_id)
+
+    adjustment = (
+        db.query(kitchen_models.KitchenInventoryAdjustment)
+        .filter(
+            kitchen_models.KitchenInventoryAdjustment.id == adjustment_id,
+            kitchen_models.KitchenInventoryAdjustment.business_id == business_id
+        )
+        .first()
+    )
+
     if not adjustment:
-        raise HTTPException(404, detail="Adjustment not found.")
+        raise HTTPException(status_code=404, detail="Adjustment not found")
 
-    stock = db.query(kitchen_models.KitchenStock).filter(
-        kitchen_models.KitchenStock.kitchen_id == adjustment.kitchen_id,
-        kitchen_models.KitchenStock.item_id == adjustment.item_id
-    ).first()
+    inventory = (
+        db.query(kitchen_models.KitchenInventory)
+        .filter(
+            kitchen_models.KitchenInventory.kitchen_id == adjustment.kitchen_id,
+            kitchen_models.KitchenInventory.item_id == adjustment.item_id,
+            kitchen_models.KitchenInventory.business_id == business_id
+        )
+        .first()
+    )
 
-    if not stock:
-        raise HTTPException(404, detail="Stock entry not found.")
+    if inventory:
+        # 🔁 reverse signed adjustment
+        inventory.quantity -= float(adjustment.quantity_adjusted)
 
-    # Restore stock
-    stock.total_used -= adjustment.quantity_adjusted
-    db.add(stock)
     db.delete(adjustment)
     db.commit()
 
-    return {"message": "Adjustment deleted successfully.", "restored_quantity": adjustment.quantity_adjusted, "current_stock": stock.total_issued - stock.total_used}
+    return {
+        "message": "Adjustment deleted successfully",
+        "reversed_quantity": adjustment.quantity_adjusted,
+        "current_stock": inventory.quantity if inventory else 0
+    }
 
 
 
@@ -527,90 +628,3 @@ def delete_kitchen_adjustment(
 
 
 
-
-
-
-
-
-
-
-@router.post("/kitchen-menu", response_model=KitchenMenuDisplay)
-def create_kitchen_menu(
-    data: KitchenMenuCreate,
-    db: Session = Depends(get_db),
-    current_user=Depends(role_required(["store", "admin"]))
-):
-    existing = db.query(KitchenMenu).filter_by(item_id=data.item_id).first()
-    if existing:
-        raise HTTPException(400, "Price for this item already exists")
-
-    record = KitchenMenu(
-        item_id=data.item_id,
-        selling_price=data.selling_price
-    )
-    db.add(record)
-    db.commit()
-    db.refresh(record)
-
-    item = db.query(StoreItem).filter_by(id=data.item_id).first()
-
-    return KitchenMenuDisplay(
-        id=record.id,
-        item_id=record.item_id,
-        item_name=item.name if item else None,
-        selling_price=record.selling_price
-    )
-
-
-@router.get("/kitchen-menu/items", response_model=List[KitchenMenuDisplay])
-def get_kitchen_menu_items(
-    db: Session = Depends(get_db),
-    current_user=Depends(role_required(["store", "restaurant","admin"]))
-):
-    records = db.query(KitchenMenu).all()
-
-    result = []
-    for r in records:
-        item = db.query(StoreItem).filter_by(id=r.item_id).first()
-        result.append(
-            KitchenMenuDisplay(
-                id=r.id,
-                item_id=r.item_id,
-                item_name=item.name if item else None,
-                selling_price=r.selling_price
-            )
-        )
-    return result
-
-
-from fastapi import Path, Body
-
-
-
-@router.put("/kitchen-menu/{item_id}", response_model=KitchenMenuDisplay)
-def update_kitchen_menu(
-    item_id: int = Path(..., description="The store item ID to update"),
-    data: KitchenMenuUpdate = Body(...),
-    db: Session = Depends(get_db),
-    current_user=Depends(role_required(["restaurant", "admin"]))
-):
-    # 1️⃣ Fetch existing record
-    record = db.query(KitchenMenu).filter_by(item_id=item_id).first()
-    if not record:
-        raise HTTPException(status_code=404, detail="Kitchen menu item not found")
-
-    # 2️⃣ Update price
-    record.selling_price = data.selling_price
-    db.commit()
-    db.refresh(record)
-
-    # 3️⃣ Fetch the related store item for name
-    item = db.query(StoreItem).filter_by(id=record.item_id).first()
-
-    # 4️⃣ Return updated record
-    return KitchenMenuDisplay(
-        id=record.id,
-        item_id=record.item_id,
-        item_name=item.name if item else None,
-        selling_price=record.selling_price
-    )

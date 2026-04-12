@@ -1,13 +1,8 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, UniqueConstraint, func
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
-from datetime import datetime
-import pytz
 from app.core.mixins import BusinessMixin
-
-def get_local_time():
-    lagos_tz = pytz.timezone("Africa/Lagos")
-    return datetime.now(lagos_tz)
+from app.core.timezone import now_wat  # ✅ USE YOUR CENTRAL HELPER
 
 
 # ----------------------------
@@ -17,8 +12,6 @@ class RestaurantLocation(Base, BusinessMixin):
     __tablename__ = "restaurant_locations"
 
     id = Column(Integer, primary_key=True, index=True)
-
-    
     name = Column(String, nullable=False)
     active = Column(Boolean, default=True)
 
@@ -34,8 +27,6 @@ class MealCategory(Base, BusinessMixin):
     __tablename__ = "meal_categories"
 
     id = Column(Integer, primary_key=True, index=True)
-
-    
     name = Column(String, nullable=False)
 
     __table_args__ = (
@@ -50,8 +41,6 @@ class Meal(Base, BusinessMixin):
     __tablename__ = "meals"
 
     id = Column(Integer, primary_key=True, index=True)
-
-    
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     price = Column(Float, nullable=False)
@@ -75,20 +64,32 @@ class MealOrder(Base, BusinessMixin):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    
     order_type = Column(String, nullable=False)
     guest_name = Column(String, nullable=False)
     room_number = Column(String, nullable=True)
+
     location_id = Column(Integer, ForeignKey("restaurant_locations.id"))
     kitchen_id = Column(Integer, ForeignKey("kitchens.id"), nullable=False)
-    created_at = Column(DateTime(timezone=True), default=get_local_time)
+
+    created_at = Column(DateTime(timezone=True), default=now_wat)  # ✅ FIXED
     status = Column(String, default="open")
+
     created_by = Column(Integer, ForeignKey("users.id"))
 
     location = relationship("RestaurantLocation")
     kitchen = relationship("Kitchen")
-    items = relationship("MealOrderItem", back_populates="order", cascade="all, delete-orphan")
-    sale = relationship("RestaurantSale", back_populates="order", uselist=False)
+
+    items = relationship(
+        "MealOrderItem",
+        back_populates="order",
+        cascade="all, delete-orphan"
+    )
+
+    sale = relationship(
+        "RestaurantSale",
+        back_populates="order",
+        uselist=False
+    )
 
 
 # ----------------------------
@@ -99,12 +100,13 @@ class MealOrderItem(Base, BusinessMixin):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    
     order_id = Column(Integer, ForeignKey("meal_orders.id"))
     meal_id = Column(Integer, ForeignKey("meals.id"), nullable=True)
     store_item_id = Column(Integer, ForeignKey("store_items.id"))
+
     quantity = Column(Integer, nullable=False)
     store_qty_used = Column(Integer, nullable=False)
+
     item_name = Column(String, nullable=False)
     price_per_unit = Column(Float, nullable=False, default=0.0)
     total_price = Column(Float, nullable=False, default=0.0)
@@ -122,19 +124,25 @@ class RestaurantSale(Base, BusinessMixin):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    
-
     order_id = Column(Integer, ForeignKey("meal_orders.id"), nullable=False)
     location_id = Column(Integer, ForeignKey("restaurant_locations.id"), nullable=False)
+
     guest_name = Column(String, nullable=True)
     served_by = Column(String, nullable=False)
+
     total_amount = Column(Float, nullable=False)
     status = Column(String, default="unpaid")
-    served_at = Column(DateTime(timezone=True), default=get_local_time)
-    created_at = Column(DateTime(timezone=True), default=get_local_time)
+
+    served_at = Column(DateTime(timezone=True), default=now_wat)   # ✅ FIXED
+    created_at = Column(DateTime(timezone=True), default=now_wat)  # ✅ FIXED
 
     order = relationship("MealOrder", back_populates="sale")
-    payments = relationship("RestaurantSalePayment", back_populates="sale", cascade="all, delete")
+
+    payments = relationship(
+        "RestaurantSalePayment",
+        back_populates="sale",
+        cascade="all, delete"
+    )
 
 
 # ----------------------------
@@ -145,9 +153,9 @@ class MealStoreItem(Base, BusinessMixin):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    
     meal_id = Column(Integer, ForeignKey("meals.id"))
     store_item_id = Column(Integer, ForeignKey("store_items.id"))
+
     quantity_used = Column(Float, default=1)
 
     meal = relationship("Meal", back_populates="store_links")
