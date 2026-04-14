@@ -1,8 +1,10 @@
 # restpayment/schemas.py
 from pydantic import BaseModel
 from datetime import datetime
+from datetime import date
 from typing import Optional
 from typing import List
+from pydantic import BaseModel, Field
 
 
 
@@ -11,6 +13,7 @@ class PaymentCreate(BaseModel):
     payment_mode: str
     bank: str | None = None   # ✅ added
     paid_by: str | None = None
+    payment_date: date = Field(default_factory=date.today)  # ✅ default today
 
 
 
@@ -36,6 +39,7 @@ class RestaurantSalePaymentDisplay(BaseModel):
     paid_by: Optional[str]
     is_void: bool
     created_at: datetime
+    payment_date: date   
 
     class Config:
         from_attributes = True
@@ -46,6 +50,7 @@ class UpdatePaymentSchema(BaseModel):
     payment_mode: Optional[str] = None
     paid_by: Optional[str] = None
     bank: Optional[str] = None   # <-- must be Optional
+    payment_date: Optional[date] = None   # ✅ ADD THIS
 
 # restpayment/schemas.py
 
@@ -56,6 +61,10 @@ class RestaurantSaleDisplay(BaseModel):
     total_amount: float
     served_by: Optional[str]
     created_at: datetime
+
+    amount_paid: Optional[float] = 0
+    balance: Optional[float] = 0
+    
     payments: List[RestaurantSalePaymentDisplay] = []
 
     class Config:

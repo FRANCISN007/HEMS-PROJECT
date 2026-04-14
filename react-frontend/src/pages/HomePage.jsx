@@ -1,47 +1,16 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { checkLicenseStatus } from "../api/licenseApi";
 import backgroundImage from "../assets/images/hotel-bg.jpg";
 import "./HomePage.css";
 
 import { HOTEL_NAME } from "../config/constants";
 
-
-
 const HomePage = () => {
   const navigate = useNavigate();
 
-  const verifyLicense = async () => {
-    try {
-      const storedVerified = localStorage.getItem("license_verified");
-      const storedExpires = localStorage.getItem("license_valid_until");
-      const now = new Date();
-
-      if (storedVerified === "true" && storedExpires) {
-        const expiresOn = new Date(storedExpires);
-        if (expiresOn > now) {
-          navigate("/login");
-          return;
-        } else {
-          localStorage.removeItem("license_verified");
-          localStorage.removeItem("license_valid_until");
-        }
-      }
-
-      const data = await checkLicenseStatus();
-      const expiresOn = data.expires_on ? new Date(data.expires_on) : null;
-
-      if (data.valid && expiresOn && expiresOn > now) {
-        localStorage.setItem("license_verified", "true");
-        localStorage.setItem("license_valid_until", expiresOn.toISOString());
-        navigate("/login");
-      } else {
-        navigate("/license");
-      }
-    } catch (error) {
-      console.error("License check failed", error);
-      navigate("/license");
-    }
+  // ✅ SIMPLE FLOW (like Shopman)
+  const handleProceed = () => {
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -68,16 +37,13 @@ const HomePage = () => {
           justifyContent: "space-between",
         }}
       >
-        {/* ✅ hotel name is now global */}
+        {/* Hotel Name */}
         <div className="hotel-name-banner">{HOTEL_NAME}</div>
 
-        {/* Main Center Content */}
+        {/* Main Content */}
         <div className="home-card">
-
-          {/* Welcome text */}
           <h1 className="heading-line1">Welcome to</h1>
 
-          {/* HEMS Text */}
           <div className="hems-text">
             <span className="hems-letter">H</span>
             <span className="hems-letter">E</span>
@@ -85,19 +51,17 @@ const HomePage = () => {
             <span className="hems-letter">S</span>
           </div>
 
-          {/* Meaning of HEMS */}
           <h2 className="heading-line2">
             Hotel &amp; Event Management System
           </h2>
 
           <button
             className="proceed-button"
-            onClick={verifyLicense}
+            onClick={handleProceed}
           >
             Proceed &gt;&gt;
           </button>
         </div>
-
 
         <footer className="home-footer">
           <div>Produced & Licensed by School of Accounting Package</div>

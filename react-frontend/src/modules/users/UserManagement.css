@@ -1,288 +1,407 @@
 /* ===============================
-   User Container
-================================ */
+   USER MANAGEMENT CONTAINER
+=============================== */
 .user-container {
-  background: #eceaea;
-  padding: 1rem;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  font-family: Arial, sans-serif;
-  max-width: 1400px;
-  display: flex;
-  flex-direction: column;
-  font-size: 12px;
-  overflow: hidden;
-}
-
-.user-container.small-frame {
-  padding: 10px;
-  max-width: 1000px;
-  margin: auto;
-  font-size: 13px;
-}
-
-/* ===============================
-   Heading
-================================ */
-.user-container .user-heading {
-  font-size: 1.2rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
-  text-align: center;
-}
-
-/* ===============================
-   User Table Wrapper
-================================ */
-.user-container .user-table {
-  width: 100%;
-  display: grid;
-  border: 1px solid #bdbdbd;
+  padding: 12px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f8f9fa;
   border-radius: 8px;
-  overflow: hidden;
-  margin-top: 15px;
-  font-size: 13px;
+  min-height: 100%;
+}
+
+/* Super admin mode */
+.user-container.super-admin-mode {
+  background-color: #f0e8ff;
+  border: 1px solid #6f42c1;
+  box-shadow: 0 4px 15px rgba(111, 66, 193, 0.12);
 }
 
 /* ===============================
-   Table Header
-================================ */
-.user-container .user-table-header {
-  display: grid;
-  grid-template-columns: 60px 200px 1fr 350px;
+   HEADER
+=============================== */
+.user-header {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  background-color: #293552;
-  color: #ffffff;
-  font-weight: bold;
-  text-align: center;
-  border-bottom: 1px solid #bdbdbd;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
-.user-container .user-table-header div {
-  padding: 6px;
-  border-right: 1px solid #bdbdbd;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.user-heading {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0;
 }
 
-.user-container .user-table-header div:last-child {
+.user-heading.super-admin {
+  color: #6f42c1;
+}
+
+.user-heading.super-admin::after {
+  content: "SYSTEM-WIDE";
+  font-size: 0.72rem;
+  background: #6f42c1;
+  color: white;
+  padding: 2px 9px;
+  border-radius: 20px;
+  margin-left: 10px;
+  font-weight: 500;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-right select {
+  padding: 7px 10px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  font-size: 0.92rem;
+  background: white;
+}
+
+.close-main-button {
+  background: #dc3545;
+  color: white;
+  border: none;
+  font-size: 17px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-main-button:hover {
+  background: #c82333;
+}
+
+/* ===============================
+   ERROR / POPUP
+=============================== */
+.error {
+  color: #dc3545;
+  font-weight: 500;
+  margin: 8px 0 12px 0;
+  padding: 8px 12px;
+  background: #ffebee;
+  border-radius: 4px;
+}
+
+.popup-inside {
+  background: #198754;
+  color: white;
+  padding: 9px 14px;
+  border-radius: 6px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+/* ===============================
+   TABLE STYLES - COMPACT + GRID LINES
+=============================== */
+.user-table {
+  overflow-x: hidden;           /* No horizontal scrollbar */
+  border: 2px solid #28a745;
+  border-radius: 8px;
+  background-color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.user-table.super-admin-table {
+  border-color: #6f42c1;
+}
+
+/* Table Header */
+.user-table .table-header {
+  display: grid;
+  background-color: #28a745;
+  color: white;
+  font-weight: 600;
+  text-align: left;
+  font-size: 0.88rem;
+  border-bottom: 2px solid #1e7e34;
+}
+
+/* Default columns */
+.user-table .table-header:not(.with-business) {
+  grid-template-columns: 65px 200px 1fr 280px;
+}
+
+/* Super Admin columns */
+.user-table .table-header.with-business {
+  grid-template-columns: 65px 180px 1fr 120px 260px;
+}
+
+.user-table .table-header div {
+  padding: 10px 8px;
+  border-right: 1px solid rgba(255,255,255,0.25);
+}
+
+.user-table .table-header div:last-child {
   border-right: none;
 }
 
-/* ===============================
-   Table Rows
-================================ */
-.user-container .user-table-row {
+/* Business column highlight */
+.user-table .table-header.with-business div:nth-child(4) {
+  background-color: #5a32a3;
+}
+
+/* Table Rows - Compact */
+.user-table .table-row {
   display: grid;
-  grid-template-columns: 60px 200px 1fr 350px;
+  font-size: 0.87rem;
+  transition: background-color 0.2s ease;
   align-items: center;
-  text-align: center;
-  border-bottom: 1px solid #d6d6d6;
+  min-height: 42px;               /* Compact row height */
+}
+
+/* Match header columns exactly */
+.user-table .table-row:not(.with-business) {
+  grid-template-columns: 65px 200px 2fr  280px;
+}
+
+.user-table .table-row.with-business {
+  grid-template-columns: 65px 180px 1fr 120px 300px;
+}
+
+/* Grid Lines + Zebra */
+.user-table .table-row {
+  border-bottom: 1px solid #434646;
+}
+
+.user-table .table-row div {
+  padding: 2px 2px;
+  border-right: 1px solid #1f2020;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-table .table-row div:last-child {
+  border-right: none;
 }
 
 /* Zebra striping */
-.user-container .user-table-row:nth-child(odd) {
-  background-color: #ffffff;
+.user-table .table-row:nth-child(odd) {
+  background-color: #f8f9fa;
 }
 
-.user-container .user-table-row:nth-child(even) {
-  background-color: #f9fbfd;
+.user-table .table-row:nth-child(even) {
+  background-color: white;
 }
 
-.user-container .user-table-row:last-child {
-  border-bottom: none;
+.user-table .table-row:hover {
+  background-color: #e9f5ee;
 }
 
-.user-container .user-table-row div {
-  padding: 6px;
-  border-right: 1px solid #d6d6d6;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  box-sizing: border-box;
+.user-table.super-admin-table .table-row:hover {
+  background-color: #f0e8ff;
 }
 
-.user-container .user-table-row div:last-child {
-  border-right: none;
-}
-
-/* Hover */
-.user-container .user-table-row:hover {
-  background-color: #eef4ff;
+/* Highlight Business cell */
+.user-table .table-row.with-business div:nth-child(4) {
+  background-color: #f8f4ff;
+  font-weight: 500;
+  color: #4a2c8c;
 }
 
 /* ===============================
-   Action Buttons
-================================ */
-.user-container .user-action-buttons {
+   ACTION BUTTONS
+=============================== */
+.action-buttons {
   display: flex;
-  gap: 6px;
-  justify-content: flex-start;
-  flex-wrap: nowrap;
+  gap: 2px;
+  flex-wrap: wrap;
 }
 
-.user-container .user-btn {
-  padding: 5px 10px;
-  border: none;
+.btn {
+  padding: 4px 10px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
   cursor: pointer;
-  flex-shrink: 0;
+  transition: all 0.2s ease;
 }
 
-/* Edit */
-.user-container .user-btn-edit {
-  background-color: #007bff;
-  color: white;
-}
+.btn.edit { background: #0d6efd; color: white; }
+.btn.edit:hover { background: #0b5ed7; }
 
-.user-container .user-btn-edit:hover {
-  background-color: #0069d9;
-}
+.btn.delete { background: #dc3545; color: white; }
+.btn.delete:hover { background: #bb2d3b; }
 
-/* Delete */
-.user-container .user-btn-delete {
-  background-color: #dc3545;
-  color: white;
-}
-
-.user-container .user-btn-delete:hover {
-  background-color: #b02a37;
-}
-
-/* Add */
-.user-container .user-btn-add {
-  background-color: #28a745;
-  color: white;
-  padding: 6px 14px;
-}
-
-.user-container .user-btn-add:hover {
-  background-color: #218838;
-}
+.btn.reset { background: #ffc107; color: #212529; }
+.btn.reset:hover { background: #e0a800; }
 
 /* ===============================
-   Add User Button Container
-================================ */
-.user-container .add-user-button-container {
+   FORMS (Compact)
+=============================== */
+.edit-form.compact-form {
+  margin-top: 16px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #28a745;
+  border-radius: 8px;
+}
+
+.edit-form.compact-form.super-admin-form {
+  border-color: #6f42c1;
+  background: #f8f5ff;
+}
+
+.edit-header h4 {
+  margin: 0 0 12px 0;
+  font-size: 1.15rem;
+  color: #2c3e50;
+}
+
+.edit-form label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.edit-form input {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid #ced4da;
+  border-radius: 5px;
+  font-size: 0.93rem;
+  margin-bottom: 10px;
+}
+
+/* Roles */
+.roles-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.roles-checkboxes label {
+  background: #f8f9fa;
+  border: 1px solid #28a745;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+/* Form Buttons */
+.form-buttons {
   display: flex;
   justify-content: flex-end;
-  margin-top: 1rem;
-}
-
-/* ===============================
-   Inline Edit Form
-================================ */
-.user-container .edit-form.compact-form {
-  margin-top: 12px;
-  padding: 10px;
-  background: #fafafa;
-  border: 1px solid #ccc;
-  border-radius: 10px;
-  font-size: 13px;
-  max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
-  display: flex;
-  flex-direction: column;
   gap: 10px;
+  margin-top: 15px;
 }
 
-.user-container .edit-form h4 {
-  font-size: 14px;
-  margin-bottom: 6px;
-}
-
-/* Inputs */
-.user-container .edit-form input,
-.user-container .edit-form select {
-  width: 100%;
-  padding: 8px 10px;
-  font-size: 14px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-}
-
-/* ===============================
-   Roles Checkboxes
-================================ */
-.user-container .roles-checkboxes {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 6px;
-}
-
-.user-container .roles-checkboxes label {
-  font-size: 13px;
-  background: #f9f9f9;
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  cursor: pointer;
-}
-
-.user-container .roles-checkboxes input {
-  margin-right: 4px;
-}
-
-/* ===============================
-   Toast Notification
-================================ */
-.user-container .popup-toast {
-  position: fixed;
-  top: 10px;
-  right: 20px;
-  background: #4caf50;
-  color: white;
-  padding: 8px 14px;
+.form-buttons button {
+  padding: 7px 16px;
   border-radius: 5px;
-  font-size: 13px;
-  z-index: 9999;
-  animation: userFadeOut 3s forwards;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
 }
 
-@keyframes userFadeOut {
-  0% { opacity: 1; }
-  80% { opacity: 1; }
-  100% { opacity: 0; }
+.form-buttons button[type="submit"] {
+  background: #28a745;
+  color: white;
 }
 
+.form-buttons button[type="submit"]:hover {
+  background: #1e7e34;
+}
 
 /* ===============================
-   Header Layout
-================================ */
-.user-header {
+   MODALS
+=============================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 360px;
+  max-width: 92%;
   position: relative;
-  display: flex;
-  align-items: center;
-  min-height: 40px;
 }
 
-/* Center the main heading */
-.user-header .user-heading {
+.close-btn {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  margin: 0;
-  font-size: 1.3rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-/* Right-side controls */
-.header-right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* Dropdown */
-.header-right select {
-  padding: 6px 10px;
-  font-size: 13px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
+  top: 10px;
+  right: 10px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
   cursor: pointer;
+  font-size: 15px;
+}
+
+/* ===============================
+   BUSINESS SECTION
+=============================== */
+.business-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.business-section .section-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #2c3e50;
+}
+
+.business-section .btn.create {
+  background: #28a745;
+  color: white;
+  padding: 7px 14px;
+  border-radius: 5px;
+  font-size: 0.9rem;
+}
+
+.business-section .btn.create:hover {
+  background: #1e7e34;
+}
+
+/* Compact Business Table */
+.business-section .table-header.with-business,
+.business-section .table-row.with-business {
+  grid-template-columns: 65px 130px 190px 140px 200px 90px 240px;
+}
+
+/* ===============================
+   REFRESH BUTTON
+=============================== */
+.btn.refresh {
+  background: #6c757d;
+  color: white;
+  padding: 7px 12px;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.btn.refresh:hover {
+  background: #5a6268;
 }

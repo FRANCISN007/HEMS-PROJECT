@@ -226,7 +226,7 @@ const ListIssues = () => {
 
   return (
     <div className="list-issues-container">
-      <h2>📦 List of Issued Items</h2>
+      <h2>📦 List of Issued Items to Bar</h2>
 
       <div className="filters">
         <select

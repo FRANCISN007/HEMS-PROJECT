@@ -53,19 +53,24 @@ def create_booking(
     attachment_str: Optional[str] = Form(None),
 
     booking_date: Optional[date] = Form(None),
-    business_id: Optional[int] = Form(None),  # ✅ NEW
+    business_id: Optional[int] = Form(None),
 
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
     try:
+        # =========================
+        # TIMESETUP (FIXED)
+        # =========================
         now = now_wat()
         today = now.date()
+        current_time = now.time()
+
         booking_date = booking_date or today
 
-        # -------------------------------
-        # 1️⃣ Tenant logic (STANDARDIZED)
-        # -------------------------------
+        # =========================
+        # TENANT LOGIC
+        # =========================
         if "super_admin" in current_user.roles:
             effective_business_id = business_id
             if not effective_business_id:
@@ -76,18 +81,18 @@ def create_booking(
         else:
             effective_business_id = current_user.business_id
 
-        # -------------------------------
-        # 2️⃣ Validate booking_date
-        # -------------------------------
+        # =========================
+        # VALIDATE BOOKING DATE
+        # =========================
         if booking_date > today:
             raise HTTPException(
                 status_code=400,
                 detail="Booking date cannot be in the future."
             )
 
-        # -------------------------------
-        # 3️⃣ Normalize room
-        # -------------------------------
+        # =========================
+        # NORMALIZE ROOM
+        # =========================
         normalized_room_number = room_number.strip().lower()
 
         room = db.query(room_models.Room).filter(
@@ -99,17 +104,12 @@ def create_booking(
             raise HTTPException(status_code=404, detail="Room not found")
 
         if room.status == "maintenance":
-            raise HTTPException(
-                status_code=400,
-                detail="Room is under maintenance."
-            )
+            raise HTTPException(status_code=400, detail="Room is under maintenance.")
 
-        # -------------------------------
-        # 4️⃣ Same-day turnover check
-        # -------------------------------
+        # =========================
+        # SAME DAY TURNOVER CHECK
+        # =========================
         if arrival_date == today:
-            now = now.time()
-
 
             overlapping_departure = (
                 db.query(booking_models.Booking)
@@ -122,15 +122,15 @@ def create_booking(
                 .first()
             )
 
-            if overlapping_departure and now < time(12, 0):
+            if overlapping_departure and current_time < time(12, 0):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Room {room.room_number} cannot be booked until after 12:00 PM today."
+                    detail=f"Room {room.room_number} cannot be booked until after 12:00 PM."
                 )
 
-        # -------------------------------
-        # 5️⃣ Attachment handling
-        # -------------------------------
+        # =========================
+        # ATTACHMENT HANDLING
+        # =========================
         attachment_path = None
 
         if attachment_file and attachment_file.filename:
@@ -147,9 +147,9 @@ def create_booking(
         elif attachment_str:
             attachment_path = attachment_str
 
-        # -------------------------------
-        # 6️⃣ Date validation
-        # -------------------------------
+        # =========================
+        # DATE VALIDATION
+        # =========================
         if departure_date <= arrival_date:
             raise HTTPException(
                 status_code=400,
@@ -162,9 +162,9 @@ def create_booking(
                 detail="Reservation bookings must be for future dates."
             )
 
-        # -------------------------------
-        # 7️⃣ Overlapping booking check
-        # -------------------------------
+        # =========================
+        # OVERLAP CHECK
+        # =========================
         overlapping_booking = (
             db.query(booking_models.Booking)
             .filter(
@@ -182,17 +182,17 @@ def create_booking(
         if overlapping_booking:
             raise HTTPException(
                 status_code=400,
-                detail=f"Room {room_number} is already booked. Booking ID: {overlapping_booking.id}",
+                detail=f"Room already booked. Booking ID: {overlapping_booking.id}",
             )
 
-        # -------------------------------
-        # 8️⃣ Calculate stay
-        # -------------------------------
+        # =========================
+        # STAY CALCULATION
+        # =========================
         number_of_days = (departure_date - arrival_date).days
 
-        # -------------------------------
-        # 9️⃣ Pricing logic
-        # -------------------------------
+        # =========================
+        # PRICING LOGIC
+        # =========================
         if booking_type == "complimentary":
             booking_cost = 0
             payment_status = "complimentary"
@@ -202,11 +202,12 @@ def create_booking(
             payment_status = "pending"
             booking_status = "reserved" if booking_type == "reservation" else "checked-in"
 
-        # -------------------------------
-        # 🔟 Create booking
-        # -------------------------------
+
+        # =========================
+        # CREATE BOOKING
+        # =========================
         new_booking = booking_models.Booking(
-            business_id=effective_business_id,  # ✅ CRITICAL
+            business_id=effective_business_id,
             room_id=room.id,
             room_number=room.room_number,
             guest_name=guest_name,
@@ -226,23 +227,21 @@ def create_booking(
             created_by=current_user.username,
             vehicle_no=vehicle_no,
             attachment=attachment_path,
-            booking_date=datetime.combine(booking_date, now.time())
 
+            # ✅ FIXED: no .time() bug anymore
+            booking_date=datetime.combine(booking_date, current_time)
         )
 
         db.add(new_booking)
         db.commit()
         db.refresh(new_booking)
 
-        # -------------------------------
-        # 1️⃣1️⃣ Update room status
-        # -------------------------------
+        # =========================
+        # UPDATE ROOM STATUS
+        # =========================
         room.status = booking_status
         db.commit()
 
-        # -------------------------------
-        # 1️⃣2️⃣ Response
-        # -------------------------------
         return {
             "message": f"Booking created successfully for room {room.room_number}.",
             "booking_details": {
@@ -279,7 +278,6 @@ def create_booking(
 
 
 
-
 @router.get("/reservations/alerts")
 def get_active_reservations(
     business_id: Optional[int] = None,
@@ -289,9 +287,14 @@ def get_active_reservations(
     today = date.today()
 
     # -------------------------------
-    # Determine business scope
+    # Enforce business scope
     # -------------------------------
     if "super_admin" in current_user.roles:
+        if not business_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Super admin must provide business_id"
+            )
         effective_business_id = business_id
     else:
         effective_business_id = current_user.business_id
@@ -299,21 +302,14 @@ def get_active_reservations(
     query = db.query(booking_models.Booking).filter(
         booking_models.Booking.status == "reserved",
         booking_models.Booking.arrival_date >= today,
-        booking_models.Booking.deleted == False
+        booking_models.Booking.business_id == effective_business_id
     )
-
-    if effective_business_id:
-        query = query.filter(
-            booking_models.Booking.business_id == effective_business_id
-        )
 
     reservations = query.all()
 
-    count = len(reservations)
-
     return {
-        "active_reservations": count > 0,
-        "count": count
+        "active_reservations": len(reservations) > 0,
+        "count": len(reservations)
     }
 
 
@@ -329,26 +325,25 @@ def get_reservation_alerts(
         today = date.today()
 
         # -------------------------------
-        # Determine business scope
+        # Enforce business scope
         # -------------------------------
         if "super_admin" in current_user.roles:
+            if not business_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Super admin must provide business_id"
+                )
             effective_business_id = business_id
         else:
             effective_business_id = current_user.business_id
 
-        query = db.query(booking_models.Booking).filter(
-            booking_models.Booking.status == "reserved",
-            booking_models.Booking.deleted == False,
-            booking_models.Booking.arrival_date >= today
-        )
-
-        if effective_business_id:
-            query = query.filter(
+        reservations = (
+            db.query(booking_models.Booking)
+            .filter(
+                booking_models.Booking.status == "reserved",
+                booking_models.Booking.arrival_date >= today,
                 booking_models.Booking.business_id == effective_business_id
             )
-
-        reservations = (
-            query
             .order_by(booking_models.Booking.arrival_date)
             .all()
         )
@@ -356,7 +351,7 @@ def get_reservation_alerts(
         return [
             BookingOut(
                 id=r.id,
-                room_number=r.room_number,  # safer since it's stored in booking
+                room_number=r.room_number,
                 guest_name=r.guest_name,
                 address=r.address,
                 arrival_date=r.arrival_date,

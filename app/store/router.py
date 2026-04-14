@@ -33,6 +33,8 @@ from app.bar import schemas as bar_schemas
 
 from app.business import models as business_models  # make sure business model is imported
 
+from app.store.schemas import  StoreInventoryAdjustmentCreate, StoreItemDisplay, KitchenItemSimple
+
 
 from sqlalchemy.orm import aliased
 from fastapi import Form
@@ -53,6 +55,8 @@ from app.core.db import db_dependency
 from app.core.business import resolve_business_id
 
 from sqlalchemy.orm import selectinload
+from datetime import datetime, timezone
+
 
 from app.core.timezone import now_wat, to_wat  # ✅ centralized WAT functions
 
@@ -742,7 +746,7 @@ async def receive_inventory(
     return stock_entry
 
 
-@router.get("/purchases")
+@router.get("/purchases", response_model=dict)
 def list_purchases(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
@@ -750,82 +754,107 @@ def list_purchases(
     vendor_name: Optional[str] = Query(None),
     vendor_id: Optional[int] = Query(None),
     item_id: Optional[int] = Query(None),
-    business_id: Optional[int] = Query(None),
+    business_id: Optional[int] = Query(None, description="Super admin must provide business_id"),
     request: Request = None,
     db: Session = Depends(db_dependency),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "admin", "super_admin"]))
 ):
-    # Resolve business for multi-tenant filtering
-    business_id = resolve_business_id(current_user, business_id)
+    # =========================
+    # ✅ Resolve tenant context (STRICT)
+    # =========================
+    effective_business_id = resolve_business_id(current_user, business_id)
 
-    query = db.query(store_models.StoreStockEntry).options(
-        selectinload(store_models.StoreStockEntry.vendor),
-        selectinload(store_models.StoreStockEntry.item),
-    ).filter(store_models.StoreStockEntry.business_id == business_id)
-
-    # Date filters
-    if start_date and end_date:
-        query = query.filter(
-            store_models.StoreStockEntry.purchase_date >= start_date,
-            store_models.StoreStockEntry.purchase_date <= end_date
+    # =========================
+    # ✅ Base query (TENANT SAFE)
+    # =========================
+    query = (
+        db.query(store_models.StoreStockEntry)
+        .options(
+            selectinload(store_models.StoreStockEntry.vendor),
+            selectinload(store_models.StoreStockEntry.item),
         )
-    elif start_date:
+        .filter(store_models.StoreStockEntry.business_id == effective_business_id)
+    )
+
+    # =========================
+    # ✅ Date filters
+    # =========================
+    if start_date:
         query = query.filter(store_models.StoreStockEntry.purchase_date >= start_date)
-    elif end_date:
+
+    if end_date:
         query = query.filter(store_models.StoreStockEntry.purchase_date <= end_date)
 
-    # Invoice filter
+    # =========================
+    # ✅ Invoice filter
+    # =========================
     if invoice_number:
-        query = query.filter(store_models.StoreStockEntry.invoice_number.ilike(f"%{invoice_number}%"))
+        query = query.filter(
+            store_models.StoreStockEntry.invoice_number.ilike(f"%{invoice_number}%")
+        )
 
-    # Vendor filters
+    # =========================
+    # ✅ Vendor filters
+    # =========================
     if vendor_id:
         query = query.filter(store_models.StoreStockEntry.vendor_id == vendor_id)
+
     if vendor_name:
         query = query.join(store_models.StoreStockEntry.vendor).filter(
             vendor_models.Vendor.business_name.ilike(f"%{vendor_name}%")
         )
 
-    # Item filter
+    # =========================
+    # ✅ Item filter
+    # =========================
     if item_id:
         query = query.filter(store_models.StoreStockEntry.item_id == item_id)
 
-    # Latest first
-    purchases = query.order_by(store_models.StoreStockEntry.created_at.desc()).all()
+    # =========================
+    # ✅ Execute query
+    # =========================
+    purchases = (
+        query.order_by(store_models.StoreStockEntry.created_at.desc())
+        .all()
+    )
 
-    # Prepare results
-    results, total_amount = [], 0
-    for purchase in purchases:
+    # =========================
+    # ✅ Build response
+    # =========================
+    results = []
+    total_amount = 0
+
+    for p in purchases:
         attachment_url = None
-        if purchase.attachment and request:
-            rel_path = os.path.relpath(purchase.attachment, "uploads").replace("\\", "/")
+
+        if p.attachment and request:
+            rel_path = os.path.relpath(p.attachment, "uploads").replace("\\", "/")
             base_url = str(request.base_url).rstrip("/")
             attachment_url = f"{base_url}/files/{rel_path}"
 
-        total_amount += purchase.total_amount or 0
+        total_amount += p.total_amount or 0
 
         results.append({
-            "id": purchase.id,
-            "item_id": purchase.item_id,
-            "item_name": purchase.item.name if purchase.item else "",
-            "invoice_number": purchase.invoice_number,
-            "quantity": purchase.original_quantity,
-            "unit_price": purchase.unit_price,
-            "total_amount": purchase.total_amount,
-            "vendor_id": purchase.vendor_id,
-            "vendor_name": purchase.vendor.business_name if purchase.vendor else "",
-            "purchase_date": purchase.purchase_date,
-            "created_by": purchase.created_by,
-            "created_at": purchase.created_at,
+            "id": p.id,
+            "item_id": p.item_id,
+            "item_name": p.item.name if p.item else "",
+            "invoice_number": p.invoice_number,
+            "quantity": p.original_quantity,
+            "unit_price": p.unit_price,
+            "total_amount": p.total_amount,
+            "vendor_id": p.vendor_id,
+            "vendor_name": p.vendor.business_name if p.vendor else "",
+            "purchase_date": p.purchase_date,
+            "created_by": p.created_by,
+            "created_at": p.created_at,
             "attachment_url": attachment_url,
         })
 
     return {
         "total_entries": len(results),
-        "total_purchase": total_amount,
-        "purchases": results
+        "total_amount": total_amount,
+        "purchases": results,
     }
-
 
 
 
@@ -1459,6 +1488,75 @@ def update_kitchen_issue(
         issue_date=issue_date_wat.isoformat()
     )
 
+
+
+@router.get("/store/kitchen-items/simple-search", response_model=List[KitchenItemSimple])
+def search_kitchen_items(
+    search: str = Query("", description="Search kitchen items"),
+    limit: int = Query(50, description="Max results"),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["kitchen", "store", "admin", "super_admin"])
+    ),
+):
+    """
+    Lightweight search for kitchen items (for autocomplete).
+    Multi-tenant secured.
+    Returns only id, name, and latest selling price.
+    """
+
+    # ✅ Resolve tenant (STRICT)
+    resolved_business_id = resolve_business_id(current_user, business_id)
+
+    # 🔁 Subquery: latest inventory per item (PER BUSINESS)
+    subquery = (
+        db.query(
+            KitchenInventory.item_id,
+            func.max(KitchenInventory.id).label("latest_inventory_id")
+        )
+        .filter(KitchenInventory.business_id == resolved_business_id)  # 🔒 IMPORTANT
+        .group_by(KitchenInventory.item_id)
+        .subquery()
+    )
+
+    # 🔗 Main query (STRICT tenant filtering)
+    query = (
+        db.query(
+            StoreItem.id.label("item_id"),
+            StoreItem.name.label("item_name"),
+            StoreItem.selling_price.label("selling_price"),
+        )
+        .outerjoin(subquery, subquery.c.item_id == StoreItem.id)
+        .outerjoin(
+            KitchenInventory,
+            KitchenInventory.id == subquery.c.latest_inventory_id
+        )
+        .filter(
+            StoreItem.item_type == "kitchen",
+            StoreItem.business_id == resolved_business_id  # 🔒 CRITICAL
+        )
+    )
+
+    # 🔍 Search filter
+    if search:
+        query = query.filter(StoreItem.name.ilike(f"%{search}%"))
+
+    # ⚡ Limit results
+    items = query.order_by(StoreItem.name.asc()).limit(limit).all()
+
+    # 🧾 Format response
+    return [
+        KitchenItemSimple(
+            item_id=item.item_id,
+            item_name=item.item_name,
+            selling_price=item.selling_price or 0,
+        )
+        for item in items
+    ]
 
 
 

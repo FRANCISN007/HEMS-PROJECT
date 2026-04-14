@@ -26,8 +26,18 @@ def resolve_business_id(current_user, business_id: Optional[int]) -> int:
     - Super admin must explicitly provide a business_id (override)
     - Normal users always use their assigned business_id
     """
-    roles = [r.strip().lower() for r in current_user.roles.split(",")] if current_user.roles else []
 
+    # ✅ Normalize roles (handles BOTH string and list)
+    if isinstance(current_user.roles, str):
+        roles = [r.strip().lower() for r in current_user.roles.split(",")]
+    elif isinstance(current_user.roles, list):
+        roles = [r.strip().lower() for r in current_user.roles]
+    else:
+        roles = []
+
+    # =========================
+    # 👑 SUPER ADMIN
+    # =========================
     if "super_admin" in roles:
         if business_id is None:
             raise HTTPException(
@@ -36,7 +46,9 @@ def resolve_business_id(current_user, business_id: Optional[int]) -> int:
             )
         return business_id
 
-    # Normal users must have a business_id
+    # =========================
+    # 👤 NORMAL USER
+    # =========================
     if not current_user.business_id:
         raise HTTPException(
             status_code=400,

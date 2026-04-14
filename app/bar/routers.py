@@ -241,132 +241,77 @@ def delete_bar(
         )
 
 
-""""
-
-@router.post("/receive-stock", response_model=BarInventoryReceiptDisplay)
-def receive_bar_stock(data: BarStockReceiveCreate, db: Session = Depends(get_db)):
-    # Validate bar and item
-    bar = db.query(Bar).filter(Bar.id == data.bar_id).first()
-    if not bar:
-        raise HTTPException(status_code=404, detail="Bar not found")
-
-    item = db.query(StoreItem).filter(StoreItem.id == data.item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-
-    # Update or create inventory
-    inventory = db.query(BarInventory).filter(
-        BarInventory.bar_id == data.bar_id,
-        BarInventory.item_id == data.item_id
-    ).first()
-
-    if inventory:
-        inventory.quantity += data.quantity
-        inventory.selling_price = data.selling_price
-        inventory.note = data.note
-    else:
-        inventory = BarInventory(
-            bar_id=data.bar_id,
-            bar_name=bar.name,
-            item_id=data.item_id,
-            item_name=item.name,
-            quantity=data.quantity,
-            selling_price=data.selling_price,
-            note=data.note
-        )
-        db.add(inventory)
-
-    # Create receipt log
-    receipt = BarInventoryReceipt(
-        bar_id=data.bar_id,
-        bar_name=bar.name,
-        item_id=data.item_id,
-        item_name=item.name,
-        quantity=data.quantity,
-        selling_price=data.selling_price,
-        note=data.note,
-        created_by="fcn"
-    )
-    db.add(receipt)
-
-    db.commit()
-    db.refresh(receipt)
-
-    return receipt
-
-
-
-@router.get("/received-stocks", response_model=List[BarInventoryDisplay])
-def list_received_stocks(
-    bar_id: Optional[int] = Query(None),
-    start_date: Optional[datetime] = Query(None),
-    end_date: Optional[datetime] = Query(None),
-    db: Session = Depends(get_db)
+@router.get("/items/simple-search", response_model=List[bar_schemas.BarSaleItemSummary])
+def search_bar_items(
+    search: str = Query("", description="Search term for item name"),
+    limit: int = Query(50, description="Maximum number of results"),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["bar", "store", "admin", "super_admin"])
+    ),
 ):
-    query = db.query(BarInventoryReceipt)
+    """
+    Search bar items by name with latest selling price.
+    Multi-tenant secured.
+    """
 
-    filters = []
-    if bar_id:
-        filters.append(BarInventoryReceipt.bar_id == bar_id)
-    if start_date:
-        filters.append(BarInventoryReceipt.created_at >= start_date)
-    if end_date:
-        filters.append(BarInventoryReceipt.created_at <= end_date)
+    # ✅ Resolve tenant (STRICT)
+    resolved_business_id = resolve_business_id(current_user, business_id)
 
-    if filters:
-        query = query.filter(and_(*filters))
+    # 🔁 Subquery: latest inventory per item (PER BUSINESS)
+    subquery = (
+        db.query(
+            bar_models.BarInventory.item_id,
+            func.max(bar_models.BarInventory.id).label("latest_inventory_id")
+        )
+        .filter(bar_models.BarInventory.business_id == resolved_business_id)  # 🔒 CRITICAL
+        .group_by(bar_models.BarInventory.item_id)
+        .subquery()
+    )
 
-    receipts = query.order_by(BarInventoryReceipt.created_at.desc()).all()
-    return receipts
+    # 🔗 Main query (STRICT tenant filtering)
+    query = (
+        db.query(
+            store_models.StoreItem.id.label("item_id"),
+            store_models.StoreItem.name.label("item_name"),
+            store_models.StoreItem.item_type.label("item_type"),
+            bar_models.BarInventory.selling_price.label("selling_price"),
+        )
+        .outerjoin(subquery, subquery.c.item_id == store_models.StoreItem.id)
+        .outerjoin(
+            bar_models.BarInventory,
+            bar_models.BarInventory.id == subquery.c.latest_inventory_id
+        )
+        .filter(
+            store_models.StoreItem.item_type == "bar",
+            store_models.StoreItem.business_id == resolved_business_id  # 🔒 CRITICAL
+        )
+    )
 
+    # 🔍 Search filter
+    if search:
+        query = query.filter(
+            store_models.StoreItem.name.ilike(f"%{search}%")
+        )
 
-@router.put("/update-received-stock", response_model=bar_schemas.BarInventoryDisplay)
-def update_received_stock(data: bar_schemas.BarStockUpdate, db: Session = Depends(get_db)):
-    # Validate bar
-    bar = db.query(Bar).filter(Bar.id == data.bar_id).first()
-    if not bar:
-        raise HTTPException(status_code=404, detail="Bar not found")
+    # ⚡ Safe limit (prevent abuse)
+    items = query.order_by(store_models.StoreItem.name.asc()).limit(min(limit, 100)).all()
 
-    # Validate item
-    item = db.query(StoreItem).filter(StoreItem.id == data.item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-
-    # Find the inventory record
-    inventory = db.query(BarInventory).filter(
-        BarInventory.bar_id == data.bar_id,
-        BarInventory.item_id == data.item_id
-    ).first()
-
-    if not inventory:
-        raise HTTPException(status_code=404, detail="Inventory record not found for update")
-
-    # Update fields
-    inventory.quantity = data.new_quantity
-    if data.selling_price is not None:
-        inventory.selling_price = data.selling_price
-    if data.note is not None:
-        inventory.note = data.note
-
-    db.commit()
-    db.refresh(inventory)
-
-    return inventory
-
-
-@router.delete("/bar-inventory/{inventory_id}", status_code=204)
-def delete_bar_inventory(inventory_id: int, db: Session = Depends(get_db),
-      current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))                   
-    ):
-    inventory = db.query(BarInventory).filter(BarInventory.id == inventory_id).first()
-    if not inventory:
-        raise HTTPException(status_code=404, detail="Inventory record not found")
-
-    db.delete(inventory)
-    db.commit()
-    return {"message": "Inventory entry deleted successfully"}
-
-    """""""""
+    # 🧾 Map to schema
+    return [
+        bar_schemas.BarSaleItemSummary(
+            item_id=item.item_id,
+            item_name=item.item_name,
+            selling_price=item.selling_price or 0,
+            quantity=0,
+            total_amount=0
+        )
+        for item in items
+    ]
 
 
 # ----------------------------
@@ -1224,7 +1169,7 @@ def update_bar_sale(
 ):
     try:
         # ------------------------------
-        # 1️⃣ Resolve business
+        # 1️⃣ Resolve business (tenant-safe)
         # ------------------------------
         business_id = resolve_business_id(current_user, business_id)
 
@@ -1321,18 +1266,18 @@ def update_bar_sale(
             if iid in existing_items:
                 db.delete(existing_items[iid])
 
-            # 🔹 add updated item line
-            # 🔹 add updated item line
-        if requested_qty > 0:
-            db.add(bar_models.BarSaleItem(
-                sale_id=sale.id,
-                bar_inventory_id=inv.id,
-                quantity=requested_qty,
-                selling_price=price,
-                total_amount=price * requested_qty,
-                business_id=business_id   # ✅ FIX ADDED HERE
-            ))
-
+            # 🔹 add updated item line ✅ FIXED POSITION
+            if requested_qty > 0:
+                db.add(
+                    bar_models.BarSaleItem(
+                        sale_id=sale.id,
+                        bar_inventory_id=inv.id,
+                        quantity=requested_qty,
+                        selling_price=price,
+                        total_amount=price * requested_qty,
+                        business_id=business_id
+                    )
+                )
 
         db.flush()
 

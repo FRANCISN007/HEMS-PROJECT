@@ -187,6 +187,37 @@ def list_kitchen_inventory_simple(
     ]
 
 
+# ----------------------------
+# List kitchens for dropdowns (simple)
+# ----------------------------
+@router.get("/simple", response_model=List[KitchenDisplaySimple])
+def list_kitchens_simple(
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
+    db: Session = Depends(get_db),
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["kitchen", "admin", "super_admin"])
+    )
+):
+    """
+    Return a simplified list of kitchens (id + name) for dropdowns.
+    Multi-tenant secured.
+    """
+
+    # ✅ Resolve tenant (STRICT)
+    resolved_business_id = resolve_business_id(current_user, business_id)
+
+    # ✅ Query ONLY this business
+    kitchens = (
+        db.query(kitchen_models.Kitchen)
+        .filter(kitchen_models.Kitchen.business_id == resolved_business_id)
+        .order_by(kitchen_models.Kitchen.id.asc())
+        .all()
+    )
+
+    return kitchens
 
 
 

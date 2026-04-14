@@ -245,38 +245,78 @@ const printContent = () => {
       const token = localStorage.getItem("token");
       if (!token) return;
 
-      const checkDashboardStatus = async () => {
-        try {
-          // ✅ 1. Check reservation alerts
-          const res = await axios.get(`${API_BASE_URL}/bookings/reservations/alerts`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
+      const userStr = localStorage.getItem("user");
+      const user = userStr ? JSON.parse(userStr) : null;
 
-          const count = res.data.count || 0;
+      const getParams = () => {
+        let params = {};
+
+        if (user && user.roles?.includes("super_admin")) {
+          if (!user.business_id) {
+            console.warn("❌ Super admin must select a business_id");
+            return null; // stop execution
+          }
+          params.business_id = user.business_id;
+        }
+
+        return params;
+      };
+
+      const checkAlerts = async () => {
+        try {
+          const params = getParams();
+          if (params === null) return;
+
+          const res = await axios.get(
+            `${API_BASE_URL}/bookings/reservation-alerts`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              params,
+            }
+          );
+
+          console.log("ALERT RESPONSE:", res.data);
+
+          const count = Array.isArray(res.data) ? res.data.length : 0;
           setReservationCount(count);
 
-          // ✅ 2. Trigger backend to auto-update room statuses after checkout time
-          await axios.post(`${API_BASE_URL}/rooms/update_status_after_checkout`, {}, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-
         } catch (err) {
-          console.error("Dashboard check failed:", err.message);
+          console.error("❌ Alert fetch failed:", err.message);
         }
       };
 
-      // Initial run
-      checkDashboardStatus();
+      const updateRooms = async () => {
+        try {
+          const params = getParams();
+          if (params === null) return;
 
-      // 🔁 Repeat every 30 seconds
-      const intervalId = setInterval(checkDashboardStatus, 5000);
+          await axios.post(
+            `${API_BASE_URL}/rooms/update_status_after_checkout`,
+            {},
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              params,
+            }
+          );
 
-      // Cleanup
-      return () => clearInterval(intervalId);
+        } catch (err) {
+          console.error("❌ Room update failed:", err.message);
+        }
+      };
+
+      // ✅ Initial run
+      checkAlerts();
+      updateRooms();
+
+      // 🔁 Polling
+      const alertInterval = setInterval(checkAlerts, 5000);   // 15s
+      const updateInterval = setInterval(updateRooms, 20000);  // 1 min
+
+      return () => {
+        clearInterval(alertInterval);
+        clearInterval(updateInterval);
+      };
+
     }, []);
 
   const menu = [

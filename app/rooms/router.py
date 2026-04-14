@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, exists
 from app.database import get_db
 from app.users.auth import get_current_user
 from app.users.permissions import role_required  # 👈 permission helper
@@ -14,6 +15,9 @@ from app.rooms import schemas
 from sqlalchemy import func
 from datetime import datetime, time, date
 from sqlalchemy import desc
+from app.core.tenant import resolve_business_id  # adjust import if needed
+from app.core.timezone import now_wat, to_wat
+
 
 import re
 from typing import Optional
@@ -136,80 +140,119 @@ from app.rooms import crud  # assuming your crud.py is under app.rooms
 def list_rooms(
     skip: int = 0,
     limit: int = 50,
-    business_id: Optional[int] = Query(None, description="Super admin only: filter by business_id"),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["dashboard"])
+    )
 ):
     today = date.today()
 
-    # ---------------- Determine business ----------------
-    roles = set(current_user.roles)
-    if "super_admin" in roles:
-        # super_admin can optionally filter by query param
-        # if business_id is None, it lists all businesses
-        pass
-    else:
-        # normal admin/other roles always use their own business_id
-        business_id = current_user.business_id
+    # ======================================================
+    # ✅ RESOLVE BUSINESS CONTEXT (SINGLE SOURCE OF TRUTH)
+    # ======================================================
+    business_scope = resolve_business_id(current_user, business_id)
 
-    # ---------------- Fetch rooms using SaaS-ready helper ----------------
-    rooms = crud.get_rooms_with_pagination(skip=skip, limit=limit, db=db, business_id=business_id)
-    room_numbers = [room.room_number for room in rooms]
-
-    # ---------------- Fetch relevant bookings ----------------
-    booking_query = db.query(
-        booking_models.Booking.room_number,
-        booking_models.Booking.arrival_date,
-        booking_models.Booking.departure_date,
-        booking_models.Booking.status
-    ).filter(
-        booking_models.Booking.room_number.in_(room_numbers),
-        booking_models.Booking.status.in_(["checked-in", "reserved", "complimentary"])
+    # ======================================================
+    # ✅ FETCH ROOMS (STRICT TENANT ISOLATION)
+    # ======================================================
+    rooms = crud.get_rooms_with_pagination(
+        skip=skip,
+        limit=limit,
+        db=db,
+        business_id=business_scope
     )
 
-    if business_id:
-        booking_query = booking_query.filter(booking_models.Booking.business_id == business_id)
+    room_numbers = [room.room_number for room in rooms]
 
-    active_bookings = booking_query.all()
+    # ======================================================
+    # ✅ FETCH BOOKINGS (STRICT TENANT ISOLATION)
+    # ======================================================
+    active_bookings = (
+        db.query(
+            booking_models.Booking.room_number,
+            booking_models.Booking.arrival_date,
+            booking_models.Booking.departure_date,
+            booking_models.Booking.status
+        )
+        .filter(
+            booking_models.Booking.business_id == business_scope,
+            booking_models.Booking.room_number.in_(room_numbers),
+            booking_models.Booking.status.in_([
+                "checked-in",
+                "reserved",
+                "complimentary"
+            ])
+        )
+        .all()
+    )
 
-    # ---------------- Collect future reservations ----------------
+    # ======================================================
+    # ✅ FUTURE RESERVATIONS ONLY
+    # ======================================================
     reservation_bookings = [
-        b for b in active_bookings if b.status == "reserved" and b.arrival_date >= today
+        b for b in active_bookings
+        if b.status == "reserved" and b.arrival_date >= today
     ]
 
-    # ---------------- Annotate future reservation counts for serialization ----------------
+    # ======================================================
+    # ✅ ENRICH ROOM DATA (NO DB SIDE EFFECTS)
+    # ======================================================
     for room in rooms:
         room.future_reservation_count = sum(
-            1 for r in reservation_bookings if r.room_number == room.room_number
+            1 for r in reservation_bookings
+            if r.room_number == room.room_number
         )
 
-        # Compute final status without changing existing logic
+        relevant = [
+            b for b in active_bookings
+            if b.room_number == room.room_number
+        ]
+
         final_status = "available"
-        relevant = [b for b in active_bookings if b.room_number == room.room_number]
 
         if room.status == "maintenance":
             final_status = "maintenance"
         else:
             for booking in relevant:
-                if booking.status == "complimentary" and booking.arrival_date <= today <= booking.departure_date:
+                if (
+                    booking.status == "complimentary"
+                    and booking.arrival_date <= today <= booking.departure_date
+                ):
                     final_status = "complimentary"
                     break
-                elif booking.status == "checked-in" and booking.arrival_date <= today <= booking.departure_date:
+
+                elif (
+                    booking.status == "checked-in"
+                    and booking.arrival_date <= today <= booking.departure_date
+                ):
                     final_status = "checked-in"
                     break
-                elif booking.status == "reserved" and booking.arrival_date >= today:
+
+                elif (
+                    booking.status == "reserved"
+                    and booking.arrival_date >= today
+                ):
                     final_status = "reserved"
 
         room.status = final_status
 
-    # ---------------- Serialize rooms ----------------
+    # ======================================================
+    # ✅ SERIALIZE RESPONSE
+    # ======================================================
     serialized_rooms = crud.serialize_rooms(rooms)
 
-    # ---------------- Total rooms ----------------
-    total_query = db.query(room_models.Room)
-    if business_id:
-        total_query = total_query.filter(room_models.Room.business_id == business_id)
-    total_rooms = total_query.count()
+    # ======================================================
+    # ✅ TOTAL ROOMS (TENANT SAFE)
+    # ======================================================
+    total_rooms = (
+        db.query(room_models.Room)
+        .filter(room_models.Room.business_id == business_scope)
+        .count()
+    )
 
     return {
         "total_rooms": total_rooms,
@@ -224,7 +267,7 @@ from fastapi import Query
 
 @router.post("/update_status_after_checkout")
 def update_rooms_after_checkout(
-    business_id: Optional[int] = Query(None, description="Super admin only: filter by business_id"),
+    business_id: Optional[int] = Query(None, description="Super admin must provide business_id"),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
 ):
@@ -232,58 +275,55 @@ def update_rooms_after_checkout(
     today = date.today()
     noon = time(12, 0)
 
-    # ---------------- Determine business ----------------
+    # ---------------- Enforce business scope ----------------
     roles = set(current_user.roles)
+
     if "super_admin" in roles:
-        # super_admin can optionally filter by query param
-        # if business_id is None, update all businesses
-        pass
+        if not business_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Super admin must provide business_id"
+            )
+        effective_business_id = business_id
     else:
-        # normal admin/other roles always use their own business_id
-        business_id = current_user.business_id
+        effective_business_id = current_user.business_id
 
     # ---------------- Get bookings departing today ----------------
-    bookings_query = db.query(booking_models.Booking).filter(
+    bookings = db.query(booking_models.Booking).filter(
         booking_models.Booking.departure_date == today,
-        booking_models.Booking.status.in_(["checked-in", "reserved", "complimentary"])
-    )
-
-    if business_id:
-        bookings_query = bookings_query.filter(booking_models.Booking.business_id == business_id)
-
-    bookings = bookings_query.all()
+        booking_models.Booking.status.in_(["checked-in", "reserved", "complimentary"]),
+        booking_models.Booking.business_id == effective_business_id
+    ).all()
 
     updated_rooms = []
     updated_bookings = []
 
-    # Only update after 12 noon
+    # ---------------- Only update after 12 noon ----------------
     if now.time() >= noon:
         for booking in bookings:
-            # Check if there is another overlapping active booking for this room
-            overlapping_query = db.query(booking_models.Booking).filter(
+
+            # Check overlapping booking
+            overlapping = db.query(booking_models.Booking).filter(
                 booking_models.Booking.room_number == booking.room_number,
                 booking_models.Booking.id != booking.id,
                 booking_models.Booking.status.in_(["checked-in", "reserved", "complimentary"]),
                 booking_models.Booking.arrival_date <= today,
-                booking_models.Booking.departure_date >= today
-            )
-            if business_id:
-                overlapping_query = overlapping_query.filter(booking_models.Booking.business_id == business_id)
-
-            overlapping = overlapping_query.first()
+                booking_models.Booking.departure_date >= today,
+                booking_models.Booking.business_id == effective_business_id
+            ).first()
 
             if overlapping:
-                continue  # Skip this booking and don't change room status
+                continue
 
-            # Mark the booking as checked-out
+            # ✅ Mark booking as checked-out
             booking.status = "checked-out"
             updated_bookings.append(booking.id)
 
-            # Update room status if not in maintenance
-            room_query = db.query(room_models.Room).filter_by(room_number=booking.room_number)
-            if business_id:
-                room_query = room_query.filter(room_models.Room.business_id == business_id)
-            room = room_query.first()
+            # ✅ Update room status
+            room = db.query(room_models.Room).filter(
+                room_models.Room.room_number == booking.room_number,
+                room_models.Room.business_id == effective_business_id
+            ).first()
 
             if room and room.status != "maintenance":
                 room.status = "available"
@@ -301,51 +341,64 @@ def update_rooms_after_checkout(
 
 
 
-@router.get("/available")
+@router.get("/available", response_model=dict)
 def list_available_rooms(
-    business_id: Optional[int] = Query(None, description="Super admin only: filter by business_id"),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["dashboard", "admin", "super_admin"])
+    )
 ):
+    # =========================
+    # ✅ Resolve tenant context
+    # =========================
+    resolved_business_id = resolve_business_id(current_user, business_id)
+
     today = date.today()
 
-    # ---------------- Determine business ----------------
-    roles = set(current_user.roles)
-    if "super_admin" in roles:
-        # super_admin can optionally filter by query param
-        pass
-    else:
-        # normal admin/other roles always use their own business_id
-        business_id = current_user.business_id
-
-    # ---------------- Step 1: Get rooms not booked as reserved or checked-in ----------------
-    bookings_query = db.query(booking_models.Booking.room_number).filter(
-        booking_models.Booking.status.in_(["reserved", "checked-in"]),
-        booking_models.Booking.arrival_date <= today,
-        booking_models.Booking.departure_date >= today,
+    # =========================
+    # 🚫 Subquery (FORCE tenant filter)
+    # =========================
+    unavailable_subquery = (
+        db.query(booking_models.Booking.room_number)
+        .filter(
+            booking_models.Booking.business_id == resolved_business_id,  # 🔥 FORCE
+            booking_models.Booking.status.in_(["reserved", "checked-in"]),
+            booking_models.Booking.arrival_date <= today,
+            booking_models.Booking.departure_date >= today,
+        )
+        .subquery()
     )
 
-    if business_id:
-        bookings_query = bookings_query.filter(booking_models.Booking.business_id == business_id)
-
-    unavailable_room_numbers = bookings_query.subquery()
-
-    # FIX: Wrap subquery using select()
-    available_rooms_query = db.query(room_models.Room).filter(
-        not_(room_models.Room.room_number.in_(select(unavailable_room_numbers.c.room_number)))
+    # =========================
+    # ✅ Available rooms (FORCE tenant filter)
+    # =========================
+    available_rooms = (
+        db.query(room_models.Room)
+        .filter(
+            room_models.Room.business_id == resolved_business_id,  # 🔥 FORCE
+            not_(
+                room_models.Room.room_number.in_(
+                    select(unavailable_subquery.c.room_number)
+                )
+            )
+        )
+        .all()
     )
 
-    if business_id:
-        available_rooms_query = available_rooms_query.filter(room_models.Room.business_id == business_id)
+    # =========================
+    # 📊 Total rooms (tenant-safe)
+    # =========================
+    total_rooms = (
+        db.query(room_models.Room)
+        .filter(room_models.Room.business_id == resolved_business_id)
+        .count()
+    )
 
-    all_available_rooms = available_rooms_query.all()
-
-    total_rooms_query = db.query(room_models.Room)
-    if business_id:
-        total_rooms_query = total_rooms_query.filter(room_models.Room.business_id == business_id)
-    total_rooms = total_rooms_query.count()
-
-    if not all_available_rooms:
+    if not available_rooms:
         return {
             "message": "We are fully booked! No rooms are available for today.",
             "total_rooms": total_rooms,
@@ -353,11 +406,13 @@ def list_available_rooms(
             "available_rooms": [],
         }
 
-    # ---------------- Step 2: Prepare data for frontend ----------------
+    # =========================
+    # 🧾 Serialize
+    # =========================
     serialized_rooms = []
-    available_count = 0  # Count excludes maintenance rooms
+    available_count = 0
 
-    for room in all_available_rooms:
+    for room in available_rooms:
         serialized_rooms.append({
             "room_number": room.room_number,
             "room_type": room.room_type,
@@ -368,15 +423,20 @@ def list_available_rooms(
         if room.status != "maintenance":
             available_count += 1
 
-    # ---------------- Natural ascending sort ----------------
+    # =========================
+    # 🔢 Natural sort
+    # =========================
     def natural_sort_key(room):
-        return [int(part) if part.isdigit() else part.lower()
-                for part in re.split(r'(\d+)', room["room_number"])]
+        return [
+            int(part) if part.isdigit() else part.lower()
+            for part in re.split(r'(\d+)', room["room_number"])
+        ]
 
     available_sorted = sorted(
         [r for r in serialized_rooms if r["status"] != "maintenance"],
         key=natural_sort_key
     )
+
     maintenance_sorted = sorted(
         [r for r in serialized_rooms if r["status"] == "maintenance"],
         key=natural_sort_key
@@ -392,56 +452,65 @@ def list_available_rooms(
 
 
 
-
 @router.get("/unavailable", response_model=dict)
 def list_unavailable_rooms(
-    business_id: Optional[int] = Query(None, description="Super admin only: filter by business_id"),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["dashboard", "admin", "super_admin"])
+    )
 ):
     """
-    Return rooms that are currently unavailable based on bookings today,
-    but only if the booking has at least one payment or is complimentary.
+    Return rooms that are currently unavailable today,
+    only if the booking has a valid payment or is complimentary.
     """
+    # =========================
+    # ✅ Resolve tenant context
+    # =========================
+    resolved_business_id = resolve_business_id(current_user, business_id)
+
     today = date.today()
 
-    # ---------------- Determine business ----------------
-    roles = set(current_user.roles)
-    if "super_admin" in roles:
-        # super_admin can optionally filter by query param
-        pass
-    else:
-        # normal admin/other roles always use their own business_id
-        business_id = current_user.business_id
-
-    # ---------------- Subquery to check for valid payments ----------------
-    has_payment = db.query(payment_models.Payment).filter(
+    # =========================
+    # 🔥 EXISTS (FORCE tenant safety)
+    # =========================
+    has_payment = exists().where(
         payment_models.Payment.booking_id == booking_models.Booking.id,
-        payment_models.Payment.void_date.is_(None)
-    ).exists()
-
-    # ---------------- Query active bookings with payment or complimentary ----------------
-    bookings_query = db.query(booking_models.Booking).filter(
-        booking_models.Booking.arrival_date <= today,
-        booking_models.Booking.departure_date >= today,
-        booking_models.Booking.status.in_(["checked-in", "complimentary", "reserved"]),
-        or_(
-            has_payment,
-            booking_models.Booking.payment_status == "complimentary"
-        )
+        payment_models.Payment.void_date.is_(None),
+        payment_models.Payment.business_id == resolved_business_id  # 🔥 IMPORTANT
     )
 
-    if business_id:
-        bookings_query = bookings_query.filter(booking_models.Booking.business_id == business_id)
+    # =========================
+    # ✅ BOOKINGS QUERY (FORCE tenant)
+    # =========================
+    active_bookings = (
+        db.query(booking_models.Booking)
+        .filter(
+            booking_models.Booking.business_id == resolved_business_id,  # 🔥 IMPORTANT
+            booking_models.Booking.arrival_date <= today,
+            booking_models.Booking.departure_date >= today,
+            booking_models.Booking.status.in_(["checked-in", "complimentary", "reserved"]),
+            or_(
+                has_payment,
+                booking_models.Booking.payment_status == "complimentary"
+            )
+        )
+        .all()
+    )
 
-    active_bookings = bookings_query.all()
-
-    # ---------------- Build unavailable rooms ----------------
+    # =========================
+    # 🧾 BUILD RESPONSE
+    # =========================
     unavailable_rooms = []
     total_booking_cost = 0
 
     for booking in active_bookings:
-        number_of_days = (booking.departure_date - booking.arrival_date).days or 1
+        number_of_days = (
+            (booking.departure_date - booking.arrival_date).days or 1
+        )
 
         unavailable_rooms.append({
             "booking_id": booking.id,
@@ -457,15 +526,22 @@ def list_unavailable_rooms(
             "phone_number": booking.phone_number,
             "booking_cost": booking.booking_cost,
             "created_by": booking.created_by,
-            "attachment": f"http://localhost:8000/static/attachments/{booking.attachment}" if booking.attachment else None
+            "attachment": (
+                f"http://localhost:8000/static/attachments/{booking.attachment}"
+                if booking.attachment else None
+            )
         })
 
         total_booking_cost += booking.booking_cost or 0
 
-    # ---------------- Natural sort for room numbers ----------------
+    # =========================
+    # 🔢 Natural sorting
+    # =========================
     def natural_sort_key(room):
-        return [int(text) if text.isdigit() else text.lower()
-                for text in re.split(r'(\d+)', room["room_number"])]
+        return [
+            int(text) if text.isdigit() else text.lower()
+            for text in re.split(r'(\d+)', room["room_number"])
+        ]
 
     unavailable_rooms = sorted(unavailable_rooms, key=natural_sort_key)
 
@@ -478,58 +554,78 @@ def list_unavailable_rooms(
 
 
 
-
 from typing import List, Optional
 from fastapi import Query
 
-@router.put("/faults/update")
+@router.put("/faults/update", response_model=dict)
 def update_faults(
     faults: List[FaultUpdate],
-    business_id: Optional[int] = Query(None, description="Super admin only: filter by business_id"),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["dashboard", "admin", "super_admin"])
+    )
 ):
-    # ---------------- Determine business ----------------
-    roles = set(current_user.roles)
-    if "super_admin" in roles:
-        # super_admin can optionally filter by query param
-        pass
-    else:
-        # normal admin/other roles always use their own business_id
-        business_id = current_user.business_id
+    # =========================
+    # ✅ Resolve tenant context
+    # =========================
+    resolved_business_id = resolve_business_id(current_user, business_id)
 
     affected_rooms = set()
 
+    # =========================
+    # 🔄 Update faults
+    # =========================
     for fault in faults:
-        db_fault_query = db.query(RoomFault).filter(RoomFault.id == fault.id)
-        if business_id:
-            db_fault_query = db_fault_query.filter(RoomFault.business_id == business_id)
-        db_fault = db_fault_query.first()
+        db_fault = (
+            db.query(RoomFault)
+            .filter(RoomFault.id == fault.id)
+            .first()
+        )
 
-        if db_fault:
-            if db_fault.resolved != fault.resolved:
-                db_fault.resolved = fault.resolved
-                db_fault.resolved_at = get_local_time() if fault.resolved else None
-            affected_rooms.add(db_fault.room_number)
+        if not db_fault:
+            continue
 
-    db.commit()
+        # ⚠️ Tenant safety check
+        if db_fault.business_id != resolved_business_id:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Fault {fault.id} does not belong to selected business"
+            )
 
-    # ---------------- Re-check all faults for affected rooms ----------------
+        if db_fault.resolved != fault.resolved:
+            db_fault.resolved = fault.resolved
+            db_fault.resolved_at = now_wat() if fault.resolved else None
+
+        affected_rooms.add(db_fault.room_number)
+
+    db.flush()
+
+    # =========================
+    # 🔄 Re-evaluate room status
+    # =========================
     for room_number in affected_rooms:
-        unresolved_query = db.query(RoomFault).filter(
-            RoomFault.room_number == room_number,
-            RoomFault.resolved == False
+        unresolved = (
+            db.query(RoomFault)
+            .filter(
+                RoomFault.business_id == resolved_business_id,  # 🔥 FORCE
+                RoomFault.room_number == room_number,
+                RoomFault.resolved == False
+            )
+            .first()
         )
-        if business_id:
-            unresolved_query = unresolved_query.filter(RoomFault.business_id == business_id)
-        unresolved = unresolved_query.first()
 
-        room_query = db.query(room_models.Room).filter(
-            room_models.Room.room_number == room_number
+        room = (
+            db.query(room_models.Room)
+            .filter(
+                room_models.Room.business_id == resolved_business_id,  # 🔥 FORCE
+                room_models.Room.room_number == room_number
+            )
+            .first()
         )
-        if business_id:
-            room_query = room_query.filter(room_models.Room.business_id == business_id)
-        room = room_query.first()
 
         if room and not unresolved and room.status == "maintenance":
             room.status = "available"
@@ -540,42 +636,71 @@ def update_faults(
 
 
 
-
 from fastapi import Query
 
-@router.patch("/faults/{fault_id}")
+@router.patch("/faults/{fault_id}", response_model=dict)
 def update_fault_status(
     fault_id: int,
     update: FaultUpdate,
-    business_id: Optional[int] = Query(None, description="Super admin only: filter by business_id"),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["dashboard", "admin", "super_admin"])
+    )
 ):
-    # ---------------- Determine business ----------------
-    roles = set(current_user.roles)
-    if "super_admin" not in roles:
-        business_id = current_user.business_id  # normal admin can only update their business
+    # =========================
+    # ✅ Resolve tenant context
+    # =========================
+    resolved_business_id = resolve_business_id(current_user, business_id)
 
-    # ---------------- Fetch fault ----------------
-    fault_query = db.query(RoomFault).filter(RoomFault.id == fault_id)
-    if business_id:
-        fault_query = fault_query.filter(RoomFault.business_id == business_id)
-    fault = fault_query.first()
+    # =========================
+    # ✅ Normalize roles (safe for list/string)
+    # =========================
+    roles = (
+        [r.strip().lower() for r in current_user.roles.split(",")]
+        if isinstance(current_user.roles, str)
+        else [r.lower() for r in current_user.roles or []]
+    )
+
+    # =========================
+    # ✅ Fetch fault
+    # =========================
+    fault = (
+        db.query(RoomFault)
+        .filter(RoomFault.id == fault_id)
+        .first()
+    )
 
     if not fault:
         raise HTTPException(status_code=404, detail="Fault not found")
 
-    # ---------------- Permission check ----------------
+    # =========================
+    # ⚠️ Tenant safety check
+    # =========================
+    if fault.business_id != resolved_business_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Fault does not belong to selected business"
+        )
+
+    # =========================
+    # ⚠️ Permission check
+    # =========================
     if fault.resolved and not update.resolved:
-        if "admin" not in roles:
+        if "admin" not in roles and "super_admin" not in roles:
             raise HTTPException(
                 status_code=403,
                 detail="Only an admin can mark a resolved fault as unresolved."
             )
 
-    # ---------------- Update fault ----------------
+    # =========================
+    # ✅ Update fault
+    # =========================
     fault.resolved = update.resolved
-    fault.resolved_at = get_local_time() if update.resolved else None
+    fault.resolved_at = now_wat() if update.resolved else None
 
     db.commit()
     db.refresh(fault)
@@ -585,10 +710,15 @@ def update_fault_status(
         "room_number": fault.room_number,
         "description": fault.description,
         "resolved": fault.resolved,
-        "created_at": fault.created_at.strftime('%Y-%m-%d %H:%M') if fault.created_at else None,
-        "resolved_at": fault.resolved_at.strftime('%Y-%m-%d %H:%M') if fault.resolved_at else None
+        "created_at": (
+            fault.created_at.strftime('%Y-%m-%d %H:%M')
+            if fault.created_at else None
+        ),
+        "resolved_at": (
+            fault.resolved_at.strftime('%Y-%m-%d %H:%M')
+            if fault.resolved_at else None
+        )
     }
-
 
 
 
@@ -596,46 +726,69 @@ def update_fault_status(
 @router.get("/{room_number}/faults", response_model=List[RoomFaultOut])
 def get_room_faults(
     room_number: str,
-    business_id: Optional[int] = Query(None, description="Super admin only: filter by business_id"),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["dashboard", "admin", "super_admin"])
+    )
 ):
-    room_number = room_number.lower()
+    # =========================
+    # ✅ Resolve tenant context
+    # =========================
+    resolved_business_id = resolve_business_id(current_user, business_id)
 
-    # ---------------- Determine business ----------------
-    roles = set(current_user.roles)
-    if "super_admin" not in roles:
-        business_id = current_user.business_id  # normal admin can only view their business
+    room_number_clean = room_number.strip().lower()
 
-    # ---------------- Fetch unresolved faults ----------------
-    unresolved_query = db.query(RoomFault).filter(
-        func.lower(RoomFault.room_number) == room_number,
-        RoomFault.resolved == False
-    ).order_by(desc(RoomFault.created_at))
-    if business_id:
-        unresolved_query = unresolved_query.filter(RoomFault.business_id == business_id)
-    unresolved_faults = unresolved_query.all()
+    # =========================
+    # 🚫 Unresolved faults
+    # =========================
+    unresolved_faults = (
+        db.query(RoomFault)
+        .filter(
+            RoomFault.business_id == resolved_business_id,  # 🔥 FORCE
+            func.lower(RoomFault.room_number) == room_number_clean,
+            RoomFault.resolved == False
+        )
+        .order_by(desc(RoomFault.created_at))
+        .all()
+    )
 
-    # ---------------- Fetch resolved faults ----------------
-    resolved_query = db.query(RoomFault).filter(
-        func.lower(RoomFault.room_number) == room_number,
-        RoomFault.resolved == True
-    ).order_by(desc(RoomFault.resolved_at))
-    if business_id:
-        resolved_query = resolved_query.filter(RoomFault.business_id == business_id)
-    resolved_faults = resolved_query.all()
+    # =========================
+    # ✅ Resolved faults
+    # =========================
+    resolved_faults = (
+        db.query(RoomFault)
+        .filter(
+            RoomFault.business_id == resolved_business_id,  # 🔥 FORCE
+            func.lower(RoomFault.room_number) == room_number_clean,
+            RoomFault.resolved == True
+        )
+        .order_by(desc(RoomFault.resolved_at))
+        .all()
+    )
 
     combined_faults = unresolved_faults + resolved_faults
 
-    # ---------------- Serialize ----------------
+    # =========================
+    # 🧾 Serialize
+    # =========================
     return [
         {
             "id": f.id,
             "room_number": f.room_number,
             "description": f.description,
             "resolved": f.resolved,
-            "created_at": f.created_at.strftime('%Y-%m-%d %H:%M') if f.created_at else None,
-            "resolved_at": f.resolved_at.strftime('%Y-%m-%d %H:%M') if f.resolved_at else None
+            "created_at": (
+                f.created_at.strftime('%Y-%m-%d %H:%M')
+                if f.created_at else None
+            ),
+            "resolved_at": (
+                f.resolved_at.strftime('%Y-%m-%d %H:%M')
+                if f.resolved_at else None
+            )
         }
         for f in combined_faults
     ]
@@ -643,81 +796,134 @@ def get_room_faults(
 
 
 
-
-@router.put("/{room_number}/status")
+@router.put("/{room_number}/status", response_model=dict)
 def update_room_status(
     room_number: str,
     status_update: RoomStatusUpdate,
-    business_id: Optional[int] = Query(None, description="Super admin only: filter by business_id"),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["dashboard", "admin"])
+    )
 ):
+    # =========================
+    # ✅ Resolve tenant context
+    # =========================
+    resolved_business_id = resolve_business_id(current_user, business_id)
+
     room_number_clean = room_number.strip().lower()
 
-    # ---------------- Determine business ----------------
-    roles = set(current_user.roles)
-    if "super_admin" not in roles:
-        business_id = current_user.business_id  # normal admin can only update their business
-
-    # ---------------- Fetch room ----------------
-    room_query = db.query(room_models.Room).filter(func.lower(room_models.Room.room_number) == room_number_clean)
-    if business_id:
-        room_query = room_query.filter(room_models.Room.business_id == business_id)
-
-    room = room_query.first()
+    # =========================
+    # ✅ Fetch room (STRICT tenant-safe)
+    # =========================
+    room = (
+        db.query(room_models.Room)
+        .filter(
+            room_models.Room.business_id == resolved_business_id,  # 🔥 FORCE
+            func.lower(room_models.Room.room_number) == room_number_clean
+        )
+        .first()
+    )
 
     if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Room not found for this business"
+        )
 
-    # ---------------- Update status ----------------
+    # =========================
+    # ✅ Update status
+    # =========================
     room.status = status_update.status
-    db.commit()
 
-    return {"message": f"Room {room_number} status updated to {status_update.status}"}
+    db.commit()
+    db.refresh(room)
+
+    return {
+        "message": f"Room {room.room_number} status updated to {status_update.status}"
+    }
+
 
 
 
 from typing import Optional
 from fastapi import Query
 
-@router.put("/{room_number}")
+@router.put("/{room_number}", response_model=dict)
 def update_room(
     room_number: str,
     room_update: room_schemas.RoomUpdateSchema,
-    business_id: Optional[int] = Query(None, description="Super admin only: filter by business_id"),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["dashboard", "admin", "super_admin"])
+    )
 ):
-    room_number_clean = room_number.lower()
+    # =========================
+    # ✅ Resolve tenant context
+    # =========================
+    resolved_business_id = resolve_business_id(current_user, business_id)
 
-    # ---------------- Determine business ----------------
-    roles = set(current_user.roles)
-    if "super_admin" not in roles:
-        business_id = current_user.business_id  # normal admin can only update their business
+    room_number_clean = room_number.strip().lower()
 
-    # ---------------- Fetch room ----------------
-    room_query = db.query(room_models.Room).filter(func.lower(room_models.Room.room_number) == room_number_clean)
-    if business_id:
-        room_query = room_query.filter(room_models.Room.business_id == business_id)
-    room = room_query.first()
+    # =========================
+    # ✅ Fetch room (STRICT tenant-safe)
+    # =========================
+    room = (
+        db.query(room_models.Room)
+        .filter(
+            room_models.Room.business_id == resolved_business_id,
+            func.lower(room_models.Room.room_number) == room_number_clean
+        )
+        .first()
+    )
 
     if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Room not found for this business"
+        )
 
+    # =========================
+    # 🚫 Prevent update if occupied
+    # =========================
     if room.status == "checked-in":
-        raise HTTPException(status_code=400, detail="Room cannot be updated as it is currently checked-in")
+        raise HTTPException(
+            status_code=400,
+            detail="Room cannot be updated while checked-in"
+        )
 
-    # ---------------- Update basic fields ----------------
-    if room_update.room_number and room_update.room_number.lower() != room.room_number.lower():
-        existing_room_query = db.query(room_models.Room).filter(func.lower(room_models.Room.room_number) == room_update.room_number.lower())
-        if business_id:
-            existing_room_query = existing_room_query.filter(room_models.Room.business_id == business_id)
-        existing_room = existing_room_query.first()
-        if existing_room:
-            raise HTTPException(status_code=400, detail="Room with this number already exists")
-        room.room_number = room_update.room_number.lower()
+    # =========================
+    # 🔄 Update basic fields
+    # =========================
+    if room_update.room_number:
+        new_number = room_update.room_number.strip().lower()
 
-    if room_update.room_type:
+        if new_number != room.room_number.lower():
+            existing_room = (
+                db.query(room_models.Room)
+                .filter(
+                    room_models.Room.business_id == resolved_business_id,
+                    func.lower(room_models.Room.room_number) == new_number
+                )
+                .first()
+            )
+
+            if existing_room:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Room with this number already exists"
+                )
+
+            room.room_number = new_number
+
+    if room_update.room_type is not None:
         room.room_type = room_update.room_type
 
     if room_update.amount is not None:
@@ -725,48 +931,82 @@ def update_room(
 
     if room_update.status:
         if room_update.status not in ["available", "maintenance"]:
-            raise HTTPException(status_code=400, detail="Invalid status value")
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid status value"
+            )
         room.status = room_update.status
 
-    # ---------------- Process faults ----------------
+    db.flush()  # ensure room.id is available
+
+    # =========================
+    # 🔧 Process faults (FIXED)
+    # =========================
     if room_update.faults is not None:
         for fault_data in room_update.faults:
-            if fault_data.id is not None:
-                existing_fault_query = db.query(room_models.RoomFault).filter(
-                    room_models.RoomFault.id == fault_data.id,
-                    room_models.RoomFault.room_number == room.room_number
+
+            # =========================
+            # 🔁 UPDATE EXISTING FAULT
+            # =========================
+            if fault_data.id:
+                existing_fault = (
+                    db.query(room_models.RoomFault)
+                    .filter(
+                        room_models.RoomFault.id == fault_data.id,
+                        room_models.RoomFault.business_id == resolved_business_id,
+                        room_models.RoomFault.room_id == room.id
+                    )
+                    .first()
                 )
-                if business_id:
-                    existing_fault_query = existing_fault_query.filter(room_models.RoomFault.business_id == business_id)
-                existing_fault = existing_fault_query.first()
-                if existing_fault:
-                    existing_fault.resolved = fault_data.resolved
-                    existing_fault.description = fault_data.description
+
+                if not existing_fault:
+                    continue
+
+                existing_fault.description = fault_data.description
+                existing_fault.resolved = fault_data.resolved
+
+                existing_fault.resolved_at = (
+                    now_wat() if fault_data.resolved else None
+                )
+
+            # =========================
+            # ➕ CREATE NEW FAULT (FIXED ROOM_ID)
+            # =========================
             else:
                 new_fault = room_models.RoomFault(
+                    room_id=room.id,   # 🔥 FIX: REQUIRED FIELD
                     room_number=room.room_number,
                     description=fault_data.description,
-                    resolved=fault_data.resolved if fault_data.resolved is not None else False,
-                    business_id=business_id
+                    resolved=fault_data.resolved or False,
+                    resolved_at=now_wat() if fault_data.resolved else None,
+                    business_id=resolved_business_id
                 )
                 db.add(new_fault)
 
-    db.commit()
+    db.flush()
 
-    # ---------------- Re-check all faults ----------------
-    unresolved_faults_query = db.query(room_models.RoomFault).filter(
-        room_models.RoomFault.room_number == room.room_number,
-        room_models.RoomFault.resolved == False
+    # =========================
+    # 🔄 Recalculate room status
+    # =========================
+    unresolved_fault = (
+        db.query(room_models.RoomFault)
+        .filter(
+            room_models.RoomFault.business_id == resolved_business_id,
+            room_models.RoomFault.room_id == room.id,
+            room_models.RoomFault.resolved == False
+        )
+        .first()
     )
-    if business_id:
-        unresolved_faults_query = unresolved_faults_query.filter(room_models.RoomFault.business_id == business_id)
-    unresolved_faults = unresolved_faults_query.all()
 
-    if not unresolved_faults:
+    if not unresolved_fault:
         room.status = "available"
 
-    db.commit
+    db.commit()
+    db.refresh(room)
 
+    return {
+        "message": f"Room {room.room_number} updated successfully"
+    }
 
 
 @router.get("/{room_number}")

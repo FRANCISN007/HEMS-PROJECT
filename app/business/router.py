@@ -84,7 +84,7 @@ def list_businesses(
     List businesses with:
     - License active/inactive filter (?active=true/false)
     - Business name search (?name=xyz)
-    - Sorted by newest creation date first
+    - Sorted by ID in ascending order (Business 1, 2, 3...)
     - Real-time expiration_date from latest license
     - owner_username from DB column
     """
@@ -116,8 +116,8 @@ def list_businesses(
             else:
                 query = query.filter(~models.Business.id.in_(subquery))
 
-        # Sort by newest first
-        query = query.order_by(models.Business.created_at.desc())
+        # ✅ SORT BY ID ASCENDING (Business 1 first)
+        query = query.order_by(models.Business.id.asc())
 
         businesses = query.all()
 
@@ -181,9 +181,7 @@ def list_businesses(
         return {
             "total": 1,
             "businesses": [biz_out]
-
         }
-
 
 
 

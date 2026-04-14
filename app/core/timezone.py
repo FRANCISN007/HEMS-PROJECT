@@ -11,5 +11,5 @@ def now_wat() -> datetime:
 def to_wat(dt: datetime) -> datetime:
     """Convert any datetime (naive or timezone-aware) to WAT"""
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
+        dt = dt.replace(tzinfo=timezone.utc)  # ✅ FIXED HERE
     return dt.astimezone(WAT)
