@@ -3,18 +3,19 @@ import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./ListBarSales.css";
 
 import "../restaurant/Receipt.css";
-import { HOTEL_NAME } from "../../config/constants";
 
 const ListBarSales = () => {
   const [sales, setSales] = useState([]);
   const [bars, setBars] = useState([]);
-  const [items, setItems] = useState([]);
   const [editingSale, setEditingSale] = useState(null);
   const [message, setMessage] = useState("");
   const [barId, setBarId] = useState("");
 
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const roles = user.roles || [];
+  
+  // Get business name from the structure your login already returns
+  const businessName = user.business?.name || "HEMS Hotel";
 
   if (!(roles.includes("admin") || roles.includes("bar"))) {
     return (
@@ -49,11 +50,14 @@ const ListBarSales = () => {
   };
 
   const fetchBars = async () => {
-    const res = await axiosWithAuth().get("/bar/bars/simple");
-    setBars(res.data || []);
+    try {
+      const res = await axiosWithAuth().get("/bar/bars/simple");
+      setBars(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch bars:", err);
+    }
   };
 
-  // 🔹 Fetch items based on search term
   const fetchItems = async (searchText) => {
     try {
       const res = await axiosWithAuth().get("/bar/items/simple-search", {
@@ -287,7 +291,6 @@ const ListBarSales = () => {
             <h3 className="modal-title">✏ Edit Sale</h3>
 
             <form onSubmit={handleUpdate}>
-              {/* BAR SELECTION */}
               <div className="form-group">
                 <label>Bar</label>
                 <select
@@ -303,7 +306,6 @@ const ListBarSales = () => {
                 </select>
               </div>
 
-              {/* SALE DATE */}
               <div className="form-group">
                 <label>Sale Date</label>
                 <input
@@ -313,7 +315,6 @@ const ListBarSales = () => {
                 />
               </div>
 
-              {/* SALE ITEMS */}
               {editingSale.items.map((item, idx) => (
                 <div key={idx} className="sale-item-card">
                   <div className="sale-item-header">
@@ -394,9 +395,11 @@ const ListBarSales = () => {
           <div className="modal2" onClick={(e) => e.stopPropagation()}>
             <div ref={printRef} className="receipt-container">
               <div className="receipt-header">
-                <h2>{HOTEL_NAME.toUpperCase()}</h2>
-                <h2>Bar Sale</h2>
-                <p style={{ fontSize: "12px", textAlign: "center" }}>{printTime?.toLocaleString()}</p>
+                <h2>{businessName.toUpperCase()}</h2>
+                <h3>Bar Sale Receipt</h3>
+                <p style={{ fontSize: "12px", textAlign: "center" }}>
+                  {printTime?.toLocaleString()}
+                </p>
                 <hr />
               </div>
 
@@ -427,11 +430,10 @@ const ListBarSales = () => {
 
               <div className="receipt-totals">
                 <p style={{ fontWeight: "bold", fontSize: "16px", display: "flex" }}>
-                  <span>Subtotal</span>
+                  <span>Total Amount</span>
                   <span>₦{printSale.total_amount?.toLocaleString() || 0}</span>
                 </p>
               </div>
-
 
               <hr />
 
@@ -462,7 +464,6 @@ const ListBarSales = () => {
       )}
     </div>
   );
-    
 };
 
 export default ListBarSales;

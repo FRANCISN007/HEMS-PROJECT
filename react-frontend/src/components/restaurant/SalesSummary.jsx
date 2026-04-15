@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
-import { HOTEL_NAME } from "../../config/constants"; // ✅ Import hotel name
 import "./SalesSummary.css";
 
 const SalesSummary = () => {
@@ -18,9 +17,14 @@ const SalesSummary = () => {
 
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
+
   if (Array.isArray(storedUser.roles)) roles = storedUser.roles;
   else if (typeof storedUser.role === "string") roles = [storedUser.role];
+
   roles = roles.map((r) => r.toLowerCase());
+
+  // ✅ Dynamic business name
+  const businessName = storedUser.business?.name || "HEMS Hotel";
 
   if (!(roles.includes("admin") || roles.includes("restaurant"))) {
     return <div className="unauthorized">🚫 Access Denied</div>;
@@ -71,54 +75,45 @@ const SalesSummary = () => {
     fetchSummary();
   }, [locationId, startDate, endDate]);
 
-  // 🖨️ PRINT FUNCTION WITH HOTEL NAME
+  // 🖨️ PRINT FUNCTION WITH BUSINESS NAME (NO TEMPLATE STRING $)
   const handlePrint = () => {
     const printContent = printRef.current.innerHTML;
     const newWindow = window.open("", "", "width=900,height=700");
 
-    newWindow.document.write(`
-      <html>
-        <head>
-          <title>Sales Summary</title>
-          <style>
-            body { font-family: Arial; padding: 10px; font-size: 12px; }
-            h1, h2, h4 { margin: 6px 0; text-align: center; }
+    const html =
+      "<html>" +
+      "<head>" +
+      "<title>Sales Summary</title>" +
+      "<style>" +
+      "body { font-family: Arial; padding: 10px; font-size: 12px; }" +
+      "h1, h2, h4 { margin: 6px 0; text-align: center; }" +
 
-            /* ================= TABLE ================= */
-            table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-            th, td { border: 1px solid #000; padding: 5px; text-align: center; }
-            th { background: #eee; }
+      "table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }" +
+      "th, td { border: 1px solid #000; padding: 5px; text-align: center; }" +
+      "th { background: #eee; }" +
 
-            /* Total row thicker and bold */
-            .grand-total-row { 
-              font-weight: bold; 
-              border-top: 3px solid #000; 
-              background: #f0f0f0; 
-            }
+      ".grand-total-row { font-weight: bold; border-top: 3px solid #000; background: #f0f0f0; }" +
 
-            /* ================= SUMMARY GRID ================= */
-            .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
-            .card { border: 1px solid #000; padding: 6px; text-align: center; }
-            .highlight { background: #eafaf0; border: 1px solid #28a745; }
+      ".summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }" +
+      ".card { border: 1px solid #000; padding: 6px; text-align: center; }" +
+      ".highlight { background: #eafaf0; border: 1px solid #28a745; }" +
 
-            /* ================= BANK ================= */
-            .bank-section { margin-top: 10px; }
-            .bank-line { display: grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; padding: 3px 0; }
-            .bank-name { font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <h1>${HOTEL_NAME}</h1>  <!-- HOTEL NAME -->
-          <h2>📊 Restaurant Sales Summary</h2>
-          ${printContent}
-        </body>
-      </html>
-    `);
+      ".bank-section { margin-top: 10px; }" +
+      ".bank-line { display: grid; grid-template-columns: 120px 1fr 1fr; gap: 10px; padding: 3px 0; }" +
+      ".bank-name { font-weight: bold; }" +
+      "</style>" +
+      "</head>" +
+      "<body>" +
+      "<h1>" + businessName + "</h1>" +
+      "<h2>📊 Restaurant Sales Summary</h2>" +
+      printContent +
+      "</body>" +
+      "</html>";
 
+    newWindow.document.write(html);
     newWindow.document.close();
     newWindow.print();
   };
-
 
   return (
     <div className="sales-summary-page">
@@ -141,7 +136,7 @@ const SalesSummary = () => {
 
       {loading ? <p>Loading...</p> : (
         <div ref={printRef}>
-          {/* ================= ITEMS TABLE ================= */}
+          {/* ITEMS TABLE */}
           <div className="summary-table-container">
             <table className="summary-table">
               <thead>
@@ -169,7 +164,7 @@ const SalesSummary = () => {
             </table>
           </div>
 
-          {/* ================= SUMMARY ================= */}
+          {/* SUMMARY */}
           <div className="summary-grid top-summary">
             <div className="card">
               <span>Sales</span><h3>₦{formatAmount(paymentSummary.total_sales)}</h3>
@@ -194,7 +189,7 @@ const SalesSummary = () => {
             </div>
           </div>
 
-          {/* ================= BANK ================= */}
+          {/* BANK */}
           <div className="bank-section">
             <h4>🏦 Bank Breakdown</h4>
             {paymentSummary.banks &&

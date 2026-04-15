@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
 import { FaFileExcel, FaPrint } from "react-icons/fa";
 import { saveAs } from "file-saver";
-import RestPhoto from "../../assets/images/RestPhoto.png";
+//import RestPhoto from "../../assets/images/RestPhoto.png";
 import ExcelJS from "exceljs";
 import "./RestDashboardPage.css"; // 🆕 restaurant CSS
 
@@ -178,8 +178,8 @@ const RestDashboardPage = () => {
                   style={{
                     position: "relative",
                     minHeight: "100%",
-                    backgroundImage:
-                      location.pathname === "/restaurant" ? `url(${RestPhoto})` : "none",
+                    //backgroundImage:
+                      //location.pathname === "/restaurant" ? `url(${RestPhoto})` : "none",
                     backgroundSize: "cover",
                     backgroundPosition: "center",
                     backgroundRepeat: "no-repeat",

@@ -1,7 +1,6 @@
 // src/components/bar/BarSalesSummary.jsx
 import React, { useEffect, useState, useRef } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
-import { HOTEL_NAME } from "../../config/constants";
 import "./BarSalesSummary.css";
 
 const BarSalesSummary = () => {
@@ -17,6 +16,10 @@ const BarSalesSummary = () => {
   const [itemsSummary, setItemsSummary] = useState({});
   const [paymentSummary, setPaymentSummary] = useState({});
   const [loading, setLoading] = useState(false);
+
+  // Get business name from login response (user.business.name)
+  const user = JSON.parse(localStorage.getItem("user")) || {};
+  const businessName = user.business?.name || "HEMS Hotel";
 
   // ================= FORMAT =================
   const formatAmount = (value) => {
@@ -113,7 +116,7 @@ const BarSalesSummary = () => {
           </style>
         </head>
         <body>
-          <h1>${HOTEL_NAME}</h1>
+          <h1>${businessName}</h1>
           <h2>🍷 Bar Sales Summary</h2>
           ${content}
         </body>

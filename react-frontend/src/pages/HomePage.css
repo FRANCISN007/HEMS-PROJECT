@@ -1,131 +1,270 @@
-/* Font */
+/* ================= FONTS ================= */
 @import url("https://fonts.googleapis.com/css2?family=Audiowide&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&display=swap");
 
-body, html {
+/* ================= BASE ================= */
+html, body {
   height: 100%;
-  overflow-y: hidden; /* This hides vertical scroll */
+  margin: 0;
+  overflow: hidden;
+  background: #0f172a; /* Deep elegant dark blue */
 }
 
-
-
-.home-card {
-  text-align: center;
-  max-width: 600px;
+/* ================= LAYOUT ================= */
+.home-container {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0f172a 0%, #1e2937 100%);
 }
 
-.hems-text {
+/* ================= SHOOTING STARS ================= */
+.stars-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.shooting-star {
+  position: absolute;
+  top: -15px;
+  width: 2px;
+  height: 18px;
+  background: linear-gradient(180deg, #a5f3fc, transparent);
+  opacity: 0.75;
+  border-radius: 50%;
+  animation: fall linear infinite;
+}
+
+@keyframes fall {
+  0% {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  10% { opacity: 0.9; }
+  100% {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+/* ================= FLOATING HEMS LOGO ================= */
+.hems-logo-wrapper {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
   display: flex;
   justify-content: center;
-  gap: 20px;
-  font-size: 4.5rem;
-  font-weight: bold;
-  margin-bottom: 30px;
-  font-family: 'Audiowide', cursive;
+  align-items: center;
 }
 
-.hems-letter {
-  animation: pulseColor 4s infinite;
+.hems-logo {
+  font-family: 'Cinzel Decorative', cursive;
+  font-size: 4.8rem;
+  font-weight: 700;
+  color: #67e8f9;
+  text-shadow: 
+    0 0 20px #22d3ee,
+    0 0 40px #06b6d4;
+  animation: float 4s ease-in-out infinite, rotateSlow 25s linear infinite;
+  z-index: 2;
+  letter-spacing: 8px;
 }
 
-.hems-letter:nth-child(1) {
-  animation-delay: 0s;
-}
-.hems-letter:nth-child(2) {
-  animation-delay: 1s;
-}
-.hems-letter:nth-child(3) {
-  animation-delay: 2s;
-}
-.hems-letter:nth-child(4) {
-  animation-delay: 3s;
+.hems-logo-glow {
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  background: radial-gradient(circle, rgba(103, 232, 249, 0.25), transparent 70%);
+  border-radius: 50%;
+  animation: pulseGlow 3s ease-in-out infinite;
+  z-index: 1;
 }
 
-@keyframes pulseColor {
-  0%, 100% { color: #61dafb; }
-  25% { color: #ffffff; }
-  50% { color: #21a1f1; }
-  75% { color: #abb2bf; }
+@keyframes float {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+  50% { transform: translate(-50%, -50%) translateY(-18px); }
 }
 
+@keyframes rotateSlow {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
 
+@keyframes pulseGlow {
+  0%, 100% { transform: scale(0.85); opacity: 0.4; }
+  50% { transform: scale(1.15); opacity: 0.7; }
+}
 
+/* ================= HOTEL NAME BANNER ================= */
 .hotel-name-banner {
   font-family: 'Cinzel Decorative', cursive;
-  font-size: 2rem;
-  margin-top: 20px;
-  color: #d6b9b9;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+  font-size: 2.1rem;
+  margin-top: 25px;
+  color: #cbd5e1;
+  text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.8);
+  z-index: 3;
 }
 
+/* ================= HOME CARD ================= */
 .home-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 15px;
+  gap: 20px;
+  text-align: center;
+  max-width: 620px;
+  z-index: 3;
+  padding: 0 20px;
 }
 
-
-
-
-.heading-line1 {
-  font-size: 1.8rem;
-  color: #23c72b;
-  margin: 0;
+/* ================= HEMS TEXT (Animated Letters) ================= */
+.hems-text {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  font-size: 4.8rem;
+  font-weight: bold;
+  font-family: 'Audiowide', cursive;
+  margin: 10px 0 15px;
 }
 
-.heading-line2 {
-  font-size: 1.4rem;
-  color: #00f521;
-  margin: 0;
+.hems-letter {
+  animation: pulseColor 4.5s infinite ease-in-out;
+  color: #67e8f9;
 }
 
-.home-footer {
-  position: fixed;
-  bottom: 10px;
-  right: 20px;
-  color: #0e0f0f;
-  font-size: 0.9rem;
-  text-align: right;
-  font-style: italic;
+.hems-letter:nth-child(1) { animation-delay: 0s; }
+.hems-letter:nth-child(2) { animation-delay: 0.8s; }
+.hems-letter:nth-child(3) { animation-delay: 1.6s; }
+.hems-letter:nth-child(4) { animation-delay: 2.4s; }
+
+@keyframes pulseColor {
+  0%, 100% { color: #67e8f9; text-shadow: 0 0 15px #22d3ee; }
+  50% { color: #f0f9ff; text-shadow: 0 0 25px #67e8f9; }
 }
 
-/* Remove spinner-related styles if they exist */
-.spinner-container, .spinner-ring {
-  display: none;
+/* ================= WELCOME TEXT ================= */
+.welcome-text {
+  text-align: center;
+  margin: 15px 0 25px;
+  color: #e2e8f0;
+  animation: fadeInUp 1.8s ease;
 }
 
+.welcome-text h1 {
+  font-size: 2.1rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  font-family: "Cinzel Decorative", serif;
+  color: #a5f3fc;
+  letter-spacing: 1.5px;
+}
 
+.welcome-text p {
+  font-size: 1.15rem;
+  line-height: 1.8;
+  color: #94a3b8;
+  max-width: 480px;
+  margin: 0 auto;
+  font-family: "Audiowide", sans-serif;
+}
+
+/* ================= PROCEED BUTTON ================= */
 .proceed-button {
-  position: fixed;             /* take it out of normal flow */
-  top: 50%;                    /* vertical center */
-  right: 20px;                 /* stick to right edge */
-  transform: translateY(-50%); /* adjust for vertical centering */
-  padding: 14px 32px;
+  padding: 15px 38px;
   font-size: 18px;
   font-weight: bold;
   color: white;
-  background-color: rgba(0, 123, 255, 0.85);
+  background: linear-gradient(135deg, #22d3ee, #06b6d4);
   border: none;
-  border-radius: 8px;
+  border-radius: 50px;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 25px rgba(34, 211, 238, 0.4);
   z-index: 1000;
 }
 
 .proceed-button:hover {
-  background-color: rgb(98, 149, 204);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px rgba(34, 211, 238, 0.6);
+  background: linear-gradient(135deg, #67e8f9, #22d3ee);
 }
 
-/* 📱 Responsive for phones */
+/* ================= FOOTER ================= */
+.home-footer {
+  position: fixed;
+  bottom: 15px;
+  right: 20px;
+  color: #64748b;
+  font-size: 0.85rem;
+  font-style: italic;
+  text-align: right;
+  z-index: 3;
+}
+
+/* ================= RESPONSIVE (Mobile) ================= */
 @media (max-width: 768px) {
+  .hems-text {
+    font-size: 3.4rem;
+    gap: 16px;
+  }
+
+  .hems-logo {
+    font-size: 3.6rem;
+  }
+
+  .welcome-text h1 {
+    font-size: 1.75rem;
+  }
+
+  .welcome-text p {
+    font-size: 1.05rem;
+  }
+
   .proceed-button {
-    top: auto;                  /* remove vertical centering */
-    bottom: 20px;               /* move to bottom */
-    right: 50%;                 /* align center horizontally */
-    transform: translateX(50%); /* perfectly center */
-    width: 80%;                 /* wider for touch devices */
-    max-width: 300px;
-    font-size: 16px;            /* slightly smaller font */
-    padding: 12px 20px;
+    position: fixed;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 85%;
+    max-width: 320px;
+    padding: 14px 24px;
+    font-size: 16.5px;
+    border-radius: 50px;
+  }
+
+  .home-footer {
+    position: relative;
+    margin-bottom: 90px;
+    text-align: center;
+    right: auto;
+    font-size: 0.8rem;
+  }
+
+  .hotel-name-banner {
+    font-size: 1.7rem;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

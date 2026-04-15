@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./ListRestaurantPayment.css";
-import { HOTEL_NAME } from "../../config/constants";
+//import { HOTEL_NAME } from "../../config/constants";
 
 const ListRestaurantPayment = () => {
   const [payments, setPayments] = useState([]);
@@ -33,6 +33,10 @@ const ListRestaurantPayment = () => {
       </div>
     );
   }
+
+  // ✅ Get business name dynamically (same as sales)
+  const businessName = storedUser.business?.name || "HEMS Hotel";
+
 
   const getToday = () => {
     const today = new Date();
@@ -181,7 +185,7 @@ const ListRestaurantPayment = () => {
           </style>
         </head>
         <body>
-          <h2>${HOTEL_NAME.toUpperCase()}</h2>
+          <h2>${businessName.toUpperCase()}</h2>
           <h2>Restaurant Payment Receipt</h2>
           <hr/>
           <p><strong>Sale ID:</strong> ${sale.id}</p>
@@ -206,6 +210,7 @@ const ListRestaurantPayment = () => {
     receiptWindow.document.close();
     receiptWindow.print();
   };
+
 
   if (loading) return <p>Loading payments...</p>;
   if (error) return <p>{error}</p>;

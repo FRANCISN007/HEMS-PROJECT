@@ -170,6 +170,10 @@ def login(
         "id": user.id,
         "username": user.username,
         "roles": roles,
+        
+        # Added this single line for easy frontend access
+        "business_name": business.name if business else None,
+
         "business": {
             "id": business.id if business else None,
             "name": business.name if business else None,
@@ -185,8 +189,6 @@ def login(
         "access_token": access_token,
         "token_type": "bearer",
     }
-
-
 
 
 # List users with tenant isolation

@@ -1,8 +1,8 @@
+// src/components/restaurant/ListRestaurantSales.jsx
 import React, { useEffect, useState, useRef } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./ListRestaurantSales.css";
 import "./Receipt.css"; // ✅ Receipt styles
-import { HOTEL_NAME } from "../../config/constants";
 
 const ListRestaurantSales = () => {
   const printRef = useRef(); // Reference for receipt content
@@ -38,21 +38,23 @@ const ListRestaurantSales = () => {
 
   roles = roles.map((r) => r.toLowerCase());
 
+  // Get business name from login response (this fixes the business name issue)
+  const businessName = storedUser.business?.name || "HEMS Hotel";
 
   if (!(roles.includes("admin") || roles.includes("restaurant"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to list restaurant sales.</p>
-    </div>
-  );
-}
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to list restaurant sales.</p>
+      </div>
+    );
+  }
 
-  // ✅ Format numbers with commas (12,000 instead of 12000)
+  // ✅ Format numbers with commas
   const formatAmount = (value) => {
     if (value === null || value === undefined || value === "") return "0";
-    const num = Number(value); // Ensure it's converted to a number
-    if (isNaN(num)) return "0"; // Prevent NaN
+    const num = Number(value);
+    if (isNaN(num)) return "0";
     return new Intl.NumberFormat("en-NG", {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
@@ -60,22 +62,22 @@ const ListRestaurantSales = () => {
   };
 
   // ✅ Fetch sales from backend
-const fetchSalesWithDates = async (from, to) => {
-  setLoading(true);
-  try {
-    const params = {};
-    if (locationId) params.location_id = locationId;
-    if (from) params.start_date = from;
-    if (to) params.end_date = to;
+  const fetchSalesWithDates = async (from, to) => {
+    setLoading(true);
+    try {
+      const params = {};
+      if (locationId) params.location_id = locationId;
+      if (from) params.start_date = from;
+      if (to) params.end_date = to;
 
-    const res = await axiosWithAuth().get("/restaurant/sales", { params });
+      const res = await axiosWithAuth().get("/restaurant/sales", { params });
 
       // normalize sales & summary
       const normalizedSales = (res.data.sales || []).map((sale) => ({
         ...sale,
         total_amount: Number(sale.total_amount) || 0,
-        amount_paid: Number(sale.amount_paid) || 0,   // ✅ use backend value
-        balance: Number(sale.balance) || 0,           // ✅ use backend value
+        amount_paid: Number(sale.amount_paid) || 0,
+        balance: Number(sale.balance) || 0,
         items: (sale.items || []).map((item) => ({
           ...item,
           total_price: Number(item.total_price) || 0,
@@ -150,15 +152,13 @@ const fetchSalesWithDates = async (from, to) => {
         <head>
           <title>Sale Receipt #${selectedSale.id}</title>
           <style>
-          @page {
-            margin: 0; /* ✅ remove printer default margins */
-          }
+          @page { margin: 0; }
 
           body {
             font-family: monospace, Arial, sans-serif;
             margin: 10;
-            padding: 2px 4px; /* ✅ reduced left/right padding */
-            width: 76mm; /* ✅ slightly less than 80mm for safety */
+            padding: 2px 4px;
+            width: 76mm;
           }
 
           h2 {
@@ -169,7 +169,7 @@ const fetchSalesWithDates = async (from, to) => {
 
           p {
             margin: 1px 0;
-            font-size: 11px; /* ✅ slightly smaller */
+            font-size: 11px;
           }
 
           hr {
@@ -200,10 +200,9 @@ const fetchSalesWithDates = async (from, to) => {
             font-size: 10px;
           }
         </style>
-
         </head>
         <body>
-          <h2>${HOTEL_NAME}</h2>
+          <h2>${businessName}</h2>
           <p style="text-align:center;">Restaurant Sale Receipt</p>
           <p style="text-align:center;">${new Date(selectedSale.created_at).toLocaleString()}</p>
           <hr />
@@ -357,7 +356,7 @@ const fetchSalesWithDates = async (from, to) => {
           <div className="print-modal" onClick={(e) => e.stopPropagation()}>
             <div ref={printRef} className="receipt-container">
               <div className="receipt-header">
-                <h2>{HOTEL_NAME}</h2>
+                <h2>{businessName}</h2>
                 <p>Restaurant Sales & Payment</p>
                 <p>{new Date(selectedSale.created_at).toLocaleString()}</p>
                 <hr />

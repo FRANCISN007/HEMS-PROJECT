@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
 import { FaFileExcel, FaPrint } from "react-icons/fa";
-import StorePhoto from "../../assets/images/StorePhoto.png";
+//import StorePhoto from "../../assets/images/StorePhoto.png";
 import { saveAs } from "file-saver";
 import ExcelJS from "exceljs";
 import "./StoreDashboardPage.css";
@@ -226,8 +226,8 @@ const StoreDashboardPage = () => {
           style={{
             position: "relative",
             minHeight: "100%",
-            backgroundImage:
-              location.pathname === "/store" ? `url(${StorePhoto})` : "none",
+            //backgroundImage:
+              //location.pathname === "/store" ? `url(${StorePhoto})` : "none",
             backgroundSize: "cover",
             backgroundPosition: "center",
             backgroundRepeat: "no-repeat",

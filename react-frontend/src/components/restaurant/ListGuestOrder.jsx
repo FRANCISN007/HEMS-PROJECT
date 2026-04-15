@@ -3,7 +3,6 @@ import React, { useEffect, useState, useRef } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./ListGuestOrder.css";
 import "./Receipt.css"; // Reuse receipt styles
-import { HOTEL_NAME } from "../../config/constants";
 
 // Currency formatter for NGN
 const currencyNGN = (value) =>
@@ -42,7 +41,7 @@ const ListGuestOrder = () => {
   const [printTime, setPrintTime] = useState(null);
   const printRef = useRef();
 
-  // Role-based access
+  // Role-based access + Business Name
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
   if (Array.isArray(storedUser.roles)) {
@@ -51,6 +50,9 @@ const ListGuestOrder = () => {
     roles = [storedUser.role];
   }
   roles = roles.map((r) => r.toLowerCase());
+
+  // Get business name from the login response
+  const businessName = storedUser.business?.name || "HEMS Hotel";
 
   if (!(roles.includes("admin") || roles.includes("restaurant"))) {
     return (
@@ -187,7 +189,6 @@ const ListGuestOrder = () => {
         item_name: i.item_name,
         quantity: Number(i.quantity),
         price_per_unit: Number(i.price_per_unit ?? 0),
-
       })),
       newMealId: "",
       newQty: "",
@@ -216,7 +217,6 @@ const ListGuestOrder = () => {
     if (!meal) return alert("Selected meal not found.");
     const qty = Number(formData.newQty) || 1;
     const unitPrice = Number(meal.selling_price || 0);
-
 
     setFormData({
       ...formData,
@@ -414,13 +414,13 @@ const ListGuestOrder = () => {
         </tbody>
       </table>
 
-      {/* Print Modal */}
+      {/* Print Modal - Using business name */}
       {printOrder && (
         <div className="modal-overlay" onClick={closePrintModal}>
           <div className="print-modal" onClick={(e) => e.stopPropagation()}>
             <div ref={printRef} className="receipt-container">
               <div className="receipt-header">
-                <h2>{HOTEL_NAME.toUpperCase()}</h2>
+                <h2>{businessName.toUpperCase()}</h2>
                 <h2>Kitchen Order</h2>
                 <p>{printTime?.toLocaleString()}</p>
                 <hr />
@@ -477,7 +477,7 @@ const ListGuestOrder = () => {
                     {/* ✅ TOTAL DISPLAY */}
                     <div className="receipt-total">
                       <strong>Total:</strong>
-                       <strong><span>{currencyNGN(orderTotal)} </span>  </strong>
+                      <strong><span>{currencyNGN(orderTotal)} </span></strong>
                     </div>
 
                     <hr />
@@ -501,7 +501,6 @@ const ListGuestOrder = () => {
           </div>
         </div>
       )}
-
 
       {/* Edit Modal */}
       {editingOrder && (
@@ -599,7 +598,6 @@ const ListGuestOrder = () => {
                   {meals.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name} ({currencyNGN(m.selling_price)})
-
                     </option>
                   ))}
                 </select>
@@ -635,7 +633,6 @@ const ListGuestOrder = () => {
                   {formData.items.length > 0 ? (
                     formData.items.map((item, idx) => {
                       const unit = Number(item.price_per_unit || 0);
-
                       const qty = Number(item.quantity || 0);
 
                       return (
