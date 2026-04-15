@@ -1,5 +1,7 @@
 // src/components/rooms/AvailableRooms.jsx
 import React, { useEffect, useState } from "react";
+import axiosWithAuth from "../../utils/axiosWithAuth";
+
 import "./AvailableRooms.css";
 
 
@@ -20,8 +22,9 @@ const AvailableRooms = ({ onClose }) => {
 
   const fetchAvailableRooms = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/rooms/available`);
-      const data = await res.json();
+      const res = await axiosWithAuth().get("/rooms/available");
+      const data = res.data;
+
       setAvailableRooms(data.available_rooms || []);
       setTotalAvailable(data.total_available_rooms || 0);
       setInfo(`${data.message} (${data.total_available_rooms})`);
@@ -32,6 +35,7 @@ const AvailableRooms = ({ onClose }) => {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="available-modal-overlay">

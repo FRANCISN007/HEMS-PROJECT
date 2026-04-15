@@ -1,18 +1,23 @@
 import React, { useState, useEffect } from "react";
 import "./UpdateForm.css";
-
 import getBaseUrl from "../../api/config";
+
 const API_BASE_URL = getBaseUrl();
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return "";
+  return dateStr.split("T")[0]; // handle ISO datetime
+};
 
 const UpdateForm = ({ booking, onClose }) => {
-  const [formData, setFormData] = useState({ ...booking });
+  const today = new Date().toISOString().split("T")[0];
+
+  const [formData, setFormData] = useState({});
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [rooms, setRooms] = useState([]);
 
-
+  // ✅ Role check
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = [];
 
@@ -24,49 +29,51 @@ const UpdateForm = ({ booking, onClose }) => {
 
   roles = roles.map((r) => r.toLowerCase());
 
-
   if (!(roles.includes("admin") || roles.includes("dashboard"))) {
-  return (
-    <div className="unauthorized">
-      <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to update bookings.</p>
-    </div>
-  );
-}
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to update bookings.</p>
+      </div>
+    );
+  }
 
-  // ✅ Initialize formData when booking changes
+  // ✅ Initialize form
   useEffect(() => {
     if (booking) {
       setFormData({
         ...booking,
-        mode_of_identification: booking.mode_of_identification?.trim() || "",
-        room_number: booking.room_number || "", // ✅ ADD THIS
+        arrival_date: formatDate(booking.arrival_date),
+        departure_date: formatDate(booking.departure_date),
+        booking_date: formatDate(booking.booking_date) || today,
+        vehicle_no: booking.vehicle_no || "",
       });
     }
   }, [booking]);
 
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/rooms/`)
-      .then(res => res.json())
-      .then(data => setRooms(data))
-      .catch(err => console.error(err));
-  }, []);
-
-  // ✅ Handle normal input
+  // ✅ Handle input
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+
+    setFormData((prev) => {
+      let updated = { ...prev, [name]: value };
+
+      // 🔥 Smart auto handling
+      if (name === "booking_type") {
+        if (value === "checked-in" || value === "complimentary") {
+          updated.arrival_date = updated.booking_date || today;
+        }
+      }
+
+      return updated;
+    });
   };
 
-  // ✅ Handle file change
   const handleFileChange = (e) => {
     setAttachmentFile(e.target.files[0]);
   };
 
-  // ✅ Submit update form
+  // ✅ Submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -74,59 +81,50 @@ const UpdateForm = ({ booking, onClose }) => {
 
     try {
       const token = localStorage.getItem("token");
-      if (!token) {
-        setMessage("You are not logged in. Please login first.");
-        setLoading(false);
-        return;
-      }
+      if (!token) throw new Error("Login required");
 
       const form = new FormData();
 
-      // ✅ Append all fields except id & attachment
-      for (const key in formData) {
-        if (key !== "id" && key !== "attachment" && formData[key] !== null) {
-          form.append(key, formData[key]);
+      // ✅ Append all fields
+      Object.entries(formData).forEach(([key, value]) => {
+        if (key !== "id" && key !== "attachment" && value !== null) {
+          form.append(key, value);
         }
-      }
+      });
 
-      // ✅ Send booking_id instead of id
+      // ✅ REQUIRED: booking_id
       form.append("booking_id", formData.id);
 
-      // ✅ Attachment handling
+      // ✅ FIXED attachment key
       if (attachmentFile) {
-        form.append("attachment_file", attachmentFile); // 🔑 same as in create
+        form.append("attachment", attachmentFile);
       } else if (formData.attachment) {
         form.append("attachment_str", formData.attachment);
       }
 
-      // ✅ Call backend (PUT)
       const response = await fetch(`${API_BASE_URL}/bookings/update/`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("token")}`,
-        // do not set Content-Type (FormData handles it)
-      },
-      body: form,
-    });
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: form,
+      });
 
-    if (!response.ok) {
-      // read as text, don’t try JSON
-      const errText = await response.text();
-      console.error("❌ Backend error:", errText);
-      throw new Error(errText);
-    }
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(errText);
+      }
 
-    // ✅ only parse JSON if ok
-    const result = await response.json();
+      const result = await response.json();
 
-    setMessage("✅ Booking updated successfully.");
-    setTimeout(() => {
-      onClose(result.updated_booking);
-    }, 1200);
+      setMessage("✅ Booking updated successfully.");
 
+      setTimeout(() => {
+        onClose(result.updated_booking);
+      }, 1000);
     } catch (err) {
-      console.error("❌ Update error:", err);
-      setMessage(err.message || "❌ Failed to update booking.");
+      console.error(err);
+      setMessage(err.message || "❌ Update failed");
     } finally {
       setLoading(false);
     }
@@ -135,9 +133,11 @@ const UpdateForm = ({ booking, onClose }) => {
   return (
     <div className="supdate-forms-overlay">
       <div className="supdate-form-container">
-        <h2>✏️ Update Guest Booking</h2>
+        <h2>✏️ Update Booking</h2>
 
         <form onSubmit={handleSubmit} className="sforms-grid">
+
+          {/* Guest */}
           <div className="sform-row" style={{ gridColumn: "1 / -1" }}>
             <label>Guest Name</label>
             <input
@@ -147,6 +147,7 @@ const UpdateForm = ({ booking, onClose }) => {
             />
           </div>
 
+          {/* Room */}
           <div className="sform-row">
             <label>Room Number</label>
             <input
@@ -157,7 +158,19 @@ const UpdateForm = ({ booking, onClose }) => {
             />
           </div>
 
+          {/* Booking Date ✅ NEW */}
+          <div className="sform-row">
+            <label>Booking Date</label>
+            <input
+              type="date"
+              name="booking_date"
+              value={formData.booking_date || ""}
+              onChange={handleChange}
+              max={today}
+            />
+          </div>
 
+          {/* Dates */}
           <div className="sform-row">
             <label>Arrival Date</label>
             <input
@@ -167,6 +180,7 @@ const UpdateForm = ({ booking, onClose }) => {
               onChange={handleChange}
             />
           </div>
+
           <div className="sform-row">
             <label>Departure Date</label>
             <input
@@ -177,29 +191,7 @@ const UpdateForm = ({ booking, onClose }) => {
             />
           </div>
 
-          <div className="sform-row">
-            <label>Gender</label>
-            <select
-              name="gender"
-              value={formData.gender || ""}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
-          </div>
-
-          <div className="sform-row">
-            <label>Phone Number</label>
-            <input
-              name="phone_number"
-              value={formData.phone_number || ""}
-              onChange={handleChange}
-            />
-          </div>
-
+          {/* Booking Type */}
           <div className="sform-row">
             <label>Booking Type</label>
             <select
@@ -214,13 +206,23 @@ const UpdateForm = ({ booking, onClose }) => {
             </select>
           </div>
 
+          {/* Contact */}
+          <div className="sform-row">
+            <label>Phone</label>
+            <input
+              name="phone_number"
+              value={formData.phone_number || ""}
+              onChange={handleChange}
+            />
+          </div>
+
+          {/* ID */}
           <div className="sform-row">
             <label>Mode of ID</label>
             <select
               name="mode_of_identification"
-              value={formData.mode_of_identification?.trim() || ""}
+              value={formData.mode_of_identification || ""}
               onChange={handleChange}
-              required
             >
               <option value="">Select</option>
               <option value="National Id Card">National ID Card</option>
@@ -240,6 +242,7 @@ const UpdateForm = ({ booking, onClose }) => {
             />
           </div>
 
+          {/* Address */}
           <div className="sform-row">
             <label>Address</label>
             <input
@@ -249,6 +252,7 @@ const UpdateForm = ({ booking, onClose }) => {
             />
           </div>
 
+          {/* Vehicle */}
           <div className="sform-row">
             <label>Vehicle No</label>
             <input
@@ -258,61 +262,33 @@ const UpdateForm = ({ booking, onClose }) => {
             />
           </div>
 
-          <div className="sform-row">
-            <label>Status</label>
-            <select
-              name="status"
-              value={formData.status || ""}
-              onChange={handleChange}
-            >
-              <option value="">Select</option>
-              <option value="reservation">Reservation</option>
-              <option value="checked-in">Checked In</option>
-              <option value="checked-out">Checked Out</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-
           {/* Attachment */}
-          <div
-            className="sform-row attachment-preview-row"
-            style={{ gridColumn: "1 / span 2" }}
-          >
-            <label>Current Attachment Preview</label>
-            {formData.attachment ? (
+          <div className="sform-row" style={{ gridColumn: "1 / -1" }}>
+            <label>Attachment</label>
+
+            {formData.attachment && (
               <img
                 src={`${API_BASE_URL}/files/attachments/${formData.attachment.split("/").pop()}`}
-                alt="Attachment Preview"
-                style={{
-                  maxWidth: "180px",
-                  maxHeight: "140px",
-                  marginBottom: "8px",
-                  borderRadius: "6px",
-                }}
+                alt="preview"
+                style={{ maxWidth: "150px", marginBottom: "10px" }}
               />
-            ) : (
-              <p>No attachment available</p>
             )}
+
             <input type="file" onChange={handleFileChange} />
           </div>
 
+          {/* Buttons */}
           <div className="sform-actions">
             <button type="submit" disabled={loading} className="update-btn">
               {loading ? "Updating..." : "Update"}
             </button>
+
             <button type="button" onClick={onClose} className="cancel-btn">
               Cancel
             </button>
           </div>
 
-          {message && (
-            <p
-              className="supdate-message"
-              style={{ gridColumn: "1 / span 2", marginTop: "8px" }}
-            >
-              {message}
-            </p>
-          )}
+          {message && <p className="supdate-message">{message}</p>}
         </form>
       </div>
     </div>
