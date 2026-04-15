@@ -8,6 +8,10 @@ import ExcelJS from "exceljs";
 import "./BarDashboardPage.css";
 
 const BarDashboardPage = () => {
+
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  const businessName = storedUser.business?.name || "HEMS Hotel";
+
   const navigate = useNavigate();
   const location = useLocation();
   const [hovered, setHovered] = useState("");
@@ -18,6 +22,9 @@ const BarDashboardPage = () => {
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Bar Data");
+
+
+
 
     const headers = Array.from(table.querySelectorAll("thead th")).map((th) =>
       th.innerText.trim()
@@ -187,20 +194,17 @@ const BarDashboardPage = () => {
           </div>
         </header>
 
-        <section
-          className="content-area"
-          style={{
-            position: "relative",
-            minHeight: "100%",
-            //backgroundImage:
-              //location.pathname === "/bar" ? `url(${BarPhoto})` : "none",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            backgroundRepeat: "no-repeat",
-          }}
-        >
+        <section className="content-area">
+        <div className="background-overlay">
+          <h1 className="watermark">{businessName}</h1>
+        </div>
+
+        <div className="content-inner">
           <Outlet />
-        </section>
+        </div>
+      </section>
+
+
 
 
       </main>

@@ -242,3 +242,121 @@
   color: white !important;
   border-color: darkblue !important;
 }
+
+
+/* =========================
+   BACKGROUND OVERLAY
+========================= */
+
+.background-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+/* DARK GRADIENT BASE */
+.background-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    rgba(224, 217, 217, 0.6),
+    rgba(20, 20, 20, 0.8)
+  );
+}
+
+/* ANIMATED LIGHT GLOW */
+.background-overlay::after {
+  content: "";
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(
+    circle,
+    rgba(231, 222, 222, 0.932) 0%,
+    transparent 60%
+  );
+  animation: moveGlow 20s linear infinite;
+}
+
+/* WATERMARK TEXT */
+.watermark {
+  position: fixed;
+  top: 50%;
+  left: 17%;
+  transform: translate(-50%, -50%);
+  font-size: 80px;
+  font-weight: bold;
+  color: rgba(0, 0, 0, 0.699);
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ANIMATION */
+@keyframes moveGlow {
+  0% {
+    transform: translate(-25%, -25%);
+  }
+  50% {
+    transform: translate(25%, 25%);
+  }
+  100% {
+    transform: translate(-25%, -25%);
+  }
+}
+
+/* ENSURE CONTENT IS ABOVE */
+.content-area > * {
+  position: relative;
+  z-index: 1;
+}
+
+
+.content-area {
+  position: relative;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+/* 🔥 Background layer */
+.background-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none; /* ✅ allows clicks to pass through */
+  z-index: 0;
+}
+
+/* 🔥 Watermark text */
+.watermark {
+  font-size: 80px;
+  font-weight: 800;
+  color: rgba(56, 56, 65, 0.24); /* VERY faint */
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  white-space: nowrap;
+
+  /* 🔥 soft glow effect */
+  text-shadow: 0 0 40px rgba(207, 198, 198, 0.08);
+
+  /* 🔥 animation */
+  animation: floatWatermark 10s ease-in-out infinite;
+}
+
+/* 🔥 animation */
+@keyframes floatWatermark {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-15px); }
+  100% { transform: translateY(0px); }
+}
+
+/* 🔥 actual content sits above */
+.content-inner {
+  position: relative;
+  z-index: 1;
+}

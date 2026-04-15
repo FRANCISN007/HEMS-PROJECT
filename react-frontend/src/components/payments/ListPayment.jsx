@@ -24,6 +24,9 @@ const ListPayment = () => {
   const [showPopup, setShowPopup] = useState(false);
   const [bankFilter, setBankFilter] = useState("");
 
+  
+
+
   // ---------------- ROLE VALIDATION ---------------- //
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = Array.isArray(storedUser.roles)
@@ -40,6 +43,9 @@ const ListPayment = () => {
       </div>
     );
   }
+
+  // ✅ Get business name dynamically
+  const businessName = storedUser.business?.name || "HEMS Hotel";
 
   // ---------------- UTIL ---------------- //
   const fetchWithToken = async (url) => {
@@ -256,6 +262,71 @@ const fetchByStatus = async () => {
     setSelectedPayment(null);
   };
 
+  const handlePrint = (payment) => {
+    const receiptWindow = window.open("", "_blank");
+
+    receiptWindow.document.write(`
+      <html>
+        <head>
+          <title>Payment Receipt</title>
+          <style>
+            body {
+              font-family: monospace, Arial, sans-serif;
+              padding: 5px;
+              margin: 0;
+              width: 80mm;
+            }
+            h2 {
+              text-align: center;
+              font-size: 14px;
+              margin: 5px 0;
+            }
+            p {
+              margin: 2px 0;
+              font-size: 12px;
+            }
+            hr {
+              border: 1px dashed #000;
+              margin: 6px 0;
+            }
+          </style>
+        </head>
+        <body>
+          <h2>${businessName.toUpperCase()}</h2>
+          <h2>Payment Receipt</h2>
+          <hr/>
+
+          <p><strong>Payment ID:</strong> ${payment.payment_id}</p>
+          <p><strong>Booking ID:</strong> ${payment.booking_id}</p>
+          <p><strong>Guest Name:</strong> ${payment.guest_name}</p>
+          <p><strong>Room:</strong> ${payment.room_number}</p>
+
+          <hr/>
+
+          <p><strong>Booking Cost:</strong> ₦${(payment.booking_cost || 0).toLocaleString()}</p>
+          <p><strong>Amount Paid:</strong> ₦${(payment.amount_paid || 0).toLocaleString()}</p>
+          <p><strong>Discount:</strong> ₦${(payment.discount_allowed || 0).toLocaleString()}</p>
+          <p><strong>Balance:</strong> ₦${(payment.balance_due || 0).toLocaleString()}</p>
+
+          <hr/>
+
+          <p><strong>Payment Method:</strong> ${payment.payment_method}</p>
+          <p><strong>Bank:</strong> ${payment.bank_name || "N/A"}</p>
+          <p><strong>Status:</strong> ${payment.status}</p>
+          <p><strong>Date:</strong> ${new Date(payment.payment_date).toLocaleString()}</p>
+
+          <hr/>
+          <p style="text-align:center;">Thank you!</p>
+        </body>
+      </html>
+    `);
+
+    receiptWindow.document.close();
+    receiptWindow.print();
+  };
+
+
+
   // ---------------- RENDER ---------------- //
   return (
     <div className="list-payment-container">
@@ -396,9 +467,13 @@ const fetchByStatus = async () => {
             </div>
 
             <div className="popup-buttons">
-              <button className="print-btn" onClick={() => window.print()}>
+              <button
+                className="print-btn"
+                onClick={() => handlePrint(selectedPayment)}
+              >
                 🖨 Print to PDF
               </button>
+
               <button className="close-popup-btn" onClick={closePopup}>
                 Close
               </button>

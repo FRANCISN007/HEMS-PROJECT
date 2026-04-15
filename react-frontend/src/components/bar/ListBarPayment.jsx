@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./ListBarPayment.css";
-import { HOTEL_NAME } from "../../config/constants";
+
 
 const ListBarPayment = () => {
   const [payments, setPayments] = useState([]);
@@ -21,6 +21,10 @@ const ListBarPayment = () => {
       </div>
     );
   }
+
+  // ✅ Dynamic business name (same pattern as restaurant)
+  const businessName = user.business?.name || "HEMS Hotel";
+
 
   const today = new Date().toISOString().split("T")[0];
   const [startDate, setStartDate] = useState(today);
@@ -196,6 +200,7 @@ const ListBarPayment = () => {
     const salePayments = payments.filter(
       (p) => p.bar_sale_id === payment.bar_sale_id
     );
+
     const totalPaid = salePayments
       .filter((p) => p.status?.toLowerCase() !== "voided payment")
       .reduce((sum, p) => sum + (p.amount_paid || 0), 0);
@@ -204,56 +209,83 @@ const ListBarPayment = () => {
     const netBalance = saleAmount - totalPaid;
 
     const receiptWindow = window.open("", "_blank");
+
     receiptWindow.document.write(`
       <html>
         <head>
           <title>Bar Payment Receipt</title>
           <style>
-            body { font-family: monospace, Arial; width: 80mm; }
-            h2 { text-align: center; font-size: 14px; margin: 5px 0; }
-            p { margin: 2px 0; font-size: 12px; }
-            hr { border: 1px dashed #000; margin: 6px 0; }
-            .void { color: red; font-weight: bold; }
+            body {
+              font-family: monospace, Arial;
+              width: 80mm;
+              padding: 5px;
+              margin: 0;
+            }
+            h2 {
+              text-align: center;
+              font-size: 14px;
+              margin: 5px 0;
+            }
+            p {
+              margin: 2px 0;
+              font-size: 12px;
+            }
+            hr {
+              border: 1px dashed #000;
+              margin: 6px 0;
+            }
+            .void {
+              color: red;
+              font-weight: bold;
+            }
           </style>
         </head>
         <body>
-          <h2>${HOTEL_NAME.toUpperCase()}</h2>
+
+          <h2>${businessName.toUpperCase()}</h2>
           <h2>Bar Payment Receipt</h2>
+
           <hr/>
-          <p><strong>Pay ID:</strong> ${payment.id}</p>
+
+          <p><strong>Payment ID:</strong> ${payment.id}</p>
           <p><strong>Sale ID:</strong> ${payment.bar_sale_id}</p>
-          <p><strong>Sale Amount:</strong> ₦${Number(
-            saleAmount
-          ).toLocaleString()}</p>
-          <p><strong>Current Paid:</strong> ₦${Number(
-            payment.amount_paid
-          ).toLocaleString()}</p>
-          <p><strong>Total Paid So Far:</strong> ₦${Number(
-            totalPaid
-          ).toLocaleString()}</p>
-          <p><strong>Net Balance:</strong> ₦${Number(
-            netBalance
-          ).toLocaleString()}</p>
+
+          <hr/>
+
+          <p><strong>Sale Amount:</strong> ₦${Number(saleAmount).toLocaleString()}</p>
+          <p><strong>Current Payment:</strong> ₦${Number(payment.amount_paid).toLocaleString()}</p>
+          <p><strong>Total Paid:</strong> ₦${Number(totalPaid).toLocaleString()}</p>
+          <p><strong>Balance:</strong> ₦${Number(netBalance).toLocaleString()}</p>
+
+          <hr/>
+
           <p><strong>Method:</strong> ${payment.payment_method}</p>
+          <p><strong>Bank:</strong> ${payment.bank || "N/A"}</p>
           <p><strong>Note:</strong> ${payment.note || "-"}</p>
+
           <p><strong>Status:</strong> ${
             payment.status?.toLowerCase() === "voided payment"
               ? '<span class="void">VOIDED</span>'
               : payment.status
           }</p>
+
           <p><strong>Date:</strong> ${
             payment.date_paid
               ? new Date(payment.date_paid).toLocaleString()
               : "-"
           }</p>
+
           <hr/>
-          <p style="text-align:center;">✅ Thank you!</p>
+          <p style="text-align:center;">Thank you!</p>
+
         </body>
       </html>
     `);
+
     receiptWindow.document.close();
     receiptWindow.print();
   };
+
 
   return (
     <div className="list-bar-payment-container">

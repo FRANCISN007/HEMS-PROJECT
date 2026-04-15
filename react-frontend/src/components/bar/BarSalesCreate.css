@@ -81,10 +81,11 @@
 }
 
 .add-btn,
+.preview-btn,
 .remove-btn,
 .submit-btn {
-  padding: 6px 12px;
-  margin-top: 8px;
+  padding: 6px 8px;
+  margin-top: 4px;
   border-radius: 6px;
   border: none;
   font-size: 13px;
@@ -137,4 +138,14 @@
 
 .suggestions-list li:hover {
   background: #f0f0f0;
+}
+
+
+.preview-btn {
+  background: #9e9c9c;
+  color: #fff;
+}
+
+.preview-btn:hover {
+  background: #363636;
 }

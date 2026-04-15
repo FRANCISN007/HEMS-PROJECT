@@ -11,9 +11,14 @@ const BarSalesCreate = () => {
   ]);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
+  
 
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const roles = user.roles || [];
+
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  const businessName = storedUser.business?.name || "HEMS Hotel";
+
 
   const axios = axiosWithAuth();
   const fetchTimeout = useRef(null);
@@ -160,6 +165,75 @@ const BarSalesCreate = () => {
     }
   };
 
+  const handlePreviewPrint = () => {
+    const validItems = saleItems.filter(
+      (r) => r.item_name && r.quantity > 0 && r.selling_price > 0
+    );
+
+    if (!validItems.length) {
+      return showMessage("⚠ Add at least one item to preview.", "warning");
+    }
+
+    const selectedBarName =
+      bars.find((b) => String(b.id) === String(barId))?.name || "N/A";
+
+    const receiptWindow = window.open("", "_blank");
+
+    receiptWindow.document.write(`
+      <html>
+        <head>
+          <title>Bar Sales Preview</title>
+          <style>
+            body { font-family: monospace; width: 80mm; }
+            h2 { text-align: center; font-size: 14px; margin: 5px 0; }
+            p { margin: 2px 0; font-size: 12px; }
+            table { width: 100%; font-size: 12px; }
+            td { padding: 2px 0; }
+            hr { border: 1px dashed #000; margin: 6px 0; }
+            .right { text-align: right; }
+          </style>
+        </head>
+        <body>
+
+          <h2>${businessName.toUpperCase()}</h2>
+          <h2>Bar Sales Preview</h2>
+
+          <hr/>
+
+          <p><strong>Bar:</strong> ${selectedBarName}</p>
+          <p><strong>Date:</strong> ${new Date(saleDate).toLocaleString()}</p>
+
+          <hr/>
+
+          <table>
+            ${validItems
+              .map(
+                (item) => `
+                  <tr>
+                    <td>${item.item_name} x${item.quantity}</td>
+                    <td class="right">₦${Number(item.total).toLocaleString()}</td>
+                  </tr>
+                `
+              )
+              .join("")}
+          </table>
+
+          <hr/>
+
+          <p><strong>Total:</strong> ₦${totalAmount.toLocaleString()}</p>
+
+          <hr/>
+          <p style="text-align:center;">Preview Only (Not Saved)</p>
+
+        </body>
+      </html>
+    `);
+
+    receiptWindow.document.close();
+    receiptWindow.print();
+  };
+
+
   // ===============================
   // Render
   // ===============================
@@ -265,10 +339,20 @@ const BarSalesCreate = () => {
           <button type="button" className="add-btn" onClick={handleAddRow}>
             ➕ Add Item
           </button>
+
+          <button
+            type="button"
+            className="preview-btn"
+            onClick={handlePreviewPrint}
+          >
+            👁 Preview / Print
+          </button>
+
           <button type="submit" className="submit-btn">
             💾 Save Sale
           </button>
         </div>
+
       </form>
     </div>
   );
