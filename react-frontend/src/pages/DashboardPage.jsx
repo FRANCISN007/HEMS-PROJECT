@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Outlet, useLocation } from "react-router-dom";
+import { createPortal } from "react-dom";
 import axios from "axios";
 import HotelPhoto3 from "../assets/images/HotelPhoto3.png";
 import "./DashboardPage.css";
@@ -7,334 +8,321 @@ import { FaHotel } from "react-icons/fa";
 import getBaseUrl from "../api/config";
 import axiosWithAuth from "../utils/axiosWithAuth";
 
-
-
-
-
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import ExcelJS from "exceljs";
 import { FaFileExcel, FaPrint } from "react-icons/fa";
 
-
 const API_BASE_URL = getBaseUrl();
 
-
 const DashboardPage = () => {
-
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   const businessName = storedUser.business?.name || "HEMS Hotel";
-
-  
-
 
   const navigate = useNavigate();
   const location = useLocation();
 
-const exportToExcel = async () => {
-  const table = document.querySelector(".content-area table");
-  if (!table) return alert("No table found to export.");
+  // 🔥 PORTAL SUBMENU STATE (Same as Restaurant Dashboard)
+  const [submenu, setSubmenu] = useState({
+    items: [],
+    position: null,
+    visible: false,
+  });
 
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("DashboardData");
+  const exportToExcel = async () => {
+    const table = document.querySelector(".content-area table");
+    if (!table) return alert("No table found to export.");
 
-  // ✅ Determine title by pathname
-  const path = window.location.pathname;
-  let title = "Dashboard Data";
-  if (path.includes("bookings")) title = "Guest Booking Details";
-  else if (path.includes("payments")) title = "Payment Report";
-  else if (path.includes("debtor")) title = "Debtor Report";
-  else if (path.includes("events")) title = "Event Report";
-  else if (path.includes("daily")) title = "Daily Payment Summary";
-  else if (path.includes("eventpayment")) title = "Event Payment Report";
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("DashboardData");
 
-  const headers = Array.from(table.querySelectorAll("thead th")).map((th) =>
-    th.innerText.trim()
-  );
-  const colCount = headers.length;
+    // ✅ Determine title by pathname
+    const path = window.location.pathname;
+    let title = "Dashboard Data";
+    if (path.includes("bookings")) title = "Guest Booking Details";
+    else if (path.includes("payments")) title = "Payment Report";
+    else if (path.includes("debtor")) title = "Debtor Report";
+    else if (path.includes("events")) title = "Event Report";
+    else if (path.includes("daily")) title = "Daily Payment Summary";
+    else if (path.includes("eventpayment")) title = "Event Payment Report";
 
-  // ✅ Title
-  sheet.mergeCells(1, 1, 1, colCount);
-  const titleCell = sheet.getCell("A1");
-  titleCell.value = title;
-  titleCell.font = { size: 14, bold: true };
-  titleCell.alignment = { vertical: "middle", horizontal: "center" };
-
-  // ✅ Table headers
-  sheet.addRow(headers).font = { bold: true };
-
-  // ✅ Table rows
-  const rows = Array.from(table.querySelectorAll("tbody tr")).map((tr) =>
-    Array.from(tr.querySelectorAll("td")).map((td) => td.innerText.trim())
-  );
-  rows.forEach((row) => sheet.addRow(row));
-
-  // ✅ Blank row
-  sheet.addRow([]);
-
-  // === 🔽 Summary Sections ===
-
-  // 1. Booking Summary
-  const bookingSummary = document.querySelector(".booking-summary");
-  if (bookingSummary) {
-    const lines = Array.from(bookingSummary.querySelectorAll("p")).map((p) =>
-      p.innerText.trim()
+    const headers = Array.from(table.querySelectorAll("thead th")).map((th) =>
+      th.innerText.trim()
     );
-    if (lines.length) {
-      sheet.addRow(["Booking Summary"]).font = { bold: true, italic: true };
-      lines.forEach((line) => sheet.addRow([line]));
+    const colCount = headers.length;
+
+    // ✅ Title
+    sheet.mergeCells(1, 1, 1, colCount);
+    const titleCell = sheet.getCell("A1");
+    titleCell.value = title;
+    titleCell.font = { size: 14, bold: true };
+    titleCell.alignment = { vertical: "middle", horizontal: "center" };
+
+    // ✅ Table headers
+    sheet.addRow(headers).font = { bold: true };
+
+    // ✅ Table rows
+    const rows = Array.from(table.querySelectorAll("tbody tr")).map((tr) =>
+      Array.from(tr.querySelectorAll("td")).map((td) => td.innerText.trim())
+    );
+    rows.forEach((row) => sheet.addRow(row));
+
+    // ✅ Blank row
+    sheet.addRow([]);
+
+    // === 🔽 Summary Sections ===
+
+    // 1. Booking Summary
+    const bookingSummary = document.querySelector(".booking-summary");
+    if (bookingSummary) {
+      const lines = Array.from(bookingSummary.querySelectorAll("p")).map((p) =>
+        p.innerText.trim()
+      );
+      if (lines.length) {
+        sheet.addRow(["Booking Summary"]).font = { bold: true, italic: true };
+        lines.forEach((line) => sheet.addRow([line]));
+        sheet.addRow([]);
+      }
+    }
+
+    // 2. Payment Summary
+    const allSummary = document.querySelector(".all-summary-wrapper");
+    if (allSummary) {
+      sheet.addRow(["Payment Summary"]).font = { bold: true, italic: true };
+      const rows = allSummary.querySelectorAll(".summary-row");
+      rows.forEach((rowEl) => {
+        const left = rowEl.querySelector(".summary-left");
+        const right = rowEl.querySelector(".summary-right");
+
+        const leftText = left ? left.innerText.trim() : "";
+        const rightText = right ? right.innerText.trim() : "";
+
+        if (leftText && rightText) {
+          sheet.addRow([leftText, rightText]);
+        } else if (leftText) {
+          sheet.addRow([leftText]);
+        }
+      });
       sheet.addRow([]);
     }
-  }
 
-  // 2. Payment Summary
-  const allSummary = document.querySelector(".all-summary-wrapper");
-  if (allSummary) {
-    sheet.addRow(["Payment Summary"]).font = { bold: true, italic: true };
-    const rows = allSummary.querySelectorAll(".summary-row");
-    rows.forEach((rowEl) => {
-      const left = rowEl.querySelector(".summary-left");
-      const right = rowEl.querySelector(".summary-right");
+    // 3. Debtor Summary
+    const debtorSummary = document.querySelector(".debtor-summary-wrapper");
+    if (debtorSummary) {
+      sheet.addRow(["Debtor Summary"]).font = { bold: true, italic: true };
+      const rows = debtorSummary.querySelectorAll(".summary-row");
+      rows.forEach((rowEl) => {
+        const left = rowEl.querySelector(".summary-left");
+        const text = left ? left.innerText.trim() : "";
+        if (text) sheet.addRow([text]);
+      });
+      sheet.addRow([]);
+    }
 
-      const leftText = left ? left.innerText.trim() : "";
-      const rightText = right ? right.innerText.trim() : "";
+    // 4. Daily Payment Summary
+    const dailySummary = document.querySelector(".payment-method-summary");
+    if (dailySummary) {
+      sheet.addRow(["Daily Payment Breakdown"]).font = { bold: true, italic: true };
+      const listItems = dailySummary.querySelectorAll("ul li");
+      listItems.forEach((li) => {
+        sheet.addRow([li.innerText.trim()]);
+      });
+      sheet.addRow([]);
+    }
 
-      if (leftText && rightText) {
-        sheet.addRow([leftText, rightText]);
-      } else if (leftText) {
-        sheet.addRow([leftText]);
-      }
-    });
-    sheet.addRow([]);
-  }
+    // 5. Status Summary
+    const statusSummary = document.querySelector(".status-summary-wrapper");
+    if (statusSummary) {
+      sheet.addRow(["Status Summary"]).font = { bold: true, italic: true };
+      const lines = Array.from(statusSummary.querySelectorAll("p")).map((p) =>
+        p.innerText.trim()
+      );
+      lines.forEach((line) => {
+        sheet.addRow([line]);
+      });
+      sheet.addRow([]);
+    }
 
-  // 3. Debtor Summary
-  const debtorSummary = document.querySelector(".debtor-summary-wrapper");
-  if (debtorSummary) {
-    sheet.addRow(["Debtor Summary"]).font = { bold: true, italic: true };
-    const rows = debtorSummary.querySelectorAll(".summary-row");
-    rows.forEach((rowEl) => {
-      const left = rowEl.querySelector(".summary-left");
-      const text = left ? left.innerText.trim() : "";
-      if (text) sheet.addRow([text]);
-    });
-    sheet.addRow([]);
-  }
+    // 6. Event Summary
+    const eventSummary = document.querySelector(".event-summary-wrapper");
+    if (eventSummary) {
+      sheet.addRow(["Event Summary"]).font = { bold: true, italic: true };
 
-  // 4. Daily Payment Summary
-  const dailySummary = document.querySelector(".payment-method-summary");
-  if (dailySummary) {
-    sheet.addRow(["Daily Payment Breakdown"]).font = { bold: true, italic: true };
-    const listItems = dailySummary.querySelectorAll("ul li");
-    listItems.forEach((li) => {
-      sheet.addRow([li.innerText.trim()]);
-    });
-    sheet.addRow([]);
-  }
+      const lines = Array.from(eventSummary.querySelectorAll("div")).map((div) =>
+        div.innerText.trim()
+      );
 
-  // 5. Status Summary
-  const statusSummary = document.querySelector(".status-summary-wrapper");
-  if (statusSummary) {
-    sheet.addRow(["Status Summary"]).font = { bold: true, italic: true };
-    const lines = Array.from(statusSummary.querySelectorAll("p")).map((p) =>
-      p.innerText.trim()
-    );
-    lines.forEach((line) => {
-      sheet.addRow([line]);
-    });
-    sheet.addRow([]);
-  }
+      lines.forEach((line) => {
+        sheet.addRow([line]);
+      });
 
-  // 6. Event Summary
-  const eventSummary = document.querySelector(".event-summary-wrapper");
-  if (eventSummary) {
-    sheet.addRow(["Event Summary"]).font = { bold: true, italic: true };
+      sheet.addRow([]);
+    }
 
-    const lines = Array.from(eventSummary.querySelectorAll("div")).map((div) =>
-      div.innerText.trim()
-    );
+    // 7. Event Payment Breakdown
+    const eventPaymentBreakdown = document.querySelector(".all-summary-wrappers");
+    if (eventPaymentBreakdown) {
+      sheet.addRow(["Event Payment Breakdown"]).font = { bold: true, italic: true };
+      const rows = eventPaymentBreakdown.querySelectorAll(".summary-rows");
+      rows.forEach((rowEl) => {
+        const left = rowEl.querySelector(".summary-lefts");
+        const right = rowEl.querySelector(".summary-rights");
 
-    lines.forEach((line) => {
-      sheet.addRow([line]);
-    });
+        const leftText = left ? left.innerText.trim() : "";
+        const rightText = right ? right.innerText.trim() : "";
 
-    sheet.addRow([]);
-  }
+        if (leftText && rightText) {
+          sheet.addRow([leftText, rightText]);
+        } else if (leftText) {
+          sheet.addRow([leftText]);
+        }
+      });
+      sheet.addRow([]);
+    }
 
-  // 7. ✅ Event Payment Breakdown
-  const eventPaymentBreakdown = document.querySelector(".all-summary-wrappers");
-  if (eventPaymentBreakdown) {
-    sheet.addRow(["Event Payment Breakdown"]).font = { bold: true, italic: true };
-    const rows = eventPaymentBreakdown.querySelectorAll(".summary-rows");
-    rows.forEach((rowEl) => {
-      const left = rowEl.querySelector(".summary-lefts");
-      const right = rowEl.querySelector(".summary-rights");
+    // 8. Event Payment Summary (Outstanding Events + Balance)
+    const eventOutstandingSummary = document.querySelector(".event-payment-summary");
+    if (eventOutstandingSummary) {
+      sheet.addRow(["Outstanding Event Summary"]).font = { bold: true, italic: true };
 
-      const leftText = left ? left.innerText.trim() : "";
-      const rightText = right ? right.innerText.trim() : "";
+      const lines = Array.from(
+        eventOutstandingSummary.querySelectorAll(".summary-line")
+      ).map((el) => el.innerText.trim());
 
-      if (leftText && rightText) {
-        sheet.addRow([leftText, rightText]);
-      } else if (leftText) {
-        sheet.addRow([leftText]);
-      }
-    });
-    sheet.addRow([]);
-  }
+      lines.forEach((line) => {
+        sheet.addRow([line]);
+      });
 
-  // 8. ✅ Event Payment Summary (Outstanding Events + Balance)
-  const eventOutstandingSummary = document.querySelector(".event-payment-summary");
-  if (eventOutstandingSummary) {
-    sheet.addRow(["Outstanding Event Summary"]).font = { bold: true, italic: true };
+      sheet.addRow([]);
+    }
 
-    const lines = Array.from(
-      eventOutstandingSummary.querySelectorAll(".summary-line")
-    ).map((el) => el.innerText.trim());
-
-    lines.forEach((line) => {
-      sheet.addRow([line]);
+    // ✅ Style all cells
+    sheet.eachRow((row) => {
+      row.eachCell((cell) => {
+        cell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
+        cell.alignment = { vertical: "middle", horizontal: "left" };
+      });
     });
 
-    sheet.addRow([]);
-  }
-
-  // ✅ Style all cells
-  sheet.eachRow((row) => {
-    row.eachCell((cell) => {
-      cell.border = {
-        top: { style: "thin" },
-        left: { style: "thin" },
-        bottom: { style: "thin" },
-        right: { style: "thin" },
-      };
-      cell.alignment = { vertical: "middle", horizontal: "left" };
+    // ✅ Auto column width
+    sheet.columns.forEach((col) => {
+      let maxLength = 10;
+      col.eachCell({ includeEmpty: true }, (cell) => {
+        const val = cell.value ? cell.value.toString() : "";
+        maxLength = Math.max(maxLength, val.length);
+      });
+      col.width = maxLength + 2;
     });
-  });
 
-  // ✅ Auto column width
-  sheet.columns.forEach((col) => {
-    let maxLength = 10;
-    col.eachCell({ includeEmpty: true }, (cell) => {
-      const val = cell.value ? cell.value.toString() : "";
-      maxLength = Math.max(maxLength, val.length);
+    // ✅ Download file
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    col.width = maxLength + 2;
-  });
+    saveAs(blob, `${title.replace(/\s+/g, "_").toLowerCase()}.xlsx`);
+  };
 
-  // ✅ Download file
-  const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  saveAs(blob, `${title.replace(/\s+/g, "_").toLowerCase()}.xlsx`);
-};
+  const printContent = () => {
+    const content = document.querySelector(".content-area");
+    if (!content) return;
 
-
-const printContent = () => {
-  const content = document.querySelector(".content-area");
-  if (!content) return;
-
-  const printWindow = window.open("", "_blank");
-  printWindow.document.write("<html><head><title>Print</title></head><body>");
-  printWindow.document.write(content.innerHTML);
-  printWindow.document.write("</body></html>");
-  printWindow.document.close();
-  printWindow.print();
-};
+    const printWindow = window.open("", "_blank");
+    printWindow.document.write("<html><head><title>Print</title></head><body>");
+    printWindow.document.write(content.innerHTML);
+    printWindow.document.write("</body></html>");
+    printWindow.document.close();
+    printWindow.print();
+  };
 
   const userRole = "admin";
 
   const [hasReservationAlert, setHasReservationAlert] = useState(false);
-  const [isBookingsHovered, setBookingsHovered] = useState(false);
-  const [isPaymentsHovered, setPaymentsHovered] = useState(false);
-  const [isEventsHovered, setEventsHovered] = useState(false);
   const [reservationCount, setReservationCount] = useState(0);
-
   const [licenseInfo, setLicenseInfo] = useState(null);
 
+  // 🔥 PORTAL SUBMENU FUNCTIONS
+  const openSubmenu = (e, item) => {
+    const rect = e.currentTarget.getBoundingClientRect();
 
+    setSubmenu({
+      items: item.submenu || [],
+      visible: true,
+      position: {
+        top: rect.top,
+        left: rect.right + 5,
+      },
+    });
+  };
 
-    useEffect(() => {
-      const token = localStorage.getItem("token");
-      if (!token) return;
+  const closeSubmenu = () => {
+    setSubmenu({ items: [], position: null, visible: false });
+  };
 
-      const userStr = localStorage.getItem("user");
-      const user = userStr ? JSON.parse(userStr) : null;
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
 
-      const getParams = () => {
-        let params = {};
+    const userStr = localStorage.getItem("user");
+    const user = userStr ? JSON.parse(userStr) : null;
 
-        if (user && user.roles?.includes("super_admin")) {
-          if (!user.business_id) {
-            console.warn("❌ Super admin must select a business_id");
-            return null; // stop execution
+    const getParams = () => {
+      let params = {};
+
+      if (user && user.roles?.includes("super_admin")) {
+        if (!user.business_id) {
+          console.warn("❌ Super admin must select a business_id");
+          return null;
+        }
+        params.business_id = user.business_id;
+      }
+
+      return params;
+    };
+
+    const checkAlerts = async () => {
+      try {
+        const params = getParams();
+        if (params === null) return;
+
+        const res = await axios.get(
+          `${API_BASE_URL}/bookings/reservation-alerts`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            params,
           }
-          params.business_id = user.business_id;
-        }
+        );
 
-        return params;
-      };
+        console.log("ALERT RESPONSE:", res.data);
 
-      const checkAlerts = async () => {
-        try {
-          const params = getParams();
-          if (params === null) return;
+        const count = Array.isArray(res.data) ? res.data.length : 0;
+        setReservationCount(count);
+      } catch (err) {
+        console.error("❌ Alert fetch failed:", err.message);
+      }
+    };
 
-          const res = await axios.get(
-            `${API_BASE_URL}/bookings/reservation-alerts`,
-            {
-              headers: { Authorization: `Bearer ${token}` },
-              params,
-            }
-          );
+    const updateRooms = async () => {
+      try {
+        const params = getParams();
+        if (params === null) return;
 
-          console.log("ALERT RESPONSE:", res.data);
-
-          const count = Array.isArray(res.data) ? res.data.length : 0;
-          setReservationCount(count);
-
-        } catch (err) {
-          console.error("❌ Alert fetch failed:", err.message);
-        }
-      };
-
-      const updateRooms = async () => {
-        try {
-          const params = getParams();
-          if (params === null) return;
-
-          await axios.post(
-            `${API_BASE_URL}/rooms/update_status_after_checkout`,
-            {},
-            {
-              headers: { Authorization: `Bearer ${token}` },
-              params,
-            }
-          );
-
-        } catch (err) {
-          console.error("❌ Room update failed:", err.message);
-        }
-      };
-
-      // ✅ Initial run
-      checkAlerts();
-      updateRooms();
-      checkLicense(); // ✅ ADD THIS
-
-      // 🔁 Polling
-      const alertInterval = setInterval(checkAlerts, 5000);   // 15s
-      const updateInterval = setInterval(updateRooms, 20000);  // 1 min
-      const licenseInterval = setInterval(checkLicense, 60000); // every 1 min
-
-      return () => {
-        clearInterval(alertInterval);
-        clearInterval(updateInterval);
-        clearInterval(licenseInterval); // ✅ ADD THIS
-      };
-
-    }, []);
-
+        await axios.post(
+          `${API_BASE_URL}/rooms/update_status_after_checkout`,
+          {},
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            params,
+          }
+        );
+      } catch (err) {
+        console.error("❌ Room update failed:", err.message);
+      }
+    };
 
     const checkLicense = async () => {
       try {
@@ -343,68 +331,25 @@ const printContent = () => {
         setLicenseInfo(res.data);
       } catch (err) {
         console.error("❌ License check failed:", err?.response?.data || err.message);
-        
-
       }
     };
 
+    // Initial run
+    checkAlerts();
+    updateRooms();
+    checkLicense();
 
+    // Polling
+    const alertInterval = setInterval(checkAlerts, 5000);
+    const updateInterval = setInterval(updateRooms, 20000);
+    const licenseInterval = setInterval(checkLicense, 60000);
 
-    useEffect(() => {
-      const init = async () => {
-        await checkLicense();
-      };
-
-      init();
-
-      const licenseInterval = setInterval(() => {
-        checkLicense();
-      }, 60000);
-
-      return () => clearInterval(licenseInterval);
-    }, []);
-
-    
-
-
-  const menu = [
-    { name: "🙎 Users", path: "/dashboard/users", adminOnly: true },
-    { name: "🏨 Rooms", path: "/dashboard/rooms" },
-    { name: "📅 Bookings", path: "/dashboard/bookings" },
-    { name: "💳 Payments", path: "/dashboard/payments" },
-    { name: "🎉 Events", path: "/dashboard/events" },
-    { name: "🍷 Bar & Lounge", path: "/bar" },
-    { name: "🏪 Store & Inventory", path: "/store" },
-    { name: "🍽️ Restaurant", path: "/restaurant" }, // ✅ fixed
-    { name: "🟩 Room Status", path: "/dashboard/rooms/status" }, // ⬅️ add this
-  ];
-
-  const bookingSubmenu = [
-    { label: "➕ Create Booking", path: "/dashboard/bookings/create" },
-    { label: "📝 List Booking", path: "/dashboard/bookings/list" },
-    { label: "✅ Checkout Guest", path: "/dashboard/bookings/checkout" },
-    { label: "❌ Cancel Booking", path: "/dashboard/bookings/cancel" },
-    { label: "📊 Summary Report", path: "/dashboard/bookings/summary" },
-
-  ];
-
-  const paymentSubmenu = [
-    { label: "➕ Create Bank", path: "/dashboard/payments/bankcreate" },
-    { label: "➕ Create Payment", path: "/dashboard/payments/create" },
-    { label: "📝 List Payment", path: "/dashboard/payments/list" },
-    { label: "❌ Void payment", path: "/dashboard/payments/void" },
-  ];
-
-  const eventSubmenu = [
-    { label: "➕ Create Event", path: "/dashboard/events/create" },
-    { label: "📝 List Event", path: "/dashboard/events/list" },
-    { label: "💳 Make Payment", path: "/dashboard/events/payment" },
-    { label: "📄 List Payment", path: "/dashboard/events/payments/list" },
-    { label: "❌ Void Payment", path: "/dashboard/events/payments/void" },
-    
-
-  ];
-
+    return () => {
+      clearInterval(alertInterval);
+      clearInterval(updateInterval);
+      clearInterval(licenseInterval);
+    };
+  }, []);
 
   const handleBackupClick = async () => {
     const confirmBackup = window.confirm("Are you sure you want to back up the database?");
@@ -444,112 +389,79 @@ const printContent = () => {
     }
   };
 
-
-
+  // Updated Menu with submenu support
+  const menu = [
+    { name: "🙎 Users", path: "/dashboard/users", adminOnly: true },
+    { name: "🏨 Rooms", path: "/dashboard/rooms" },
+    { 
+      name: "📅 Bookings", 
+      submenu: [
+        { label: "➕ Create Booking", path: "/dashboard/bookings/create" },
+        { label: "📝 List Booking", path: "/dashboard/bookings/list" },
+        { label: "✅ Checkout Guest", path: "/dashboard/bookings/checkout" },
+        { label: "❌ Cancel Booking", path: "/dashboard/bookings/cancel" },
+        { label: "📊 Summary Report", path: "/dashboard/bookings/summary" },
+      ]
+    },
+    { 
+      name: "💳 Payments", 
+      submenu: [
+        { label: "➕ Create Bank", path: "/dashboard/payments/bankcreate" },
+        { label: "➕ Create Payment", path: "/dashboard/payments/create" },
+        { label: "📝 List Payment", path: "/dashboard/payments/list" },
+        { label: "❌ Void payment", path: "/dashboard/payments/void" },
+      ]
+    },
+    { 
+      name: "🎉 Events", 
+      submenu: [
+        { label: "➕ Create Event", path: "/dashboard/events/create" },
+        { label: "📝 List Event", path: "/dashboard/events/list" },
+        { label: "💳 Make Payment", path: "/dashboard/events/payment" },
+        { label: "📄 List Payment", path: "/dashboard/events/payments/list" },
+        { label: "❌ Void Payment", path: "/dashboard/events/payments/void" },
+      ]
+    },
+    { name: "🍷 Bar & Lounge", path: "/bar" },
+    { name: "🏪 Store & Inventory", path: "/store" },
+    { name: "🍽️ Restaurant", path: "/restaurant" },
+    { name: "🟩 Room Status", path: "/dashboard/rooms/status" },
+  ];
 
   return (
-    <div className="dashboard-container">
+    <div className="dashboard-container" onClick={closeSubmenu}>
+      {/* SIDEBAR */}
       <aside className="sidebar">
         <h2 className="sidebar-title">MENU</h2>
 
         <nav>
           {menu.map((item) => {
-            const isBookings = item.name.includes("Bookings");
-            const isPayments = item.name.includes("Payments");
-            const isEvents = item.name.includes("Events");
+            const hasSubmenu = !!item.submenu;
+            const isAdminOnly = item.adminOnly && userRole !== "admin";
 
-            return (!item.adminOnly || userRole === "admin") ? (
-              <div
-                key={item.path}
-                className="sidebar-item-wrapper"
-                onMouseEnter={() => {
-                  if (isBookings) setBookingsHovered(true);
-                  if (isPayments) setPaymentsHovered(true);
-                  if (isEvents) setEventsHovered(true);
-                }}
-                onMouseLeave={() => {
-                  if (isBookings) setBookingsHovered(false);
-                  if (isPayments) setPaymentsHovered(false);
-                  if (isEvents) setEventsHovered(false);
-                }}
-                style={{ position: "relative" }}
-              >
+            if (isAdminOnly) return null;
+
+            return (
+              <div key={item.name} className="sidebar-item-wrapper">
                 <button
-                  onClick={() => {
-                    navigate(item.path); // let React Router handle it
+                  className="sidebar-button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (hasSubmenu) {
+                      openSubmenu(e, item);
+                    } else {
+                      navigate(item.path);
+                      closeSubmenu();
+                    }
                   }}
-
-
-
-                  className={`sidebar-button ${
-                    isBookings && isBookingsHovered ||
-                    isPayments && isPaymentsHovered ||
-                    isEvents && isEventsHovered
-                      ? "sidebar-button-active"
-                      : ""
-                  }`}
                 >
                   <span style={{ fontSize: "1.3rem", marginRight: "6px" }}>
                     {item.name.slice(0, 2)}
                   </span>
                   {item.name.slice(2).trim()}
                 </button>
-
-                {isBookings && isBookingsHovered && (
-                  <div className="submenu">
-                    {bookingSubmenu.map((sub) => (
-                      <button
-                        key={sub.path}
-                        onClick={() => {
-                          navigate(sub.path);
-                          setBookingsHovered(false);
-                        }}
-                        className="submenu-item"
-                      >
-                        {sub.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {isPayments && isPaymentsHovered && (
-                  <div className="submenu">
-                    {paymentSubmenu.map((sub) => (
-                      <button
-                        key={sub.path}
-                        onClick={() => {
-                          navigate(sub.path);
-                          setPaymentsHovered(false);
-                        }}
-                        className="submenu-item"
-                      >
-                        {sub.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* ✅ Event submenu */}
-                {isEvents && isEventsHovered && (
-                <div className="submenu">
-                  {eventSubmenu.map((sub) => (
-                    <button
-                      key={sub.path}
-                      onClick={() => {
-                        navigate(sub.path);
-                        setEventsHovered(false);
-                      }}
-                      className="submenu-item"
-                    >
-                      {sub.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-
               </div>
-            ) : null;
+            );
           })}
 
           <button
@@ -560,7 +472,6 @@ const printContent = () => {
             💾 Backup Files
           </button>
 
-
           <button
             onClick={() => navigate("/dashboard/reservation-alert")}
             className={`sidebar-button reservation-button ${
@@ -569,22 +480,22 @@ const printContent = () => {
           >
             🔔 Reservation Alert{reservationCount > 0 ? ` (${reservationCount})` : ""}
           </button>
-
-
         </nav>
       </aside>
 
+      {/* Logout Button */}
       <button onClick={() => navigate("/logout")} className="logout-button">
         🚪 Logout
       </button>
 
+      {/* MAIN CONTENT */}
       <main className="main-content">
         <header
           className="header"
           style={{
             display: "flex",
             alignItems: "center",
-            paddingRight: "110px", // ✅ create space from the Logout button
+            paddingRight: "110px",
             gap: "20px",
           }}
         >
@@ -604,8 +515,7 @@ const printContent = () => {
           </div>
         </header>
 
-
-      {/* ✅ LICENSE ALERT BANNER (ONLY SHOW WHEN ≤ 7 DAYS OR EXPIRED) */}
+        {/* LICENSE ALERT BANNER */}
         {licenseInfo &&
           licenseInfo.days_left !== null &&
           licenseInfo.days_left <= 7 && (
@@ -613,9 +523,8 @@ const printContent = () => {
               style={{
                 background:
                   licenseInfo.valid === false || licenseInfo.days_left <= 0
-                    ? "#dc2626" // red (expired)
-                    : "#f59e0b", // yellow (warning 1–7 days)
-
+                    ? "#dc2626"
+                    : "#f59e0b",
                 color: "white",
                 padding: "10px",
                 borderRadius: "8px",
@@ -627,14 +536,11 @@ const printContent = () => {
               {licenseInfo.valid === false || licenseInfo.days_left <= 0
                 ? "❌ License expired"
                 : licenseInfo.message}
-
               <span style={{ marginLeft: "10px" }}>
                 ({licenseInfo.days_left} day(s) left)
               </span>
             </div>
           )}
-
-
 
         <section className="content-area">
           <div className="background-overlay">
@@ -646,6 +552,35 @@ const printContent = () => {
           </div>
         </section>
       </main>
+
+      {/* 🔥 PORTAL SUBMENU */}
+      {submenu.visible &&
+        createPortal(
+          <div
+            className="submenu"
+            style={{
+              position: "fixed",
+              top: submenu.position.top,
+              left: submenu.position.left,
+              zIndex: 999999,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {submenu.items.map((sub) => (
+              <button
+                key={sub.path}
+                className="submenu-item"
+                onClick={() => {
+                  navigate(sub.path);
+                  closeSubmenu();
+                }}
+              >
+                {sub.label}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
