@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.users.permissions import role_required  # 👈 permission helper
+from sqlalchemy import func
 
 from app.database import get_db
 from app.kitchen.models import Kitchen, KitchenInventory, KitchenStock, KitchenMenu, KitchenInventoryAdjustment
@@ -52,31 +53,36 @@ def create_kitchen(
 ):
     try:
         # ------------------------------
-        # 1️⃣ Resolve business (VALIDATION ONLY)
+        # 1️⃣ Resolve tenant
         # ------------------------------
-        business_id = resolve_business_id(current_user, business_id)
+        resolved_business_id = resolve_business_id(current_user, business_id)
+
+        kitchen_name_clean = data.name.strip().lower()
 
         # ------------------------------
-        # 2️⃣ Check duplicate (tenant-safe via ORM filter)
+        # 2️⃣ Tenant-safe duplicate check 🔥
         # ------------------------------
         existing = (
             db.query(kitchen_models.Kitchen)
-            .filter(kitchen_models.Kitchen.name == data.name)
+            .filter(
+                kitchen_models.Kitchen.business_id == resolved_business_id,
+                func.lower(kitchen_models.Kitchen.name) == kitchen_name_clean
+            )
             .first()
         )
 
         if existing:
             raise HTTPException(
                 status_code=400,
-                detail=f"Kitchen '{data.name}' already exists."
+                detail=f"Kitchen '{data.name}' already exists for this business."
             )
 
         # ------------------------------
-        # 3️⃣ Create kitchen (EXPLICIT business_id 🔥)
+        # 3️⃣ Create kitchen
         # ------------------------------
         kitchen = kitchen_models.Kitchen(
-            name=data.name,
-            business_id=business_id
+            name=data.name.strip(),
+            business_id=resolved_business_id
         )
 
         db.add(kitchen)
@@ -111,16 +117,29 @@ def list_kitchens(
         role_required(["store", "admin", "super_admin"])
     )
 ):
-    # ✅ Only resolves tenant (DO NOT use in filter)
-    resolve_business_id(current_user, business_id)
+    try:
+        # ------------------------------
+        # 1️⃣ Resolve tenant
+        # ------------------------------
+        resolved_business_id = resolve_business_id(current_user, business_id)
 
-    kitchens = (
-        db.query(kitchen_models.Kitchen)
-        .order_by(kitchen_models.Kitchen.id.asc())
-        .all()
-    )
+        # ------------------------------
+        # 2️⃣ STRICT tenant filter 🔥
+        # ------------------------------
+        kitchens = (
+            db.query(kitchen_models.Kitchen)
+            .filter(kitchen_models.Kitchen.business_id == resolved_business_id)
+            .order_by(kitchen_models.Kitchen.id.asc())
+            .all()
+        )
 
-    return kitchens
+        return kitchens
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch kitchens: {str(e)}"
+        )
 
 
 # kitchen/router.py

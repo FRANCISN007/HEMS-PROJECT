@@ -1,87 +1,23 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, Outlet, useLocation } from "react-router-dom";
 import { FaFileExcel, FaPrint } from "react-icons/fa";
-//import BarPhoto from "../../assets/images/BarPhoto.png";
-
 import { saveAs } from "file-saver";
 import ExcelJS from "exceljs";
 import "./BarDashboardPage.css";
 
 const BarDashboardPage = () => {
-
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   const businessName = storedUser.business?.name || "HEMS Hotel";
 
   const navigate = useNavigate();
   const location = useLocation();
-  const [hovered, setHovered] = useState("");
 
-  const exportToExcel = async () => {
-    const table = document.querySelector(".content-area table");
-    if (!table) return alert("No table found to export.");
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Bar Data");
-
-
-
-
-    const headers = Array.from(table.querySelectorAll("thead th")).map((th) =>
-      th.innerText.trim()
-    );
-    const colCount = headers.length;
-
-    sheet.mergeCells(1, 1, 1, colCount);
-    const titleCell = sheet.getCell("A1");
-    titleCell.value = "Bar Report";
-    titleCell.font = { size: 14, bold: true };
-    titleCell.alignment = { vertical: "middle", horizontal: "center" };
-
-    sheet.addRow(headers).font = { bold: true };
-
-    const rows = Array.from(table.querySelectorAll("tbody tr")).map((tr) =>
-      Array.from(tr.querySelectorAll("td")).map((td) => td.innerText.trim())
-    );
-    rows.forEach((row) => sheet.addRow(row));
-
-    sheet.eachRow((row) => {
-      row.eachCell((cell) => {
-        cell.border = {
-          top: { style: "thin" },
-          left: { style: "thin" },
-          bottom: { style: "thin" },
-          right: { style: "thin" },
-        };
-        cell.alignment = { vertical: "middle", horizontal: "left" };
-      });
-    });
-
-    sheet.columns.forEach((col) => {
-      let maxLength = 10;
-      col.eachCell({ includeEmpty: true }, (cell) => {
-        const val = cell.value ? cell.value.toString() : "";
-        maxLength = Math.max(maxLength, val.length);
-      });
-      col.width = maxLength + 2;
-    });
-
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    saveAs(blob, `bar_report.xlsx`);
-  };
-
-  const printContent = () => {
-    const content = document.querySelector(".content-area");
-    if (!content) return;
-    const printWindow = window.open("", "_blank");
-    printWindow.document.write("<html><head><title>Print</title></head><body>");
-    printWindow.document.write(content.innerHTML);
-    printWindow.document.write("</body></html>");
-    printWindow.document.close();
-    printWindow.print();
-  };
+  const [submenu, setSubmenu] = useState({
+    items: [],
+    position: null,
+    visible: false,
+  });
 
   const barMenu = [
     { name: "🍾 Bar Outlet", path: "/bar/list" },
@@ -90,7 +26,7 @@ const BarDashboardPage = () => {
       submenu: [
         { label: "➕ Create Sales", path: "/bar/sales/create" },
         { label: "📃 List Sales", path: "/bar/sales/list" },
-        { label: "📃 Sales Summary", path: "/bar/sales/SalesSummary" },
+        { label: "📊 Sales Summary", path: "/bar/sales/SalesSummary" },
       ],
     },
     {
@@ -111,103 +47,159 @@ const BarDashboardPage = () => {
     { name: "🏪 Store Issues", path: "/bar/store-issues" },
   ];
 
+  const openSubmenu = (e, item) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+
+    setSubmenu({
+      items: item.submenu || [],
+      visible: true,
+      position: {
+        top: rect.top,
+        left: rect.right + 5,
+      },
+    });
+  };
+
+  const closeSubmenu = () => {
+    setSubmenu({ items: [], position: null, visible: false });
+  };
+
+  const exportToExcel = async () => {
+    const table = document.querySelector(".content-area table");
+    if (!table) return alert("No table found to export.");
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Bar Data");
+
+    const headers = Array.from(table.querySelectorAll("thead th")).map((th) =>
+      th.innerText.trim()
+    );
+
+    sheet.mergeCells(1, 1, 1, headers.length);
+
+    const titleCell = sheet.getCell("A1");
+    titleCell.value = "Bar Report";
+
+    sheet.addRow(headers).font = { bold: true };
+
+    const rows = Array.from(table.querySelectorAll("tbody tr")).map((tr) =>
+      Array.from(tr.querySelectorAll("td")).map((td) => td.innerText.trim())
+    );
+
+    rows.forEach((row) => sheet.addRow(row));
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    saveAs(blob, "bar_report.xlsx");
+  };
+
+  const printContent = () => {
+    const content = document.querySelector(".content-area");
+    if (!content) return;
+
+    const printWindow = window.open("", "_blank");
+    printWindow.document.write("<html><body>");
+    printWindow.document.write(content.innerHTML);
+    printWindow.document.write("</body></html>");
+    printWindow.document.close();
+    printWindow.print();
+  };
+
   return (
-    <div className="dashboard-container">
+    <div className="dashboard-container" onClick={closeSubmenu}>
       <aside className="sidebars1">
         <h2 className="sidebar-title">BAR MENU</h2>
-        <nav>
-          {barMenu.map((item) => (
-            <div
-              key={item.name}
-              className="sidebar-item-wrapper"
-              onMouseEnter={() => setHovered(item.name)}
-              onMouseLeave={() => setHovered("")}
+
+        {barMenu.map((item) => (
+          <div key={item.name} className="sidebar-item-wrapper">
+            <button
+              className="sidebars1-button"
+              onClick={(e) => {
+                e.stopPropagation();
+
+                if (item.submenu) {
+                  openSubmenu(e, item);
+                } else {
+                  navigate(item.path);
+                  closeSubmenu();
+                }
+              }}
             >
-              <button
-                className={`sidebars1-button ${
-                  hovered === item.name ? "active" : ""
-                }`}
-                onClick={() => {
-                  if (!item.submenu && item.path) {
-                    navigate(item.path);
-                  }
-                }}
-              >
-                {item.name}
-              </button>
+              {item.name}
+            </button>
+          </div>
+        ))}
 
-              {item.submenu && hovered === item.name && (
-                <div className="submenu">
-                  {item.submenu.map((sub) => {
-                    const subActive = location.pathname === sub.path;
-                    return (
-                      <button
-                        type="button"
-                        key={sub.path}
-                        className={`submenu-item ${
-                          subActive ? "active" : ""
-                        }`}
-                        onClick={() => {
-                          navigate(sub.path);
-                          setHovered("");
-                        }}
-                      >
-                        {sub.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ))}
-
-          {/* ✅ Main Dashboard button stays at the bottom */}
-          <button
-            className="sidebars1-button main-dashboard-btn"
-            onClick={() => navigate("/dashboard")}
-          >
-            🏠 Main Dashboard
-          </button>
-        </nav>
+        <button
+          className="sidebars1-button main-dashboard-btn"
+          onClick={() => navigate("/dashboard")}
+        >
+          🏠 Main Dashboard
+        </button>
       </aside>
 
       <main className="main-content">
-        <header className="header" style={{ gap: "20px" }}>
-          <h1 className="header-title" style={{ flexGrow: 1 }}>
-            🍷 Bar Management Dashboard
-          </h1>
+        <header className="header">
+          <h1 className="header-title">🍷 Bar Management Dashboard</h1>
+
           <div style={{ display: "flex", gap: "10px" }}>
             <button onClick={exportToExcel} className="action-button1">
-              <FaFileExcel style={{ marginRight: "5px" }} />
-              Export to Excel
+              Export
             </button>
+
             <button onClick={printContent} className="action-button1">
-              <FaPrint style={{ marginRight: "5px" }} />
               Print
             </button>
-            <button
-              onClick={() => navigate("/logout")}
-              className="logout-button1"
-            >
-              🚪 Logout
+
+            <button onClick={() => navigate("/logout")} className="logout-button1">
+              Logout
             </button>
           </div>
         </header>
 
         <section className="content-area">
-        <div className="background-overlay">
-          <h1 className="watermark">{businessName}</h1>
-        </div>
+          <div className="background-overlay">
+            <h1 className="watermark">{businessName}</h1>
+          </div>
 
-        <div className="content-inner">
-          <Outlet />
-        </div>
-      </section>
-
-
-
-
+          <div className="content-inner">
+            <Outlet />
+          </div>
+        </section>
       </main>
+
+      {/* 🔥 PORTAL SUBMENU */}
+      {submenu.visible &&
+        createPortal(
+          <div
+            className="submenu"
+            style={{
+              position: "fixed",
+              top: submenu.position.top,
+              left: submenu.position.left,
+              zIndex: 999999,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {submenu.items.map((sub) => (
+              <button
+                key={sub.path}
+                className="submenu-item"
+                onClick={() => {
+                  navigate(sub.path);
+                  closeSubmenu();
+                }}
+              >
+                {sub.label}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

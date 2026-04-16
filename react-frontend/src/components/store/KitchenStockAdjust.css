@@ -1,68 +1,115 @@
-.stock-adjustment-container {
-  background: rgb(247, 244, 244);
-  padding: 20px;
-  border-radius: 8px;
-  max-width: 500px;
-  margin: 0 auto;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
 }
 
-.stock-adjustment-container h2 {
-  text-align: center;
-  margin-bottom: 15px;
+.stock-adjustment-container {
+  background: rgb(247, 244, 244);
+  padding: 25px;
+  border-radius: 12px;
+  max-width: 520px;
+  width: 90%;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 15px;
+}
+
+.form-header h2 {
+  margin: 0;
+  color: #333;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #888;
+  cursor: pointer;
+  padding: 5px 12px;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  color: #e74c3c;
+  background: rgba(231, 76, 60, 0.1);
 }
 
 .message {
-  text-align: center;
-  padding: 8px;
-  margin-bottom: 10px;
+  padding: 12px;
+  margin-bottom: 15px;
+  border-radius: 6px;
   font-weight: bold;
-  color: #fff;
-  background: #2ecc71;
-  border-radius: 4px;
+  text-align: center;
 }
 
-.message:empty {
-  display: none;
+.message.success {
+  background: #2ecc71;
+  color: white;
+}
+
+.message.error {
+  background: #e74c3c;
+  color: white;
 }
 
 .adjustment-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .adjustment-form label {
   font-weight: bold;
+  color: #444;
 }
 
 .adjustment-form select,
 .adjustment-form input,
 .adjustment-form textarea {
-  padding: 8px;
+  padding: 10px;
   border-radius: 6px;
-  border: 1px solid #d3c9c9;
+  border: 1px solid #ccc;
   font-size: 14px;
 }
 
 .adjust-btn {
   background: #3498db;
   color: white;
-  padding: 10px;
+  padding: 12px;
   border: none;
   border-radius: 6px;
   cursor: pointer;
   font-weight: bold;
+  margin-top: 10px;
+  font-size: 16px;
 }
 
-.adjust-btn:hover {
+.adjust-btn:hover:not(:disabled) {
   background: #2980b9;
 }
 
-
-.button-group {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
+.adjust-btn:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
 }
+
+
+
 

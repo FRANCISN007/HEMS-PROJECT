@@ -5,6 +5,8 @@ import HotelPhoto3 from "../assets/images/HotelPhoto3.png";
 import "./DashboardPage.css";
 import { FaHotel } from "react-icons/fa";
 import getBaseUrl from "../api/config";
+import axiosWithAuth from "../utils/axiosWithAuth";
+
 
 
 
@@ -19,6 +21,13 @@ const API_BASE_URL = getBaseUrl();
 
 
 const DashboardPage = () => {
+
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  const businessName = storedUser.business?.name || "HEMS Hotel";
+
+  
+
+
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -241,6 +250,10 @@ const printContent = () => {
   const [isEventsHovered, setEventsHovered] = useState(false);
   const [reservationCount, setReservationCount] = useState(0);
 
+  const [licenseInfo, setLicenseInfo] = useState(null);
+
+
+
     useEffect(() => {
       const token = localStorage.getItem("token");
       if (!token) return;
@@ -307,17 +320,52 @@ const printContent = () => {
       // ✅ Initial run
       checkAlerts();
       updateRooms();
+      checkLicense(); // ✅ ADD THIS
 
       // 🔁 Polling
       const alertInterval = setInterval(checkAlerts, 5000);   // 15s
       const updateInterval = setInterval(updateRooms, 20000);  // 1 min
+      const licenseInterval = setInterval(checkLicense, 60000); // every 1 min
 
       return () => {
         clearInterval(alertInterval);
         clearInterval(updateInterval);
+        clearInterval(licenseInterval); // ✅ ADD THIS
       };
 
     }, []);
+
+
+    const checkLicense = async () => {
+      try {
+        const res = await axiosWithAuth().get("/license/check");
+        console.log("LICENSE RESPONSE:", res.data);
+        setLicenseInfo(res.data);
+      } catch (err) {
+        console.error("❌ License check failed:", err?.response?.data || err.message);
+        
+
+      }
+    };
+
+
+
+    useEffect(() => {
+      const init = async () => {
+        await checkLicense();
+      };
+
+      init();
+
+      const licenseInterval = setInterval(() => {
+        checkLicense();
+      }, 60000);
+
+      return () => clearInterval(licenseInterval);
+    }, []);
+
+    
+
 
   const menu = [
     { name: "🙎 Users", path: "/dashboard/users", adminOnly: true },
@@ -557,20 +605,46 @@ const printContent = () => {
         </header>
 
 
-        <section
-                  className="content-area"
-                  style={{
-                    position: "relative",
-                    minHeight: "100%",
-                    backgroundImage:
-                      location.pathname === "/dashboard" ? `url(${HotelPhoto3})` : "none",
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                    backgroundRepeat: "no-repeat",
-                  }}
-                >
-                  <Outlet />
-                </section>
+      {/* ✅ LICENSE ALERT BANNER (ONLY SHOW WHEN ≤ 7 DAYS OR EXPIRED) */}
+        {licenseInfo &&
+          licenseInfo.days_left !== null &&
+          licenseInfo.days_left <= 7 && (
+            <div
+              style={{
+                background:
+                  licenseInfo.valid === false || licenseInfo.days_left <= 0
+                    ? "#dc2626" // red (expired)
+                    : "#f59e0b", // yellow (warning 1–7 days)
+
+                color: "white",
+                padding: "10px",
+                borderRadius: "8px",
+                marginBottom: "10px",
+                fontWeight: "600",
+                textAlign: "center",
+              }}
+            >
+              {licenseInfo.valid === false || licenseInfo.days_left <= 0
+                ? "❌ License expired"
+                : licenseInfo.message}
+
+              <span style={{ marginLeft: "10px" }}>
+                ({licenseInfo.days_left} day(s) left)
+              </span>
+            </div>
+          )}
+
+
+
+        <section className="content-area">
+          <div className="background-overlay">
+            <h1 className="watermark">{businessName}</h1>
+          </div>
+
+          <div className="content-inner">
+            <Outlet />
+          </div>
+        </section>
       </main>
     </div>
   );

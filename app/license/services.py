@@ -1,21 +1,27 @@
 # app/license/service.py
+
 import json
 import os
 from datetime import datetime
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
+from math import ceil
 
 from app.license import schemas, models
+from app.core.timezone import now_wat, to_wat
 from loguru import logger
-
 
 
 LICENSE_FILE = "license_status.json"
 
 
+# ---------------------------------------------------
+# SAVE LICENSE FILE (OFFLINE SUPPORT)
+# ---------------------------------------------------
 def save_license_file(data: dict):
     """Save license status to local JSON file (offline fallback)."""
     safe_data = {}
+
     for k, v in data.items():
         if isinstance(v, datetime):
             safe_data[k] = v.isoformat()
@@ -29,21 +35,31 @@ def save_license_file(data: dict):
         logger.error(f"Failed to save license file: {e}")
 
 
+# ---------------------------------------------------
+# LOAD LICENSE FILE
+# ---------------------------------------------------
 def load_license_file():
     """Load license status from local JSON file."""
     if not os.path.exists(LICENSE_FILE):
         return None
+
     try:
         with open(LICENSE_FILE, "r") as f:
             data = json.load(f)
-        if "expires_on" in data and data["expires_on"]:
+
+        if data.get("expires_on"):
             data["expires_on"] = datetime.fromisoformat(data["expires_on"])
+
         return data
+
     except Exception as e:
         logger.error(f"Failed to load license file: {e}")
         return None
 
 
+# ---------------------------------------------------
+# CREATE LICENSE
+# ---------------------------------------------------
 def create_license_key(
     db: Session,
     data: schemas.LicenseCreate
@@ -63,8 +79,23 @@ def create_license_key(
     return schemas.LicenseResponse.from_orm(new_license)
 
 
+# ---------------------------------------------------
+# VERIFY LICENSE (UPDATED - WAT SAFE + WARNING)
+# ---------------------------------------------------
+from math import ceil
+from app.core.timezone import now_wat, to_wat
+
 def verify_license_key(db: Session, key: str, business_id: int) -> dict:
-    """Verify license key for a business."""
+    """
+    Verify license key for a business.
+    - WAT timezone safe
+    - Includes 7-day expiry warning
+    - Returns consistent response structure
+    """
+
+    # -----------------------------
+    # FETCH LICENSE
+    # -----------------------------
     license_record = (
         db.query(models.LicenseKey)
         .filter(
@@ -75,14 +106,63 @@ def verify_license_key(db: Session, key: str, business_id: int) -> dict:
         .first()
     )
 
+    # -----------------------------
+    # INVALID LICENSE
+    # -----------------------------
     if not license_record:
-        return {"valid": False, "message": "Invalid license key"}
+        return {
+            "valid": False,
+            "expires_on": None,
+            "message": "Invalid license key",
+            "warning": True,
+            "days_left": None
+        }
 
-    if license_record.expiration_date < datetime.utcnow():
-        return {"valid": False, "message": "License expired"}
+    # -----------------------------
+    # TIME HANDLING (WAT SAFE)
+    # -----------------------------
+    now = now_wat()
+    expires_on = to_wat(license_record.expiration_date)
 
+    # -----------------------------
+    # EXPIRED LICENSE
+    # -----------------------------
+    if expires_on <= now:
+        return {
+            "valid": False,
+            "expires_on": expires_on,
+            "message": "License expired",
+            "warning": True,
+            "days_left": 0
+        }
+
+    # -----------------------------
+    # CALCULATE DAYS LEFT (ACCURATE)
+    # -----------------------------
+    delta_seconds = (expires_on - now).total_seconds()
+    days_left = ceil(delta_seconds / 86400)
+
+    # -----------------------------
+    # WARNING LOGIC
+    # -----------------------------
+    warning = days_left <= 7
+
+    # -----------------------------
+    # MESSAGE
+    # -----------------------------
+    message = (
+        f"⚠️ License expires in {days_left} day(s). Please renew."
+        if warning
+        else "License valid"
+    )
+
+    # -----------------------------
+    # RESPONSE
+    # -----------------------------
     return {
         "valid": True,
-        "expires_on": license_record.expiration_date,
-        "message": "License valid"
+        "expires_on": expires_on,
+        "message": message,
+        "warning": warning,
+        "days_left": days_left
     }

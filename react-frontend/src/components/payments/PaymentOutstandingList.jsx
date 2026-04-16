@@ -31,7 +31,7 @@ const PaymentOutstandingList = () => {
   return (
     <div className="unauthorized">
       <h2>🚫 Access Denied</h2>
-      <p>You do not have permission to ctreate booking payment.</p>
+      <p>You do not have permission to create booking payment.</p>
     </div>
   );
 }

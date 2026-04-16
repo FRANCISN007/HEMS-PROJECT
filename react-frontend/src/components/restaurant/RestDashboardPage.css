@@ -243,3 +243,141 @@
   color: white !important;
   border-color: darkblue !important;
 }
+
+
+
+
+/* =========================
+   CONTENT AREA
+========================= */
+.content-area {
+  position: relative;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+
+/* =========================
+   BACKGROUND OVERLAY
+========================= */
+.background-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* DARK BASE */
+.background-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    rgba(240, 240, 240, 0.6),
+    rgba(10, 10, 10, 0.85)
+  );
+}
+
+/* 🔥 STRONGER MOVING LIGHT */
+.background-overlay::after {
+  content: "";
+  position: absolute;
+  width: 250%;
+  height: 250%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.25) 0%,
+    transparent 60%
+  );
+  animation: moveGlow 12s linear infinite;
+}
+
+/* =========================
+   WATERMARK TEXT (MAIN EFFECT)
+========================= */
+.watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  
+  font-size: 78px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+
+  color: rgba(0, 0, 0, 0.15);
+
+  /* 🔥 stronger glow */
+  text-shadow: 
+    0 0 40px rgba(77, 74, 74, 0.1),
+    0 0 40px rgba(87, 83, 83, 0.15);
+
+  white-space: nowrap;
+
+  animation: waveMotion 6s ease-in-out infinite;
+}
+
+/* =========================
+   🔥 WAVE MOTION (KEY PART)
+========================= */
+@keyframes waveMotion {
+  0% {
+    transform: translate(-50%, -50%) translateY(0px) scale(1) rotate(0deg);
+  }
+  25% {
+    transform: translate(-48%, -52%) translateY(-15px) scale(1.02) rotate(-1deg);
+  }
+  50% {
+    transform: translate(-52%, -48%) translateY(10px) scale(0.98) rotate(1deg);
+  }
+  75% {
+    transform: translate(-49%, -51%) translateY(-10px) scale(1.01) rotate(-0.5deg);
+  }
+  100% {
+    transform: translate(-50%, -50%) translateY(0px) scale(1) rotate(0deg);
+  }
+}
+
+/* =========================
+   GLOW MOVEMENT
+========================= */
+@keyframes moveGlow {
+  0% {
+    transform: translate(-30%, -30%);
+  }
+  50% {
+    transform: translate(30%, 30%);
+  }
+  100% {
+    transform: translate(-30%, -30%);
+  }
+}
+
+/* =========================
+   CONTENT ABOVE
+========================= */
+.content-inner {
+  position: relative;
+  z-index: 1;
+}
+
+
+
+
+.header-title {
+  animation: fadeSlideIn 0.8s ease forwards;
+}
+
+@keyframes fadeSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-15px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

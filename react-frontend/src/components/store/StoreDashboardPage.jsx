@@ -1,17 +1,23 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, Outlet } from "react-router-dom";
 import { FaFileExcel, FaPrint } from "react-icons/fa";
-//import StorePhoto from "../../assets/images/StorePhoto.png";
 import { saveAs } from "file-saver";
 import ExcelJS from "exceljs";
 import "./StoreDashboardPage.css";
 
-
 const StoreDashboardPage = () => {
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  const businessName = storedUser.business?.name || "HEMS Hotel";
+
   const navigate = useNavigate();
-  const [hovered, setHovered] = useState("");
-  const [showCreateCategory, setShowCreateCategory] = useState(false);
-  const [showCreateVendor, setShowCreateVendor] = useState(false);
+
+  // 🔥 submenu state (portal-based)
+  const [submenu, setSubmenu] = useState({
+    items: [],
+    position: null,
+    visible: false,
+  });
 
   const exportToExcel = async () => {
     const table = document.querySelector(".content-area table");
@@ -23,9 +29,9 @@ const StoreDashboardPage = () => {
     const headers = Array.from(table.querySelectorAll("thead th")).map((th) =>
       th.innerText.trim()
     );
-    const colCount = headers.length;
 
-    sheet.mergeCells(1, 1, 1, colCount);
+    sheet.mergeCells(1, 1, 1, headers.length);
+
     const titleCell = sheet.getCell("A1");
     titleCell.value = "Store Report";
     titleCell.font = { size: 14, bold: true };
@@ -36,7 +42,9 @@ const StoreDashboardPage = () => {
     const rows = Array.from(table.querySelectorAll("tbody tr")).map((tr) =>
       Array.from(tr.querySelectorAll("td")).map((td) => td.innerText.trim())
     );
+
     rows.forEach((row) => sheet.addRow(row));
+
     sheet.eachRow((row) => {
       row.eachCell((cell) => {
         cell.border = {
@@ -60,14 +68,17 @@ const StoreDashboardPage = () => {
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      type:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    saveAs(blob, `store_report.xlsx`);
+
+    saveAs(blob, "store_report.xlsx");
   };
 
   const printContent = () => {
     const content = document.querySelector(".content-area");
     if (!content) return;
+
     const printWindow = window.open("", "_blank");
     printWindow.document.write("<html><head><title>Print</title></head><body>");
     printWindow.document.write(content.innerHTML);
@@ -77,15 +88,9 @@ const StoreDashboardPage = () => {
   };
 
   const storeMenu = [
-    {
-      name: "📂 Create Category",
-      path: "category/list", // 👈 Directly links to List Category
-    },
+    { name: "📂 Create Category", path: "category/list" },
+    { name: "📦 Manage Items", path: "items/list" },
 
-    {
-      name: "📦 Manage Items",
-      path: "items/list", // ✅ Goes directly to the list
-    },
     {
       name: "🛒 Purchase",
       submenu: [
@@ -93,6 +98,7 @@ const StoreDashboardPage = () => {
         { label: "📃 List Purchase", path: "purchase/list" },
       ],
     },
+
     {
       name: "🍶 Manage Bar",
       submenu: [
@@ -100,7 +106,6 @@ const StoreDashboardPage = () => {
         { label: "📃 List Items", path: "issue/list" },
       ],
     },
-
 
     {
       name: "👨‍🍳 Manage Kitchen",
@@ -110,11 +115,8 @@ const StoreDashboardPage = () => {
         { label: "📃 List Issue", path: "kitchenissue/list" },
         { label: "🔧 Adjust Stock", path: "kitchenadjustment/create" },
         { label: "🔧 List Adjustment", path: "kitchenadjustment/list" },
-        
       ],
     },
-
-
 
     {
       name: "⚖️ Stock Adjustment",
@@ -124,124 +126,127 @@ const StoreDashboardPage = () => {
       ],
     },
 
-    {
-      name: "📊 Store Stock",
-      path: "stock-balance",
-    },
-    
+    { name: "📊 Store Stock", path: "stock-balance" },
+    { name: "📊 Bar Stock", path: "barstock-balance" },
+    { name: "👨‍🍳 Kitchen Stock", path: "kitchenstock" },
+    { name: "🏭 Manage Vendor", path: "vendor/list" },
 
     {
-      name: "📊 Bar Stock",
-      path: "barstock-balance",
+      name: "🏠 Main Dashboard",
+      path: "/dashboard",
+      customClass: "main-dashboard-btn",
     },
+  ];
 
+  // 🔥 open submenu with position
+  const openSubmenu = (e, item) => {
+    const rect = e.currentTarget.getBoundingClientRect();
 
-    {
-      name: "👨‍🍳 Kitchen Stock",
-      path: "kitchenstock",
-    },
+    setSubmenu({
+      items: item.submenu || [],
+      visible: true,
+      position: {
+        top: rect.top,
+        left: rect.right + 5,
+      },
+    });
+  };
 
-    {
-      name: "🏭 Manage Vendor",
-      path: "vendor/list", // 👉 direct navigation
-    },
-
-  // ✅ New Main Dashboard Button
-  {
-    name: "🏠 Main Dashboard",
-    path: "/dashboard", // navigate back to hotel dashboard
-    customClass: "main-dashboard-btn", // 👈 custom class
-  },
-];
+  const closeSubmenu = () => {
+    setSubmenu({ items: [], position: null, visible: false });
+  };
 
   return (
-    <div className="dashboard-container">
+    <div className="dashboard-container" onClick={closeSubmenu}>
+      {/* SIDEBAR */}
       <aside className="sidebars1">
         <h2 className="sidebar-title">STORE MENU</h2>
-        <nav className="sidebars1-menu">
+
+        <nav>
           {storeMenu.map((item) => (
-            <div
-              key={item.name}
-              className="sidebar-item-wrapper"
-              onMouseEnter={() => setHovered(item.name)}
-              onMouseLeave={() => setHovered("")}
-            >
-              {/* Main Button */}
+            <div key={item.name} className="sidebar-item-wrapper">
               <button
-                className={`sidebars1-button ${hovered === item.name ? "active" : ""} ${item.customClass || ""}`}
-                onClick={() => {
-                  if (!item.submenu && item.path) {
+                className={`sidebars1-button ${item.customClass || ""}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+
+                  if (item.submenu) {
+                    openSubmenu(e, item);
+                  } else if (item.path) {
                     navigate(item.path);
+                    closeSubmenu();
                   }
                 }}
               >
                 {item.name}
               </button>
-
-              {/* Submenu */}
-              {item.submenu && hovered === item.name && (
-                <div className="submenu">
-                  {item.submenu.map((sub) => (
-                    <button
-                      key={sub.label}
-                      className="submenu-item"
-                      onClick={() => {
-                        if (sub.path) navigate(sub.path);
-                        if (sub.action) sub.action();
-                        setHovered("");
-                      }}
-                    >
-                      {sub.label}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
           ))}
         </nav>
       </aside>
 
+      {/* MAIN */}
       <main className="main-content">
-        <header className="header" style={{ gap: "20px" }}>
-          <h1 className="header-title" style={{ flexGrow: 1 }}>
-            🏪 Store Management Dashboard
-          </h1>
+        <header className="header">
+          <h1 className="header-title">🏪 Store Management Dashboard</h1>
+
           <div style={{ display: "flex", gap: "10px" }}>
             <button onClick={exportToExcel} className="action-button1">
-              <FaFileExcel style={{ marginRight: "5px" }} />
-              Export to Excel
+              <FaFileExcel /> Export
             </button>
+
             <button onClick={printContent} className="action-button1">
-              <FaPrint style={{ marginRight: "5px" }} />
-              Print
+              <FaPrint /> Print
             </button>
-            <button onClick={() => navigate("/logout")} className="logout-button1">
+
+            <button
+              onClick={() => navigate("/logout")}
+              className="logout-button1"
+            >
               🚪 Logout
             </button>
           </div>
         </header>
 
-        <section
-          className="content-area"
-          style={{
-            position: "relative",
-            minHeight: "100%",
-            //backgroundImage:
-              //location.pathname === "/store" ? `url(${StorePhoto})` : "none",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            backgroundRepeat: "no-repeat",
-          }}
-        >
-          {showCreateCategory ? (
-            <CreateCategory onClose={() => setShowCreateCategory(false)} />
-          ) : showCreateVendor ? (
-            <CreateVendor onClose={() => setShowCreateVendor(false)} />
-          ) : (
+        <section className="content-area">
+          <div className="background-overlay">
+            <h1 className="watermark">{businessName}</h1>
+          </div>
+
+          <div className="content-inner">
             <Outlet />
-          )}
+          </div>
         </section>
       </main>
+
+      {/* 🔥 PORTAL SUBMENU */}
+      {submenu.visible &&
+        createPortal(
+          <div
+            className="submenu"
+            style={{
+              position: "fixed",
+              top: submenu.position.top,
+              left: submenu.position.left,
+              zIndex: 999999,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {submenu.items.map((sub) => (
+              <button
+                key={sub.label}
+                className="submenu-item"
+                onClick={() => {
+                  navigate(sub.path);
+                  closeSubmenu();
+                }}
+              >
+                {sub.label}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

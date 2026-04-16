@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from sqlalchemy.sql import func
 
 from app.database import get_db
 from . import models, schemas
 from app.users.schemas import UserDisplaySchema
 from app.payments import models as payment_models
 from app.users.permissions import role_required
+from app.core.business import resolve_business_id
 
 router = APIRouter()
 
@@ -26,68 +28,110 @@ def get_business_bank(db: Session, bank_id: int, business_id: int):
     return bank
 
 
+
 # ---------------------------------------------------
-# CREATE BANK
+# CREATE BANK (SaaS CLEAN VERSION)
 # ---------------------------------------------------
 @router.post("/", response_model=schemas.BankDisplay)
 def create_bank(
     bank: schemas.BankCreate,
-    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
     db: Session = Depends(get_db),
-    current_user: UserDisplaySchema = Depends(role_required(["admin", "super_admin"]))
+    current_user: UserDisplaySchema = Depends(
+        role_required(["admin", "super_admin"])
+    )
 ):
-    roles = set(current_user.roles)
+    try:
+        # -------------------------------
+        # 1️⃣ Resolve business (CENTRALIZED SaaS)
+        # -------------------------------
+        effective_business_id = resolve_business_id(current_user, business_id)
 
-    # Determine target business
-    if "super_admin" in roles and business_id:
-        target_business_id = business_id
-    else:
-        target_business_id = current_user.business_id
+        # -------------------------------
+        # 2️⃣ Normalize bank name
+        # -------------------------------
+        bank_name = bank.name.strip().title()
 
-    bank_name = bank.name.strip().title()
-
-    existing = db.query(models.Bank).filter(
-        models.Bank.business_id == target_business_id,
-        models.Bank.name == bank_name
-    ).first()
-
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail="Bank already exists for this business"
+        # -------------------------------
+        # 3️⃣ Prevent duplicates (tenant-safe)
+        # -------------------------------
+        existing = (
+            db.query(models.Bank)
+            .filter(
+                models.Bank.business_id == effective_business_id,
+                models.Bank.name == bank_name
+            )
+            .first()
         )
 
-    new_bank = models.Bank(
-        name=bank_name,
-        business_id=target_business_id
-    )
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail="Bank already exists for this business"
+            )
 
-    db.add(new_bank)
-    db.commit()
-    db.refresh(new_bank)
+        # -------------------------------
+        # 4️⃣ Create bank
+        # -------------------------------
+        new_bank = models.Bank(
+            name=bank_name,
+            business_id=effective_business_id
+        )
 
-    return new_bank
+        db.add(new_bank)
+        db.commit()
+        db.refresh(new_bank)
+
+        return new_bank
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create bank: {str(e)}"
+        )
 
 
-# ---------------------------------------------------
-# LIST BANKS
-# ---------------------------------------------------
+
+
+
 @router.get("/", response_model=List[schemas.BankDisplay])
 def list_banks(
-    business_id: Optional[int] = Query(None, description="Super admin can specify business"),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
     db: Session = Depends(get_db),
-    current_user: UserDisplaySchema = Depends(role_required(["dashboard", "admin", "super_admin"]))
+    current_user: UserDisplaySchema = Depends(
+        role_required(["dashboard", "admin", "super_admin"])
+    )
 ):
-    roles = set(current_user.roles)
+    try:
+        # ✅ CENTRALIZED SaaS CONTROL
+        effective_business_id = resolve_business_id(current_user, business_id)
 
-    if "super_admin" in roles and business_id:
-        target_business_id = business_id
-    else:
-        target_business_id = current_user.business_id
+        banks = (
+            db.query(models.Bank)
+            .filter(models.Bank.business_id == effective_business_id)
+            .order_by(models.Bank.name.asc())
+            .all()
+        )
 
-    return db.query(models.Bank).filter(
-        models.Bank.business_id == target_business_id
-    ).order_by(models.Bank.name).all()
+        return banks
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch banks: {str(e)}"
+        )
+
 
 
 # ---------------------------------------------------

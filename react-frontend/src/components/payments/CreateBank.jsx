@@ -5,7 +5,6 @@ import "./CreateBank.css";
 import getBaseUrl from "../../api/config";
 const API_BASE_URL = getBaseUrl();
 
-
 const CreateBank = () => {
   const [bankName, setBankName] = useState("");
   const [banks, setBanks] = useState([]);
@@ -18,7 +17,27 @@ const CreateBank = () => {
 
   const token = localStorage.getItem("token");
 
-  // Fetch banks
+  // ✅ SAFE ROLE HANDLING
+  const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+  let roles = Array.isArray(storedUser.roles)
+    ? storedUser.roles
+    : [storedUser.role || ""];
+
+  roles = roles.map((r) => r.toLowerCase());
+
+  // 🚫 BLOCK SUPER ADMIN COMPLETELY (NO UI RENDER)
+  if (roles.includes("super_admin")) {
+    return (
+      <div className="unauthorized">
+        <h2>🚫 Access Denied</h2>
+        <p>You do not have permission to create bank.</p>
+      </div>
+    );
+  }
+
+  // ---------------------------
+  // FETCH BANKS
+  // ---------------------------
   const fetchBanks = async () => {
     try {
       const res = await axios.get(`${API_BASE_URL}/bank/`, {
@@ -26,6 +45,7 @@ const CreateBank = () => {
       });
       setBanks(res.data);
     } catch (err) {
+      setError("❌ Failed to load banks.");
       console.error(err);
     }
   };
@@ -34,7 +54,9 @@ const CreateBank = () => {
     fetchBanks();
   }, []);
 
-  // Create Bank
+  // ---------------------------
+  // CREATE BANK
+  // ---------------------------
   const handleCreate = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -47,6 +69,7 @@ const CreateBank = () => {
         { name: bankName },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
       setMessage(`✅ Bank "${res.data.name}" created!`);
       setBankName("");
       fetchBanks();
@@ -57,13 +80,17 @@ const CreateBank = () => {
     }
   };
 
-  // Delete Bank
+  // ---------------------------
+  // DELETE BANK
+  // ---------------------------
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this bank?")) return;
+
     try {
       await axios.delete(`${API_BASE_URL}/bank/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
       setMessage("✅ Bank deleted successfully!");
       fetchBanks();
     } catch (err) {
@@ -71,21 +98,24 @@ const CreateBank = () => {
     }
   };
 
-  // Open edit modal
+  // ---------------------------
+  // EDIT BANK
+  // ---------------------------
   const handleEdit = (bank) => {
     setEditId(bank.id);
     setEditName(bank.name);
   };
 
-  // Update Bank
   const handleUpdate = async () => {
     if (!editName.trim()) return;
+
     try {
       await axios.put(
         `${API_BASE_URL}/bank/${editId}`,
         { name: editName },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
       setMessage("✅ Bank updated successfully!");
       setEditId(null);
       setEditName("");
@@ -95,11 +125,14 @@ const CreateBank = () => {
     }
   };
 
+  // ---------------------------
+  // UI
+  // ---------------------------
   return (
     <div className="create-bank-container">
       <h2 className="create-bank-title">🏦 Bank Management</h2>
 
-      {/* Add Bank */}
+      {/* CREATE FORM */}
       <form className="create-bank-form" onSubmit={handleCreate}>
         <div className="form-group">
           <label htmlFor="bankName">Bank Name</label>
@@ -112,16 +145,19 @@ const CreateBank = () => {
             required
           />
         </div>
+
         <button type="submit" className="submit-btn" disabled={loading}>
           {loading ? "Creating..." : "Add Bank"}
         </button>
       </form>
 
+      {/* MESSAGES */}
       {message && <p className="success-message">{message}</p>}
       {error && <p className="error-message">{error}</p>}
 
-      {/* Bank List */}
+      {/* BANK LIST */}
       <h3 className="bank-list-title">List of Banks</h3>
+
       <table className="bank-table">
         <thead>
           <tr>
@@ -130,10 +166,12 @@ const CreateBank = () => {
             <th>Actions</th>
           </tr>
         </thead>
+
         <tbody>
           {banks.map((bank) => (
             <tr key={bank.id}>
               <td>{bank.id}</td>
+
               <td>
                 {editId === bank.id ? (
                   <input
@@ -145,6 +183,7 @@ const CreateBank = () => {
                   bank.name
                 )}
               </td>
+
               <td>
                 {editId === bank.id ? (
                   <>
@@ -166,6 +205,7 @@ const CreateBank = () => {
                     >
                       Edit
                     </button>
+
                     <button
                       className="delete-btn"
                       onClick={() => handleDelete(bank.id)}
