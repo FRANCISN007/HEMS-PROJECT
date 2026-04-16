@@ -7,6 +7,10 @@
   background-color: #f8f9fa;
   border-radius: 8px;
   min-height: 100%;
+  height: calc(100vh - 80px);     
+  overflow: hidden;               
+  display: flex;
+  flex-direction: column;
 }
 
 /* Super admin mode */
@@ -104,21 +108,25 @@
 }
 
 /* ===============================
-   TABLE STYLES - COMPACT + GRID LINES
+   TABLE STYLES - WITH VERTICAL SCROLL (COMPACT + ALIGNED)
 =============================== */
 .user-table {
-  overflow-x: hidden;           /* No horizontal scrollbar */
+  overflow-x: hidden;
+  overflow-y: auto;                    
   border: 2px solid #28a745;
   border-radius: 8px;
   background-color: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  flex: 1;                             
+  min-height: 200px;                   
 }
 
+/* Super admin table */
 .user-table.super-admin-table {
   border-color: #6f42c1;
 }
 
-/* Table Header */
+/* Sticky Table Header */
 .user-table .table-header {
   display: grid;
   background-color: #28a745;
@@ -127,65 +135,70 @@
   text-align: left;
   font-size: 0.88rem;
   border-bottom: 2px solid #1e7e34;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
-/* Default columns */
-.user-table .table-header:not(.with-business) {
+/* ==================== EXACT COLUMN ALIGNMENT ==================== */
+
+/* Normal User Table (4 columns) */
+.user-table .table-header:not(.with-business),
+.user-table .table-row:not(.with-business) {
   grid-template-columns: 65px 200px 1fr 280px;
 }
 
-/* Super Admin columns */
-.user-table .table-header.with-business {
-  grid-template-columns: 65px 180px 1fr 120px 260px;
+/* Super Admin Table (5 columns) - FIXED ALIGNMENT */
+.user-table .table-header.with-business,
+.user-table .table-row.with-business {
+  grid-template-columns: 65px 180px 1fr 130px 280px;   /* Business column = 130px */
 }
 
+/* Header Cell Styling */
 .user-table .table-header div {
   padding: 10px 8px;
   border-right: 1px solid rgba(255,255,255,0.25);
+  display: flex;
+  align-items: center;
 }
 
 .user-table .table-header div:last-child {
   border-right: none;
 }
 
-/* Business column highlight */
+/* Business column highlight in header */
 .user-table .table-header.with-business div:nth-child(4) {
   background-color: #5a32a3;
 }
 
-/* Table Rows - Compact */
+/* Table Rows */
 .user-table .table-row {
   display: grid;
-  font-size: 0.87rem;
+  font-size: 0.82rem;
   transition: background-color 0.2s ease;
   align-items: center;
-  min-height: 42px;               /* Compact row height */
+  min-height: 25px;
+  height: 25px;
 }
 
-/* Match header columns exactly */
-.user-table .table-row:not(.with-business) {
-  grid-template-columns: 65px 200px 2fr  280px;
+/* Row Cell Styling */
+.user-table .table-row div {
+  padding: 4px 8px;                   /* Consistent padding */
+  border-right: 1px solid #1f2020;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
 }
 
-.user-table .table-row.with-business {
-  grid-template-columns: 65px 180px 1fr 120px 300px;
+.user-table .table-row div:last-child {
+  border-right: none;
 }
 
 /* Grid Lines + Zebra */
 .user-table .table-row {
   border-bottom: 1px solid #434646;
-}
-
-.user-table .table-row div {
-  padding: 2px 2px;
-  border-right: 1px solid #1f2020;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.user-table .table-row div:last-child {
-  border-right: none;
 }
 
 /* Zebra striping */
@@ -205,11 +218,33 @@
   background-color: #f0e8ff;
 }
 
-/* Highlight Business cell */
+/* Highlight Business cell in rows */
 .user-table .table-row.with-business div:nth-child(4) {
   background-color: #f8f4ff;
   font-weight: 500;
   color: #4a2c8c;
+}
+
+/* Nice scrollbar styling */
+.user-table::-webkit-scrollbar {
+  width: 8px;
+}
+
+.user-table::-webkit-scrollbar-thumb {
+  background-color: #28a745;
+  border-radius: 10px;
+}
+
+.user-table::-webkit-scrollbar-thumb:hover {
+  background-color: #1e7e34;
+}
+
+.user-table.super-admin-table::-webkit-scrollbar-thumb {
+  background-color: #6f42c1;
+}
+
+.user-table.super-admin-table::-webkit-scrollbar-thumb:hover {
+  background-color: #5a32a3;
 }
 
 /* ===============================
@@ -222,9 +257,9 @@
 }
 
 .btn {
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   border: none;
   cursor: pointer;
@@ -384,7 +419,7 @@
   background: #1e7e34;
 }
 
-/* Compact Business Table */
+/* Compact Business Table - Also aligned */
 .business-section .table-header.with-business,
 .business-section .table-row.with-business {
   grid-template-columns: 65px 130px 190px 140px 200px 90px 240px;
