@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, Outlet, useLocation } from "react-router-dom";
-import { FaFileExcel, FaPrint } from "react-icons/fa";
+//import { FaFileExcel, FaPrint } from "react-icons/fa";
 import { saveAs } from "file-saver";
 import ExcelJS from "exceljs";
 import "./BarDashboardPage.css";

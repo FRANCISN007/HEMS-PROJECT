@@ -46,9 +46,6 @@ router = APIRouter()
 # Restaurant Locations (FINAL WORKING VERSION)
 # ----------------------------
 
-# ----------------------------
-# Create Location
-# ----------------------------
 @router.post(
     "/locations",
     response_model=restaurant_schemas.RestaurantLocationDisplay
@@ -65,24 +62,36 @@ def create_location(
         role_required(["restaurant", "admin", "super_admin"])
     )
 ):
-    # ✅ ONLY trigger validation (DO NOT assign)
-    resolve_business_id(current_user, business_id)
+    # -----------------------------
+    # 1️⃣ Resolve tenant (MUST assign)
+    # -----------------------------
+    business_id = resolve_business_id(current_user, business_id)
 
-    # ✅ Prevent duplicate (tenant handled automatically)
-    existing = db.query(restaurant_models.RestaurantLocation).filter(
-        restaurant_models.RestaurantLocation.name == location.name
-    ).first()
+    # -----------------------------
+    # 2️⃣ Check duplicate (PER BUSINESS ✅)
+    # -----------------------------
+    existing = (
+        db.query(restaurant_models.RestaurantLocation)
+        .filter(
+            restaurant_models.RestaurantLocation.business_id == business_id,
+            restaurant_models.RestaurantLocation.name.ilike(location.name)  # 🔥 case-insensitive
+        )
+        .first()
+    )
 
     if existing:
         raise HTTPException(
             status_code=400,
-            detail=f"Location '{location.name}' already exists"
+            detail=f"Location '{location.name}' already exists in this business"
         )
 
+    # -----------------------------
+    # 3️⃣ Create location
+    # -----------------------------
     db_location = restaurant_models.RestaurantLocation(
         name=location.name,
         active=getattr(location, "active", True),
-        business_id=current_user.business_id if current_user.business_id else business_id
+        business_id=business_id   # ✅ always use resolved value
     )
 
     db.add(db_location)
@@ -92,9 +101,6 @@ def create_location(
     return db_location
 
 
-# ----------------------------
-# List Locations
-# ----------------------------
 @router.get(
     "/locations",
     response_model=list[restaurant_schemas.RestaurantLocationDisplay]
@@ -110,14 +116,18 @@ def list_locations(
         role_required(["restaurant", "admin", "super_admin"])
     )
 ):
-    # ✅ ONLY resolve (no assignment)
-    resolve_business_id(current_user, business_id)
+    # 🔥 1️⃣ MUST assign it
+    business_id = resolve_business_id(current_user, business_id)
 
-    return (
+    # 🔥 2️⃣ ALWAYS filter by tenant
+    locations = (
         db.query(restaurant_models.RestaurantLocation)
+        .filter(restaurant_models.RestaurantLocation.business_id == business_id)
         .order_by(restaurant_models.RestaurantLocation.id.asc())
         .all()
     )
+
+    return locations
 
 
 # ----------------------------
@@ -315,69 +325,76 @@ def get_restaurant_items(
     response_model=List[restaurant_schemas.RestaurantMealStoreItem]
 )
 def get_restaurant_items_from_store(
-    search: Optional[str] = Query(
-        None,
-        description="Search item name",
-        example="rice"
-    ),
-    business_id: Optional[int] = Query(
-        None,
-        description="Super admin must provide business_id",
-        example=1
-    ),
+    search: Optional[str] = Query(None, description="Search item name"),
+    business_id: Optional[int] = Query(None, description="Super admin must provide business_id"),
+    limit: int = Query(20, le=50),  # 🔥 ADD LIMIT for speed
     db: Session = Depends(db_dependency),
     current_user: user_schemas.UserDisplaySchema = Depends(
         role_required(["restaurant", "admin", "super_admin"])
     )
 ):
     """
-    Fetch kitchen/store items using StoreItem.selling_price.
-    - Tenant-safe (middleware handles filtering)
-    - Supports search
+    FAST AUTOCOMPLETE SEARCH (optimized for frontend dropdown)
     """
 
-    # ✅ Resolve tenant (IMPORTANT)
-    resolve_business_id(current_user, business_id)
+    # ------------------------------
+    # 1️⃣ Resolve tenant
+    # ------------------------------
+    business_id = resolve_business_id(current_user, business_id)
 
     # ------------------------------
-    # 1️⃣ Base query
+    # 2️⃣ Base query (ONLY needed fields)
     # ------------------------------
     query = (
         db.query(
             store_models.StoreItem.id,
             store_models.StoreItem.name,
             store_models.StoreItem.selling_price,
+            store_models.StoreItem.item_type,   # ✅ FIX: required by frontend
         )
         .filter(
+            store_models.StoreItem.business_id == business_id,  # 🔥 important for speed
             store_models.StoreItem.item_type.in_(["kitchen", "meal", "food"])
         )
     )
 
     # ------------------------------
-    # 2️⃣ Search (optimized)
+    # 3️⃣ FAST SEARCH STRATEGY
     # ------------------------------
     if search:
-        query = query.filter(
-            store_models.StoreItem.name.ilike(f"%{search.strip()}%")
-        )
+        search = search.strip()
+
+        if len(search) <= 2:
+            # too short → avoid heavy query
+            query = query.filter(store_models.StoreItem.name.ilike(f"{search}%"))
+        else:
+            # PRIMARY: prefix search (FAST, uses index)
+            prefix_filter = store_models.StoreItem.name.ilike(f"{search}%")
+
+            # OPTIONAL fallback (slower but still controlled)
+            fallback_filter = store_models.StoreItem.name.ilike(f"%{search}%")
+
+            query = query.filter(prefix_filter | fallback_filter)
 
     # ------------------------------
-    # 3️⃣ Execute
+    # 4️⃣ ORDER + LIMIT (CRITICAL for autocomplete)
     # ------------------------------
     items = (
         query
         .order_by(store_models.StoreItem.name.asc())
+        .limit(limit)
         .all()
     )
 
     # ------------------------------
-    # 4️⃣ Response
+    # 5️⃣ RESPONSE
     # ------------------------------
     return [
         restaurant_schemas.RestaurantMealStoreItem(
             id=item.id,
             name=item.name,
-            selling_price=float(item.selling_price or 0)
+            selling_price=float(item.selling_price or 0),
+            item_type=item.item_type  # ✅ FIX frontend dependency
         )
         for item in items
     ]

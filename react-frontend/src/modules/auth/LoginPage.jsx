@@ -105,26 +105,14 @@ const LoginPage = () => {
   return (
     <div className="auth-page-wrapper">
       {/* LEFT SIDE - HEMS Branding */}
-      <div className="auth-left-panel">
-        <h1 className="app-title">
-          HEMS – Hotel & Event Management System
-        </h1>
-        <p className="app-description">
-          HEMS 6-in-1 App is a complete hospitality management solution designed to
-          simplify, automate, and centralize operations across:
-        </p>
-        <ul className="app-features">
-          <li>Booking Management</li>
-          <li>Bar Operations</li>
-          <li>Restaurant Services</li>
-          <li>Event Management</li>
-          <li>Store & Inventory Control</li>
-          <li>Kitchen Services</li>
-        </ul>
-        <p className="app-tagline">
-          Fast • Reliable • All-in-One Hospitality Control
-        </p>
-      </div>
+      
+      <div className="top-left-brand">
+          <div className="logo-orbit-wrapper">
+            <img src="/images/hems-logo.jpeg" className="top-left-logo" />
+            <span className="orbit-ring"></span>
+            <span className="orbit-dot"></span>
+          </div>
+        </div>
 
       {/* RIGHT SIDE - Login + Inquiry Link */}
       <div className="auth-container">

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, timezone
+from datetime import datetime, timedelta
 from typing import List
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
@@ -429,70 +430,76 @@ def list_items_simple(
 
 @router.get("/items/simple-search", response_model=List[store_schemas.StoreItemOut])
 def list_items_simple_search(
-    search: Optional[str] = None,
-    limit: int = 50,
+    search: Optional[str] = Query(None),
+    limit: int = Query(20, le=50),  # 🔥 keep small for speed
     business_id: Optional[int] = Query(None),
     db: Session = Depends(db_dependency),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "restaurant"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["store", "bar", "restaurant"])
+    )
 ):
     try:
+        # ------------------------------
+        # 1️⃣ Resolve tenant
+        # ------------------------------
         business_id = resolve_business_id(current_user, business_id)
 
-        # Subquery to get latest stock entry per item
-        latest_entry_subquery = (
-            db.query(
-                store_models.StoreStockEntry.item_id,
-                func.max(store_models.StoreStockEntry.id).label("latest_entry_id")
-            )
-            .group_by(store_models.StoreStockEntry.item_id)
-            .subquery()
-        )
-
-        latest_entry = aliased(store_models.StoreStockEntry)
-
+        # ------------------------------
+        # 2️⃣ Base query (LIGHTWEIGHT)
+        # ------------------------------
         query = (
             db.query(
-                store_models.StoreItem,
-                latest_entry.unit_price
-            )
-            .outerjoin(
-                latest_entry_subquery,
-                store_models.StoreItem.id == latest_entry_subquery.c.item_id
-            )
-            .outerjoin(
-                latest_entry,
-                latest_entry.id == latest_entry_subquery.c.latest_entry_id
+                store_models.StoreItem.id,
+                store_models.StoreItem.name,
+                store_models.StoreItem.unit,
+                store_models.StoreItem.unit_price,
+                store_models.StoreItem.selling_price,
+                store_models.StoreItem.category_id,
+                store_models.StoreItem.item_type,
             )
             .filter(store_models.StoreItem.business_id == business_id)
         )
 
-        # Optional search by name
+        # ------------------------------
+        # 3️⃣ FAST SEARCH (INDEX FRIENDLY 🔥)
+        # ------------------------------
         if search:
-            query = query.filter(store_models.StoreItem.name.ilike(f"%{search}%"))
+            search = search.strip().lower()
 
-        results = (
+            query = query.filter(
+                store_models.StoreItem.name.ilike(f"%{search}%")  # 🔥 prefix search
+            )
+
+        # ------------------------------
+        # 4️⃣ ORDER + LIMIT (VERY IMPORTANT)
+        # ------------------------------
+        items = (
             query
             .order_by(store_models.StoreItem.name.asc())
             .limit(limit)
             .all()
         )
 
+        # ------------------------------
+        # 5️⃣ FORMAT RESPONSE
+        # ------------------------------
         return [
             store_schemas.StoreItemOut(
                 id=item.id,
                 name=item.name,
                 unit=item.unit,
-                unit_price=unit_price or 0.0,
+                unit_price=item.unit_price or 0.0,
                 selling_price=item.selling_price or 0.0,
                 category_id=item.category_id,
                 item_type=item.item_type
             )
-            for item, unit_price in results
+            for item in items
         ]
 
     except Exception as e:
         print("❌ Error in /items/simple-search:", e)
         raise HTTPException(status_code=500, detail="Failed to fetch items.")
+
 
 
 
@@ -664,7 +671,7 @@ async def receive_inventory(
     attachment: UploadFile = File(None),
     business_id: Optional[int] = Query(None),
     db: Session = Depends(db_dependency),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["store", "admin"]))
 ):
     """
     Receive inventory / Create purchase (stock entry)
@@ -779,11 +786,17 @@ def list_purchases(
     # =========================
     # ✅ Date filters
     # =========================
+    
+
     if start_date:
-        query = query.filter(store_models.StoreStockEntry.purchase_date >= start_date)
+        query = query.filter(
+            store_models.StoreStockEntry.purchase_date >= datetime.combine(start_date, datetime.min.time())
+        )
 
     if end_date:
-        query = query.filter(store_models.StoreStockEntry.purchase_date <= end_date)
+        query = query.filter(
+            store_models.StoreStockEntry.purchase_date < datetime.combine(end_date + timedelta(days=1), datetime.min.time())
+        )
 
     # =========================
     # ✅ Invoice filter

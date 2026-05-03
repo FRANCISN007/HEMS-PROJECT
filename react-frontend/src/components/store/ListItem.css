@@ -193,3 +193,25 @@
 .cancel-btn:hover {
   background-color: #90a4ae;
 }
+
+
+
+/* Vertical Scroll for the item list - IMPROVED */
+.scrollable-table-container {
+  max-height: 350px;           /* Reduced a bit so scroll appears earlier */
+  overflow-y: auto;
+  overflow-x: auto;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-top: 10px;
+  background-color: white;     /* Ensure background is visible */
+}
+
+/* Sticky table header */
+.scrollable-table-container table thead th {
+  position: sticky;
+  top: 0;
+  background-color: #f4f6f8;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Optional: better visual separation */
+}

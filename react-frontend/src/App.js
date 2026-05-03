@@ -8,6 +8,9 @@ import {
   Navigate,
 } from "react-router-dom";
 
+import ProtectedRoute from "./utils/ProtectedRoute";
+
+
 import HomePage from "./pages/HomePage";
 import LoginPage from "./modules/auth/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -102,7 +105,17 @@ const App = () => {
         <Route path="/login" element={<LoginPage />} />
 
         {/* ================= STORE ================= */}
-        <Route path="/store" element={<StoreDashboardPage />}>
+        <Route
+          path="/store"
+          element={
+            <ProtectedRoute>
+              <StoreDashboardPage />
+            </ProtectedRoute>
+          }
+        >
+
+
+
           <Route path="vendor/list" element={<ListVendor />} />
           <Route path="category/list" element={<ListCategory />} />
           <Route path="items/list" element={<ListItem />} />
@@ -123,7 +136,17 @@ const App = () => {
         </Route>
 
         {/* ================= BAR ================= */}
-        <Route path="/bar" element={<BarDashboardPage />}>
+        <Route
+          path="/bar"
+          element={
+            <ProtectedRoute>
+              <BarDashboardPage />
+            </ProtectedRoute>
+          }
+        >
+
+
+
           <Route path="list" element={<ListBar />} />
           <Route path="stock-balance" element={<BarStockBalance />} />
           <Route path="store-issues" element={<StoreToBarControl />} />
@@ -139,7 +162,16 @@ const App = () => {
         </Route>
 
         {/* ================= RESTAURANT ================= */}
-        <Route path="/restaurant" element={<RestDashboardPage />}>
+        <Route
+          path="/restaurant"
+          element={
+            <ProtectedRoute>
+              <RestDashboardPage />
+            </ProtectedRoute>
+          }
+        >
+
+        
           <Route path="location" element={<RestaurantLocation />} />
           <Route path="MealCategory" element={<MealCategory />} />
           <Route path="MealCreate" element={<MealCreate />} />
@@ -154,7 +186,17 @@ const App = () => {
         </Route>
 
         {/* ================= DASHBOARD ================= */}
-        <Route path="/dashboard" element={<DashboardPage />}>
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        >
+
+
+
           <Route path="users" element={<UsersPage />} />
           <Route path="rooms" element={<RoomsPage />} />
           <Route path="rooms/status" element={<RoomStatusBoard />} />

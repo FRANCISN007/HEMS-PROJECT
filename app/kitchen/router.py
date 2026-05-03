@@ -217,7 +217,7 @@ def list_kitchens_simple(
     ),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(
-        role_required(["kitchen", "admin", "super_admin"])
+        role_required(["store", "admin", "super_admin"])
     )
 ):
     """
@@ -250,7 +250,7 @@ def update_kitchen(
     data: KitchenCreate,
     business_id: Optional[int] = Query(None),
     db: Session = Depends(db_dependency),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["admin" , "store"]))
 ):
     business_id = resolve_business_id(current_user, business_id)
 
@@ -340,7 +340,7 @@ def adjust_kitchen_inventory(
     business_id: Optional[int] = Query(None),
     db: Session = Depends(db_dependency),
     current_user: user_schemas.UserDisplaySchema = Depends(
-        role_required(["admin", "store", "kitchen", "super_admin"])
+        role_required(["admin", "store",  "super_admin"])
     )
 ):
     try:

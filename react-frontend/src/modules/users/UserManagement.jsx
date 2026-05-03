@@ -6,6 +6,7 @@ import getBaseUrl from "../../api/config";
 
 const API_BASE_URL = getBaseUrl();
 
+//const baseRoleOptions = ["user", "admin", "manager"];
 const baseRoleOptions = ["user", "admin", "dashboard", "bar", "restaurant", "store", "event"];
 const superAdminRole = "super_admin";
 

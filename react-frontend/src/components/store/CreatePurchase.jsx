@@ -1,22 +1,42 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./CreatePurchase.css";
 
 const CreatePurchase = () => {
+  const axios = axiosWithAuth();
+
   const [categories, setCategories] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [rows, setRows] = useState([
-    { categoryId: "", itemId: "", itemName: "", quantity: "", unitPrice: "", total: 0, search: "", suggestions: [] },
+    {
+      categoryId: "",
+      itemId: "",
+      itemName: "",
+      quantity: "",
+      unitPrice: "",
+      total: 0,
+      search: "",
+      suggestions: [],
+    },
   ]);
+
   const [vendorId, setVendorId] = useState("");
   const [purchaseDate, setPurchaseDate] = useState("");
   const [attachment, setAttachment] = useState(null);
   const [message, setMessage] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
 
+
+
+  const searchTimers = useRef({});
+  const searchCache = useRef({});
+
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
-  let roles = Array.isArray(storedUser.roles) ? storedUser.roles : [storedUser.role];
-  roles = roles.map((r) => r.toLowerCase());
+  let roles = Array.isArray(storedUser.roles)
+    ? storedUser.roles
+    : [storedUser.role];
+
+  roles = roles.map((r) => r?.toLowerCase());
 
   if (!(roles.includes("admin") || roles.includes("store"))) {
     return (
@@ -26,8 +46,6 @@ const CreatePurchase = () => {
       </div>
     );
   }
-
-  const axios = axiosWithAuth();
 
   useEffect(() => {
     fetchVendors();
@@ -53,56 +71,92 @@ const CreatePurchase = () => {
     }
   };
 
-  // 🔹 New: fetch items based on search term
   const fetchItems = async (searchText) => {
+    if (searchCache.current[searchText]) {
+      return searchCache.current[searchText];
+    }
+
     try {
       const res = await axios.get("/store/items/simple-search", {
-        params: { search: searchText, limit: 50 },
+        params: { search: searchText, limit: 20 },
       });
-      return Array.isArray(res.data) ? res.data : [];
+
+      const data = Array.isArray(res.data) ? res.data : [];
+      searchCache.current[searchText] = data;
+
+      return data;
     } catch {
       return [];
     }
   };
 
-  const handleRowChange = async (index, field, value) => {
+  const updateRowTotal = (row) => {
+    const qty = parseFloat(row.quantity) || 0;
+    const price = parseFloat(row.unitPrice) || 0;
+    row.total = qty * price;
+  };
+
+  const fetchTimeout = useRef(null);
+
+  const handleSearch = (index, value) => {
+    const updated = [...rows];
+
+    updated[index].search = value;
+    updated[index].itemId = "";
+    updated[index].itemName = "";
+    updated[index].categoryId = "";
+
+    setRows(updated);
+
+    if (fetchTimeout.current) {
+      clearTimeout(fetchTimeout.current);
+    }
+
+    if (value.length < 2) {
+      updated[index].suggestions = [];
+      setRows([...updated]);
+      return;
+    }
+
+    fetchTimeout.current = setTimeout(async () => {
+      try {
+        const res = await axios.get("/store/items/simple-search", {
+          params: { search: value, limit: 20 },
+        });
+
+        const results = Array.isArray(res.data) ? res.data : [];
+
+        setRows((prev) => {
+          const next = [...prev];
+          next[index].suggestions = results;
+          return next;
+        });
+      } catch {
+        // silent fail
+      }
+    }, 300);
+  };
+
+
+  const handleRowChange = (index, field, value) => {
     const updated = [...rows];
     updated[index][field] = value;
 
-    // Update item search suggestions dynamically
-    if (field === "search") {
-      if (value.length > 0) {
-        const results = await fetchItems(value);
-        updated[index].suggestions = results;
-      } else {
-        updated[index].suggestions = [];
-      }
-      updated[index].itemId = "";
-      updated[index].categoryId = "";
-      updated[index].itemName = "";
-    }
+    updateRowTotal(updated[index]);
+    setRows(updated);
+  };
 
-    // When user selects an item from suggestions
-    // When user selects an item from suggestions
-  if (field === "itemId") {
-    const selectedItem = updated[index].suggestions.find(
-      i => i.id === parseInt(value)
-    );
-    if (selectedItem) {
-      updated[index].categoryId = selectedItem.category_id || "";
-      updated[index].unitPrice = selectedItem.unit_price || 0;
-      updated[index].itemName = selectedItem.name;
+  const handleItemSelect = (index, item) => {
+    const updated = [...rows];
 
-      // ✅ Update the search input to display the actual item name
-      updated[index].search = selectedItem.name;
-    }
+    updated[index].itemId = item.id;
+    updated[index].itemName = item.name;
+    updated[index].categoryId = item.category_id || "";
+    updated[index].unitPrice = item.unit_price || 0;
+    updated[index].search = item.name;
     updated[index].suggestions = [];
-  }
 
-
-    const qty = parseFloat(updated[index].quantity) || 0;
-    const price = parseFloat(updated[index].unitPrice) || 0;
-    updated[index].total = qty * price;
+    updateRowTotal(updated[index]);
 
     setRows(updated);
   };
@@ -110,11 +164,22 @@ const CreatePurchase = () => {
   const addRow = () => {
     setRows([
       ...rows,
-      { categoryId: "", itemId: "", itemName: "", quantity: "", unitPrice: "", total: 0, search: "", suggestions: [] },
+      {
+        categoryId: "",
+        itemId: "",
+        itemName: "",
+        quantity: "",
+        unitPrice: "",
+        total: 0,
+        search: "",
+        suggestions: [],
+      },
     ]);
   };
 
-  const removeRow = (index) => setRows(rows.filter((_, i) => i !== index));
+  const removeRow = (index) => {
+    setRows(rows.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -132,31 +197,56 @@ const CreatePurchase = () => {
         formData.append("unit_price", String(row.unitPrice));
         formData.append("vendor_id", String(vendorId));
         formData.append("purchase_date", purchaseDate);
-        if (attachment) formData.append("attachment", attachment);
+
+        if (attachment) {
+          formData.append("attachment", attachment);
+        }
 
         await axios.post("/store/purchases", formData, {
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
         });
       }
 
       setMessage("✅ Purchase saved successfully.");
-      setRows([{ categoryId: "", itemId: "", itemName: "", quantity: "", unitPrice: "", total: 0, search: "", suggestions: [] }]);
+
+      setRows([
+        {
+          categoryId: "",
+          itemId: "",
+          itemName: "",
+          quantity: "",
+          unitPrice: "",
+          total: 0,
+          search: "",
+          suggestions: [],
+        },
+      ]);
+
       setVendorId("");
       setInvoiceNumber("");
-      setPurchaseDate(new Date().toISOString().split("T")[0]);
       setAttachment(null);
+      setPurchaseDate(new Date().toISOString().split("T")[0]);
+
     } catch (err) {
-      setMessage(err.response?.data?.detail || "❌ Failed to save purchase.");
+      setMessage(
+        err.response?.data?.detail || "❌ Failed to save purchase."
+      );
     }
   };
 
-  const invoiceTotal = rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+  const invoiceTotal = rows.reduce(
+    (sum, row) => sum + (parseFloat(row.total) || 0),
+    0
+  );
 
   return (
     <div className="create-purchase-container">
       <h2>Add New Purchase</h2>
+
       <form onSubmit={handleSubmit} className="purchase-form">
-        {/* Top Form */}
+
         <div className="top-row">
           <div className="form-group">
             <label>Vendor</label>
@@ -195,7 +285,6 @@ const CreatePurchase = () => {
           </div>
         </div>
 
-        {/* Attachment (full width below) */}
         <div className="attachment-row">
           <div className="form-group full-width">
             <label>Attach Invoice (optional)</label>
@@ -206,8 +295,6 @@ const CreatePurchase = () => {
           </div>
         </div>
 
-
-        {/* Item Table */}
         <div className="purchase-items-table">
           <div className="table-header">
             <span>Quantity</span>
@@ -223,22 +310,31 @@ const CreatePurchase = () => {
               <input
                 type="number"
                 value={row.quantity}
-                onChange={e => handleRowChange(index, "quantity", e.target.value)}
+                onChange={(e) =>
+                  handleRowChange(index, "quantity", e.target.value)
+                }
                 required
               />
 
-              {/* 🔹 Searchable Item */}
               <div className="autocomplete">
                 <input
                   type="text"
-                  placeholder="Type to search item..."
+                  placeholder="Type item name..."
                   value={row.search}
-                  onChange={e => handleRowChange(index, "search", e.target.value)}
+                  onChange={(e) =>
+                    handleSearch(index, e.target.value)
+                  }
                 />
+
                 {row.suggestions.length > 0 && (
                   <ul className="suggestions-list">
-                    {row.suggestions.map(item => (
-                      <li key={item.id} onClick={() => handleRowChange(index, "itemId", item.id)}>
+                    {row.suggestions.map((item) => (
+                      <li
+                        key={item.id}
+                        onClick={() =>
+                          handleItemSelect(index, item)
+                        }
+                      >
                         {item.name}
                       </li>
                     ))}
@@ -246,33 +342,61 @@ const CreatePurchase = () => {
                 )}
               </div>
 
-              <select value={row.categoryId} onChange={e => handleRowChange(index, "categoryId", e.target.value)}>
+              <select value={row.categoryId} disabled>
                 <option value="">Select Category</option>
-                {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
               </select>
 
               <input
                 type="number"
                 value={row.unitPrice}
-                onChange={e => handleRowChange(index, "unitPrice", e.target.value)}
+                onChange={(e) =>
+                  handleRowChange(index, "unitPrice", e.target.value)
+                }
                 required
               />
 
-              <input type="number" className="total-cell" value={row.total} readOnly />
+              <input
+                type="number"
+                className="total-cell"
+                value={row.total}
+                readOnly
+              />
 
-              <button type="button" className="remove-btn" onClick={() => removeRow(index)}>Remove</button>
+              <button
+                type="button"
+                className="remove-btn"
+                onClick={() => removeRow(index)}
+              >
+                Remove
+              </button>
             </div>
           ))}
         </div>
 
-        <button type="button" className="add-row-btn" onClick={addRow}>+ Add Item</button>
+        <button
+          type="button"
+          className="add-row-btn"
+          onClick={addRow}
+        >
+          + Add Item
+        </button>
 
         <div className="invoice-total">
           <strong>Total: </strong>
-          {invoiceTotal.toLocaleString("en-NG", { style: "currency", currency: "NGN" })}
+          {invoiceTotal.toLocaleString("en-NG", {
+            style: "currency",
+            currency: "NGN",
+          })}
         </div>
 
-        <button type="submit" className="submit-button">Add Purchase</button>
+        <button type="submit" className="submit-button">
+          Add Purchase
+        </button>
 
         {message && <p className="message">{message}</p>}
       </form>
@@ -281,3 +405,5 @@ const CreatePurchase = () => {
 };
 
 export default CreatePurchase;
+
+

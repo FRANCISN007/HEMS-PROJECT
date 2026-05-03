@@ -121,10 +121,12 @@ const ListCategory = ({ onClose }) => {
             <th>Actions</th>
           </tr>
         </thead>
+        
         <tbody>
           {categories.map((cat, index) => (
             <tr key={cat.id} className={index % 2 === 0 ? "even-row" : "odd-row"}>
-              <td>{index + 1}</td>
+              <td>{cat.id}</td>
+
               <td>
                 {editId === cat.id ? (
                   <input

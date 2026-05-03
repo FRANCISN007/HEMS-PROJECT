@@ -300,43 +300,45 @@ const ListItem = () => {
 
       <hr />
 
-      {/* Item Table */}
+      {/* Item Table with Vertical Scroll */}
       {loading ? (
         <p>Loading items...</p>
       ) : items.length === 0 ? (
         <p>No items found.</p>
       ) : (
-        <table className="item-table">
-          <thead>
-            <tr>
-              <th>Id</th>
-              <th>Name</th>
-              <th>Unit</th>
-              <th>Cost Price</th>
-              <th>Selling Price</th>
-              <th>Category</th>
-              <th>Item Type</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, index) => (
-              <tr key={item.id} className={index % 2 === 0 ? "even-row" : "odd-row"}>
-                <td>{item.id}</td>
-                <td>{item.name}</td>
-                <td>{item.unit}</td>
-                <td>{item.unit_price}</td>
-                <td>{item.selling_price}</td>
-                <td>{item.category?.name}</td>
-                <td>{item.item_type || "All"}</td>
-                <td>
-                  <button className="edit-btn" onClick={() => openEditModal(item)}>✏️ Edit</button>
-                  <button className="delete-btn" onClick={() => handleDelete(item.id)}>🗑 Delete</button>
-                </td>
+        <div className="scrollable-table-container">
+          <table className="item-table">
+            <thead>
+              <tr>
+                <th>Id</th>
+                <th>Name</th>
+                <th>Unit</th>
+                <th>Cost Price</th>
+                <th>Selling Price</th>
+                <th>Category</th>
+                <th>Item Type</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((item, index) => (
+                <tr key={item.id} className={index % 2 === 0 ? "even-row" : "odd-row"}>
+                  <td>{item.id}</td>
+                  <td>{item.name}</td>
+                  <td>{item.unit}</td>
+                  <td>{item.unit_price}</td>
+                  <td>{item.selling_price}</td>
+                  <td>{item.category?.name}</td>
+                  <td>{item.item_type || "All"}</td>
+                  <td>
+                    <button className="edit-btn" onClick={() => openEditModal(item)}>✏️ Edit</button>
+                    <button className="delete-btn" onClick={() => handleDelete(item.id)}>🗑 Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* Edit Modal */}

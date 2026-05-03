@@ -16,7 +16,7 @@
   margin: 50px auto;
   padding: 20px;
   border-radius: 10px;
-  background: #ffffff;
+  background: #02091d;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.07);
   display: flex;
   flex-direction: column;
@@ -180,7 +180,7 @@
 .auth-page-wrapper {
   display: flex;
   height: 100vh;
-  background: #f1f5f9;
+  background: #02091d;
 }
 
 
@@ -321,7 +321,7 @@
   flex-direction: column;
   justify-content: center;
   padding: 40px;
-  background: white;
+  background: #c5c7ce;
 }
 
 .license-warning {
@@ -333,4 +333,24 @@
   text-align: center;
   font-weight: bold;
   margin-bottom: 15px;
+}
+
+
+/* ===== Spinner (ShopMan-style loading animation) ===== */
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #ffffff;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin 0.6s linear infinite;
+}
+
+
+/* Rotation animation */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

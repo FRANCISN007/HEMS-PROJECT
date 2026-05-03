@@ -51,7 +51,7 @@ def create_vendor(
     vendor: schemas.VendorCreate,
     business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: UserDisplaySchema = Depends(role_required(["admin"]))
+    current_user: UserDisplaySchema = Depends(role_required(["admin", "store"]))
 ):
     business_id = resolve_business_id(current_user, business_id)
 
@@ -90,7 +90,7 @@ def create_vendor(
 def list_vendors_simple(
     business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: UserDisplaySchema = Depends(role_required(["dashboard", "admin"]))
+    current_user: UserDisplaySchema = Depends(role_required(["dashboard", "admin", "store"]))
 ):
     business_id = resolve_business_id(current_user, business_id)
 
@@ -113,7 +113,7 @@ def list_vendors_simple(
 def list_vendors(
     business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: UserDisplaySchema = Depends(role_required(["dashboard", "admin"]))
+    current_user: UserDisplaySchema = Depends(role_required(["dashboard", "admin", "store"]))
 ):
     business_id = resolve_business_id(current_user, business_id)
 
@@ -132,7 +132,7 @@ def get_vendor(
     vendor_id: int,
     business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: UserDisplaySchema = Depends(role_required(["dashboard", "admin"]))
+    current_user: UserDisplaySchema = Depends(role_required(["dashboard", "admin", "store"]))
 ):
     business_id = resolve_business_id(current_user, business_id)
     return get_business_vendor(db, vendor_id, business_id)
@@ -147,7 +147,7 @@ def update_vendor(
     updated_data: schemas.VendorCreate,
     business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    current_user: UserDisplaySchema = Depends(role_required(["admin"]))
+    current_user: UserDisplaySchema = Depends(role_required(["admin", "store"]))
 ):
     business_id = resolve_business_id(current_user, business_id)
 

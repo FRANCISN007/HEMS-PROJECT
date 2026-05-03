@@ -64,7 +64,7 @@ def create_bar(
     bar: bar_schemas.BarCreate,
     business_id: Optional[int] = Query(None, description="Super admin can specify business"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar", "admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar", "admin", "store"]))
 ):
     # Determine business scope
     if "super_admin" in current_user.roles:
@@ -102,7 +102,7 @@ def create_bar(
 def list_bars(
     business_id: Optional[int] = Query(None, description="Super admin can specify business"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar", "admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar", "admin" , "store"]))
 ):
     # Determine business scope
     if "super_admin" in current_user.roles:
@@ -127,7 +127,7 @@ def list_bars(
 def list_bars_simple(
     business_id: Optional[int] = Query(None, description="Super admin can specify business"),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar", "admin"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["bar", "admin" , "store"]))
 ):
     # Determine business scope
     if "super_admin" in current_user.roles:
@@ -398,7 +398,7 @@ def get_bar_items(
     business_id: Optional[int] = Query(None, description="Super admin can specify business"),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(
-        role_required(["bar", "admin", "super_admin"])
+        role_required(["bar", "admin", "super_admin" , "store"])
     )
 ):
     try:
@@ -473,7 +473,7 @@ def update_selling_price(
     business_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: user_schemas.UserDisplaySchema = Depends(
-        role_required(["bar", "admin", "super_admin"])
+        role_required(["bar", "admin", "super_admin" , "store"])
     )
 ):
     try:
