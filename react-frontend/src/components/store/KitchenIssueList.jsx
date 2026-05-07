@@ -1,5 +1,3 @@
-// src/components/kitchen/KitchenIssueList.jsx
-
 import React, { useState, useEffect } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./KitchenIssueList.css";
@@ -53,17 +51,16 @@ const KitchenIssueList = () => {
   }
 
   // =====================
-  // Initial Dates (TODAY ONLY)
+  // Initial Dates
   // =====================
   useEffect(() => {
     const today = new Date().toISOString().split("T")[0];
-
     setStartDate(today);
     setEndDate(today);
   }, []);
 
   // =====================
-  // Fetch Kitchens (ONCE)
+  // Fetch Kitchens
   // =====================
   useEffect(() => {
     (async () => {
@@ -79,12 +76,12 @@ const KitchenIssueList = () => {
   // =====================
   // Fetch Issues
   // =====================
-  const fetchIssues = async (sDate, eDate) => {
+  const fetchIssues = async () => {
     try {
       const params = {};
       if (filterKitchenId) params.kitchen_id = filterKitchenId;
-      if (sDate) params.start_date = sDate;
-      if (eDate) params.end_date = eDate;
+      if (startDate) params.start_date = startDate;
+      if (endDate) params.end_date = endDate;
 
       const res = await axiosWithAuth().get("/store/kitchen", { params });
       setIssues(Array.isArray(res.data) ? res.data : []);
@@ -94,9 +91,8 @@ const KitchenIssueList = () => {
   };
 
   useEffect(() => {
-    fetchIssues(startDate, endDate);
-    // eslint-disable-next-line
-  }, [startDate, endDate]);
+    fetchIssues();
+  }, [filterKitchenId, startDate, endDate]);
 
   // =====================
   // Fetch Items by Kitchen
@@ -137,8 +133,6 @@ const KitchenIssueList = () => {
     });
 
     setEditingIssue(issue.id);
-
-    // IMPORTANT: load items for this kitchen
     await fetchItemsByKitchen(kitchenId);
   };
 
@@ -195,7 +189,7 @@ const KitchenIssueList = () => {
       showMessage("✅ Issue updated successfully.");
       setEditingIssue(null);
       setFormData({ kitchen_id: "", issue_date: "", issue_items: [] });
-      fetchIssues(startDate, endDate);
+      fetchIssues();
     } catch (err) {
       console.error("Update failed", err.response?.data || err.message);
       showMessage("❌ Failed to update issue.");
@@ -210,15 +204,12 @@ const KitchenIssueList = () => {
     try {
       await axiosWithAuth().delete(`/store/kitchen/${id}`);
       showMessage("✅ Issue deleted.");
-      fetchIssues(startDate, endDate);
+      fetchIssues();
     } catch (err) {
       showMessage("❌ Delete failed.");
     }
   };
 
-  // =====================
-  // Render
-  // =====================
   return (
     <div className="list-issues-container">
       <h2>📦 Kitchen Issue List</h2>
@@ -239,50 +230,53 @@ const KitchenIssueList = () => {
         <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
 
-        <button onClick={() => fetchIssues(startDate, endDate)}>🔍 Filter</button>
+        <button onClick={() => fetchIssues()}>🔍 Filter</button>
       </div>
 
       {message && <p className="issue-message">{message}</p>}
 
-      <table className="list-issues-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Kitchen</th>
-            <th>Date</th>
-            <th>Items</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {issues.length === 0 ? (
+      {/* Vertical Scroll Table */}
+      <div className="table-scroll-container">
+        <table className="list-issues-table">
+          <thead>
             <tr>
-              <td colSpan="5">No issues found.</td>
+              <th>ID</th>
+              <th>Kitchen</th>
+              <th>Date</th>
+              <th>Items</th>
+              <th>Actions</th>
             </tr>
-          ) : (
-            issues.map((issue) => (
-              <tr key={issue.id}>
-                <td>{issue.id}</td>
-                <td>{issue.kitchen?.name}</td>
-                <td>{new Date(issue.issue_date).toLocaleDateString()}</td>
-                <td>
-                  <ul>
-                    {issue.issue_items.map((it, idx) => (
-                      <li key={idx}>
-                        {it.item?.name} — {it.quantity}
-                      </li>
-                    ))}
-                  </ul>
-                </td>
-                <td>
-                  <button onClick={() => handleEditClick(issue)}>✏️Edit</button>
-                  <button onClick={() => handleDelete(issue.id)}>🗑️Delete</button>
-                </td>
+          </thead>
+          <tbody>
+            {issues.length === 0 ? (
+              <tr>
+                <td colSpan="5">No issues found.</td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : (
+              issues.map((issue) => (
+                <tr key={issue.id}>
+                  <td>{issue.id}</td>
+                  <td>{issue.kitchen?.name}</td>
+                  <td>{new Date(issue.issue_date).toLocaleDateString()}</td>
+                  <td>
+                    <ul>
+                      {issue.issue_items.map((it, idx) => (
+                        <li key={idx}>
+                          {it.item?.name} — {it.quantity}
+                        </li>
+                      ))}
+                    </ul>
+                  </td>
+                  <td>
+                    <button onClick={() => handleEditClick(issue)}>✏️ Edit</button>
+                    <button onClick={() => handleDelete(issue.id)}>🗑️ Delete</button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {/* ================= EDIT MODAL ================= */}
       {editingIssue && (
@@ -316,6 +310,7 @@ const KitchenIssueList = () => {
             />
 
             <h4>Items</h4>
+
             {formData.issue_items.map((row, idx) => (
               <div key={idx} className="item-row">
                 <select
@@ -333,15 +328,14 @@ const KitchenIssueList = () => {
                 </select>
 
                 <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={row.quantity}
-                    onChange={(e) =>
-                        handleItemChange(idx, "quantity", e.target.value)
-                    }
-                    />
-
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={row.quantity}
+                  onChange={(e) =>
+                    handleItemChange(idx, "quantity", e.target.value)
+                  }
+                />
 
                 <button onClick={() => removeIssueLine(idx)}>❌</button>
               </div>

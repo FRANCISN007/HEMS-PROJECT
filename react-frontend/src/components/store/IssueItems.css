@@ -1,5 +1,5 @@
 .issue-items-container {
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
   padding: 20px;
   background: white;
@@ -13,22 +13,92 @@
   gap: 1rem;
 }
 
+.issue-form label {
+  font-weight: 600;
+  color: #333;
+}
+
+/* ================= SCROLLABLE TABLE ================= */
+.table-scroll-container {
+  max-height: 55vh;           /* Good height for issue form */
+  overflow-y: auto;
+  overflow-x: auto;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  margin: 8px 0;
+}
+
 .issue-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 4px;
+  table-layout: auto;
+  margin: 0;
 }
 
-.issue-table th,
-.issue-table td {
-  border: 1px solid #ccc;
-  padding: 4px;
+.issue-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #293552;
+}
+
+.issue-table th {
+  background-color: #293552;
+  color: #fff;
+  padding: 10px 8px;
   text-align: left;
+  font-weight: 600;
+  border: 1px solid #ccc;
 }
 
+.issue-table td {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  vertical-align: middle;
+}
+
+.issue-table input {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+/* Suggestions */
+.autocomplete {
+  position: relative;
+}
+
+.suggestions-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background: white;
+  border: 1px solid #ccc;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.suggestions-list li {
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.suggestions-list li:hover {
+  background: #f0f0f0;
+}
+
+/* Buttons */
 .add-row-btn,
-.submit-btn {
-  margin-top: 10px;
+.submit-btn,
+.remove-btn {
   padding: 8px 12px;
   font-weight: bold;
   border: none;
@@ -38,7 +108,7 @@
 
 .add-row-btn {
   background-color: #ced4ce;
-  color: rgb(0, 0, 0);
+  color: black;
 }
 
 .submit-btn {
@@ -46,19 +116,20 @@
   color: white;
 }
 
+.remove-btn {
+  background-color: #e74c3c;
+  color: white;
+}
+
 .issue-message {
   margin-top: 1rem;
   font-weight: bold;
+  text-align: center;
 }
 
-.issue-form input,
-.issue-form select,
-.issue-table input,
-.issue-table select {
-  width: 100%;
-  padding: 6px;
-  box-sizing: border-box;
-  border: 1px solid #ccc;
-  border-radius: 8px;
+/* Responsive */
+@media (max-width: 992px) {
+  .table-scroll-container {
+    max-height: 45vh;
+  }
 }
-

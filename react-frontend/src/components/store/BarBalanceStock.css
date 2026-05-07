@@ -2,12 +2,13 @@
 .stock-balance-container1 {
   padding: 8px;
   font-family: Arial, sans-serif;
-  max-width: 1200px;  /* wider container for large screens */
+  max-width: 1320px;
   width: 100%;
   margin: 0 auto;
   background: #fafafa;
   border-radius: 6px;
   box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+  box-sizing: border-box;
 }
 
 /* ================= HEADER ================= */
@@ -30,48 +31,41 @@
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 6px 4px;
+  padding: 9px 10px;
   background: #ffffff;
   border-radius: 6px;
   box-shadow: 0px 1px 4px rgba(0,0,0,0.08);
   width: 100%;
-  align-items: center;
+  align-items: flex-start;     /* Better vertical alignment */
+  box-sizing: border-box;
 }
 
-/* Rows inside filter */
-.filter-row1 {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  flex: 1; /* allow spreading */
-}
-
-/* Each input group */
 .filter-group1 {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  flex: 1; /* expand evenly */
+  gap: 2px;
+  flex: 1;
+  min-width: 110px;
+  max-width: 165px;
 }
 
-/* Label */
 .filter-group1 label {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   color: #333;
+  margin-bottom: 1px;
 }
 
-/* Inputs & Selects */
 .filter-group1 input,
 .filter-group1 select {
-  min-width: 120px;
-  padding: 6px 10px;
+  padding: 4px 6px;
   border-radius: 4px;
   border: 1px solid #ccc;
   font-size: 12px;
   background: #fafafa;
-  width: 100%; /* fill parent group */
+  width: 100%;
+  box-sizing: border-box;
+  height: 28px;
 }
 
 .filter-group1 input:focus,
@@ -81,46 +75,66 @@
   background: #fff;
 }
 
-/* Wider inputs for search/item row */
-.filter-row1.search-group input {
-  min-width: 150px;
+/* ================= Specific Filter Adjustments ================= */
+.bar-filter {
+  min-width: 140px;        /* More space for Bar names */
+  max-width: 190px;
+  flex-shrink: 0;          /* Important: Prevent shrinking */
 }
 
-.filter-row1.search-group select {
-  min-width: 130px;
+.search-filter {
+  min-width: 135px;
 }
 
-/* ================= TOTALS ================= */
+.item-filter {
+  min-width: 125px;
+}
+
+/* ================= TOTAL ================= */
 .total-stock1 {
   display: flex;
-  gap: 10px;
+  gap: 15px;
   font-size: 14px;
   color: #2d572c;
   background: #e6f4ea;
-  padding: 4px 8px;
+  padding: 5px 10px;
   border-radius: 4px;
   margin-top: 6px;
   align-self: flex-start;
 }
 
-/* ================= TABLE ================= */
+/* ================= SCROLLABLE TABLE ================= */
+.table-scroll-container {
+  max-height: 65vh;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+}
+
 .stock-balance-container1 table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 6px;
-  table-layout: auto; /* expand columns naturally */
+  table-layout: auto;
+  margin: 0;
+}
+
+.stock-balance-container1 thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #293552;
 }
 
 .stock-balance-container1 th,
 .stock-balance-container1 td {
   padding: 4px 6px;
   border: 1px solid #ccc;
-  font-size: 14px;
+  font-size: 12px;
   text-align: left;
 }
 
 .stock-balance-container1 th {
-  background-color: #293552;
   color: #fff;
   font-weight: 600;
   font-size: 13px;
@@ -128,13 +142,8 @@
   letter-spacing: 0.3px;
 }
 
-.even-row {
-  background-color: #f9f9f9;
-}
-
-.odd-row {
-  background-color: #fff;
-}
+.even-row { background-color: #f9f9f9; }
+.odd-row { background-color: #fff; }
 
 /* ================= MESSAGE ================= */
 .message {
@@ -150,37 +159,24 @@
 @media (max-width: 992px) {
   .stock-balance-container1 {
     width: 98%;
+    padding: 6px;
   }
-
+  
   .filter-frame1 {
     flex-direction: column;
     align-items: stretch;
+    gap: 8px;
+    padding: 8px;
   }
 
-  .filter-row1 {
-    width: 100%;
-    justify-content: flex-start;
+  .filter-group1,
+  .bar-filter {
+    min-width: auto;
+    max-width: none;
+    flex-shrink: 1;
   }
 
-  .filter-group1 input,
-  .filter-group1 select {
-    width: 100%;
-  }
-}
-
-@media (max-width: 768px) {
-  .filter-frame1 {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .filter-row1 {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .filter-group1 input,
-  .filter-group1 select {
-    width: 100%;
+  .table-scroll-container {
+    max-height: 55vh;
   }
 }

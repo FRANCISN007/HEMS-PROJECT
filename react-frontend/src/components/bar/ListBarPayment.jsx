@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./ListBarPayment.css";
 
-
 const ListBarPayment = () => {
   const [payments, setPayments] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -22,9 +21,7 @@ const ListBarPayment = () => {
     );
   }
 
-  // ✅ Dynamic business name (same pattern as restaurant)
   const businessName = user.business?.name || "HEMS Hotel";
-
 
   const today = new Date().toISOString().split("T")[0];
   const [startDate, setStartDate] = useState(today);
@@ -36,10 +33,9 @@ const ListBarPayment = () => {
     amount_paid: "",
     payment_method: "",
     note: "",
-    date_paid: today, // default today
+    date_paid: today,
   });
 
-  // ✅ BANKS
   const [banks, setBanks] = useState([]);
 
   useEffect(() => {
@@ -70,39 +66,30 @@ const ListBarPayment = () => {
       if (start) params.start_date = start;
       if (end) params.end_date = end;
       if (barId) params.bar_id = Number(barId);
-      if (status) params.status = status;  // 🔥 only used for payment-status endpoint
+      if (status) params.status = status;
 
       let res;
 
       if (status) {
-        // 🔥 If status filter is selected → USE PAYMENT-STATUS ENDPOINT
-        res = await axiosWithAuth().get("/barpayment/payment-status", {
-          params,
-        });
-
-        // 🔥 This endpoint returns an array, not an object with .payments
+        res = await axiosWithAuth().get("/barpayment/payment-status", { params });
         const mappedPayments = res.data.map((p) => ({
           id: p.payment_id,
           bar_sale_id: p.bar_sale_id,
           sale_amount: p.amount_due,
           amount_paid: p.amount_paid,
-          cumulative_paid: p.amount_paid, // because endpoint doesn't send cumulative
+          cumulative_paid: p.amount_paid,
           balance_due: p.amount_due - p.amount_paid,
           payment_method: p.payment_method,
-          bank: "-", // not returned here
+          bank: "-",
           note: "-",
           date_paid: p.date_paid,
           created_by: p.created_by,
           status: p.payment_status,
         }));
-
         setPayments(mappedPayments);
         setSummary(null);
-      } 
-      else {
-        // 🔥 No status filter → USE NORMAL ENDPOINT
+      } else {
         res = await axiosWithAuth().get("/barpayment/", { params });
-
         const mappedPayments = res.data.payments.map((p) => ({
           id: p.id,
           bar_sale_id: p.bar_sale_id,
@@ -117,11 +104,9 @@ const ListBarPayment = () => {
           created_by: p.created_by,
           status: p.status,
         }));
-
         setPayments(mappedPayments);
         setSummary(res.data.summary);
       }
-
     } catch (err) {
       console.error("❌ Failed to fetch bar payments:", err);
       setError("Failed to load bar payments.");
@@ -129,7 +114,6 @@ const ListBarPayment = () => {
       setLoading(false);
     }
   };
-
 
   useEffect(() => {
     fetchBars();
@@ -159,10 +143,9 @@ const ListBarPayment = () => {
       note: payment.note,
       date_paid: payment.date_paid
         ? new Date(payment.date_paid).toISOString().split("T")[0]
-        : today, // fallback to today
+        : today,
     });
   };
-
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -184,7 +167,6 @@ const ListBarPayment = () => {
     }
   };
 
-
   const handleVoid = async (id) => {
     if (!window.confirm("Are you sure you want to void this payment?")) return;
     try {
@@ -197,6 +179,7 @@ const ListBarPayment = () => {
   };
 
   const handlePrint = (payment) => {
+    // ... your existing print logic (unchanged)
     const salePayments = payments.filter(
       (p) => p.bar_sale_id === payment.bar_sale_id
     );
@@ -215,77 +198,48 @@ const ListBarPayment = () => {
         <head>
           <title>Bar Payment Receipt</title>
           <style>
-            body {
-              font-family: monospace, Arial;
-              width: 80mm;
-              padding: 5px;
-              margin: 0;
-            }
-            h2 {
-              text-align: center;
-              font-size: 14px;
-              margin: 5px 0;
-            }
-            p {
-              margin: 2px 0;
-              font-size: 12px;
-            }
-            hr {
-              border: 1px dashed #000;
-              margin: 6px 0;
-            }
-            .void {
-              color: red;
-              font-weight: bold;
-            }
+            body { font-family: monospace, Arial; width: 80mm; padding: 5px; margin: 0; }
+            h2 { text-align: center; font-size: 14px; margin: 5px 0; }
+            p { margin: 2px 0; font-size: 12px; }
+            hr { border: 1px dashed #000; margin: 6px 0; }
+            .void { color: red; font-weight: bold; }
           </style>
         </head>
         <body>
-
           <h2>${businessName.toUpperCase()}</h2>
           <h2>Bar Payment Receipt</h2>
-
           <hr/>
-
           <p><strong>Payment ID:</strong> ${payment.id}</p>
           <p><strong>Sale ID:</strong> ${payment.bar_sale_id}</p>
-
           <hr/>
-
           <p><strong>Sale Amount:</strong> ₦${Number(saleAmount).toLocaleString()}</p>
           <p><strong>Current Payment:</strong> ₦${Number(payment.amount_paid).toLocaleString()}</p>
           <p><strong>Total Paid:</strong> ₦${Number(totalPaid).toLocaleString()}</p>
           <p><strong>Balance:</strong> ₦${Number(netBalance).toLocaleString()}</p>
-
           <hr/>
-
           <p><strong>Method:</strong> ${payment.payment_method}</p>
           <p><strong>Bank:</strong> ${payment.bank || "N/A"}</p>
           <p><strong>Note:</strong> ${payment.note || "-"}</p>
-
           <p><strong>Status:</strong> ${
             payment.status?.toLowerCase() === "voided payment"
               ? '<span class="void">VOIDED</span>'
               : payment.status
           }</p>
-
           <p><strong>Date:</strong> ${
             payment.date_paid
               ? new Date(payment.date_paid).toLocaleString()
               : "-"
           }</p>
-
           <hr/>
           <p style="text-align:center;">Thank you!</p>
-
         </body>
       </html>
     `);
 
     receiptWindow.document.close();
     receiptWindow.print();
+    receiptWindow.close();
   };
-
 
   return (
     <div className="list-bar-payment-container">
@@ -294,10 +248,7 @@ const ListBarPayment = () => {
       {/* Filters */}
       <div className="filter-section">
         <label>Filter by Bar:</label>
-        <select
-          value={selectedBar}
-          onChange={(e) => setSelectedBar(e.target.value)}
-        >
+        <select value={selectedBar} onChange={(e) => setSelectedBar(e.target.value)}>
           <option value="">-- All Bars --</option>
           {bars.map((bar) => (
             <option key={bar.id} value={bar.id}>
@@ -307,24 +258,13 @@ const ListBarPayment = () => {
         </select>
 
         <label>Start Date:</label>
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-        />
+        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
 
         <label>End Date:</label>
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-        />
+        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
 
         <label>Status:</label>
-        <select
-          value={selectedStatus}
-          onChange={(e) => setSelectedStatus(e.target.value)}
-        >
+        <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
           <option value="">-- All Status --</option>
           <option value="fully paid">Fully Paid</option>
           <option value="part payment">Part Payment</option>
@@ -336,7 +276,8 @@ const ListBarPayment = () => {
       {error && <p className="error">{error}</p>}
       {!loading && payments.length === 0 && <p>No payment records found.</p>}
 
-      <div className="table-scroll">
+      {/* Vertical Scroll Table */}
+      <div className="table-scroll-container">
         <table className="bar-payment-table">
           <thead>
             <tr>
@@ -347,9 +288,7 @@ const ListBarPayment = () => {
               <th>Total Paid</th>
               <th>Bal Due</th>
               <th>Method</th>
-
               <th>Bank</th>
-
               <th>Note</th>
               <th>Date Paid</th>
               <th>Created By</th>
@@ -357,125 +296,74 @@ const ListBarPayment = () => {
               <th>Actions</th>
             </tr>
           </thead>
-
           <tbody>
-            {payments.map((p) => {
-              const bankName = p.bank || "-";
-
-
-              return (
-                <tr
-                  key={p.id}
-                  className={
-                    p.status?.toLowerCase() === "voided payment"
-                      ? "void-row"
-                      : ""
-                  }
-                >
-                  <td>{p.id}</td>
-                  <td>{p.bar_sale_id}</td>
-                  <td>{formatAmount(p.sale_amount)}</td>
-                  <td>{formatAmount(p.amount_paid)}</td>
-                  <td>{formatAmount(p.cumulative_paid)}</td>
-
-                  <td
-                    style={{ color: p.balance_due > 0 ? "red" : "green" }}
-                  >
-                    {formatAmount(p.balance_due)}
-                  </td>
-
-                  <td>{p.payment_method || "-"}</td>
-
-                  {/* 🔥 DISPLAY BANK NAME */}
-                  <td>{bankName}</td>
-
-                  <td>{p.note || "-"}</td>
-                  <td>
-                    {p.date_paid
-                      ? new Date(p.date_paid).toLocaleDateString()
-                      : "-"}
-                  </td>
-                  <td>{p.created_by || "-"}</td>
-
-                  <td
-                    className={`status ${p.status
-                      ?.toLowerCase()
-                      .replace(/\s+/g, "-")}`}
-                  >
-                    {p.status}
-                  </td>
-
-                  <td>
-                    <button
-                      className="btn-edit"
-                      onClick={() => handleEdit(p)}
-                    >
-                      ✏️ Edit
-                    </button>
-                    <button
-                      className="btn-delete"
-                      onClick={() => handleDelete(p.id)}
-                    >
-                      🗑️ Delete
-                    </button>
-                    <button
-                      className="btn-void"
-                      onClick={() => handleVoid(p.id)}
-                      disabled={p.status === "voided payment"}
-                    >
-                      🚫 Void
-                    </button>
-                    <button
-                      className="btn-print"
-                      onClick={() => handlePrint(p)}
-                    >
-                      🖨 Print
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
+            {payments.map((p) => (
+              <tr
+                key={p.id}
+                className={p.status?.toLowerCase() === "voided payment" ? "void-row" : ""}
+              >
+                <td>{p.id}</td>
+                <td>{p.bar_sale_id}</td>
+                <td>{formatAmount(p.sale_amount)}</td>
+                <td>{formatAmount(p.amount_paid)}</td>
+                <td>{formatAmount(p.cumulative_paid)}</td>
+                <td style={{ color: p.balance_due > 0 ? "red" : "green" }}>
+                  {formatAmount(p.balance_due)}
+                </td>
+                <td>{p.payment_method || "-"}</td>
+                <td>{p.bank || "-"}</td>
+                <td>{p.note || "-"}</td>
+                <td>
+                  {p.date_paid ? new Date(p.date_paid).toLocaleDateString() : "-"}
+                </td>
+                <td>{p.created_by || "-"}</td>
+                <td className={`status ${p.status?.toLowerCase().replace(/\s+/g, "-")}`}>
+                  {p.status}
+                </td>
+                <td>
+                  <button className="btn-edit" onClick={() => handleEdit(p)}>✏️ Edit</button>
+                  <button className="btn-delete" onClick={() => handleDelete(p.id)}>🗑️ Delete</button>
+                  <button className="btn-void" onClick={() => handleVoid(p.id)} disabled={p.status === "voided payment"}>🚫 Void</button>
+                  <button className="btn-print" onClick={() => handlePrint(p)}>🖨 Print</button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
       {summary && (
-  <>
-        {/* 🔹 MAIN SUMMARY */}
-        <div className="main-summary-section">
-          <h3>📊 Main Summary</h3>
-          <div className="main-summary-grid">
-            <div className="summary-card"><strong>Total Sales:</strong> {formatAmount(summary.total_sales)}</div>
-            <div className="summary-card"><strong>Total Paid:</strong> {formatAmount(summary.total_paid)}</div>
-            <div className="summary-card"><strong>Total Due:</strong> {formatAmount(summary.total_due)}</div>
-            <div className="summary-card"><strong>Total Cash:</strong> {formatAmount(summary.total_cash)}</div>
-            <div className="summary-card"><strong>Total POS:</strong> {formatAmount(summary.total_pos)}</div>
-            <div className="summary-card"><strong>Total Transfer:</strong> {formatAmount(summary.total_transfer)}</div>
-          </div>
-        </div>
-
-        {/* 🔹 BANK SUMMARY */}
-        {summary.banks && (
-          <div className="bank-summary-section">
-            <h3>🏦 Bank Summary</h3>
-            <div className="bank-summary-grid">
-              {Object.entries(summary.banks)
-                .filter(([bankName]) => bankName && bankName.toUpperCase() !== "NO BANK") // ✅ skip No Bank
-                .map(([bankName, data]) => (
-                  <div key={bankName} className="bank-summary-card">
-                    <h4>{bankName}</h4>
-                    <p><strong>POS:</strong> {formatAmount(data.pos || 0)}</p>
-                    <p><strong>Transfer:</strong> {formatAmount(data.transfer || 0)}</p>
-                  </div>
-              ))}
-
+        <>
+          <div className="main-summary-section">
+            <h3>📊 Main Summary</h3>
+            <div className="main-summary-grid">
+              <div className="summary-card"><strong>Total Sales:</strong> {formatAmount(summary.total_sales)}</div>
+              <div className="summary-card"><strong>Total Paid:</strong> {formatAmount(summary.total_paid)}</div>
+              <div className="summary-card"><strong>Total Due:</strong> {formatAmount(summary.total_due)}</div>
+              <div className="summary-card"><strong>Total Cash:</strong> {formatAmount(summary.total_cash)}</div>
+              <div className="summary-card"><strong>Total POS:</strong> {formatAmount(summary.total_pos)}</div>
+              <div className="summary-card"><strong>Total Transfer:</strong> {formatAmount(summary.total_transfer)}</div>
             </div>
           </div>
-        )}
-      </>
-    )}
 
-
+          {summary.banks && (
+            <div className="bank-summary-section">
+              <h3>🏦 Bank Summary</h3>
+              <div className="bank-summary-grid">
+                {Object.entries(summary.banks)
+                  .filter(([bankName]) => bankName && bankName.toUpperCase() !== "NO BANK")
+                  .map(([bankName, data]) => (
+                    <div key={bankName} className="bank-summary-card">
+                      <h4>{bankName}</h4>
+                      <p><strong>POS:</strong> {formatAmount(data.pos || 0)}</p>
+                      <p><strong>Transfer:</strong> {formatAmount(data.transfer || 0)}</p>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Edit Modal */}
       {editingPayment && (
@@ -484,35 +372,23 @@ const ListBarPayment = () => {
             <h3>Edit Payment #{editingPayment.id}</h3>
             <form onSubmit={handleSave}>
               <label>Payment Date</label>
-                <input
-                  type="date"
-                  value={formData.date_paid}
-                  onChange={(e) =>
-                    setFormData({ ...formData, date_paid: e.target.value })
-                  }
-                />
+              <input
+                type="date"
+                value={formData.date_paid}
+                onChange={(e) => setFormData({ ...formData, date_paid: e.target.value })}
+              />
 
               <label>Amount Paid</label>
               <input
                 type="number"
                 value={formData.amount_paid}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    amount_paid: e.target.value,
-                  })
-                }
+                onChange={(e) => setFormData({ ...formData, amount_paid: e.target.value })}
               />
 
               <label>Payment Method</label>
               <select
                 value={formData.payment_method || ""}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    payment_method: e.target.value,
-                  })
-                }
+                onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
               >
                 <option value="">-- Select Method --</option>
                 <option value="cash">Cash</option>
@@ -524,25 +400,12 @@ const ListBarPayment = () => {
               <input
                 type="text"
                 value={formData.note}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    note: e.target.value,
-                  })
-                }
+                onChange={(e) => setFormData({ ...formData, note: e.target.value })}
               />
 
               <div className="modal-actions3">
-                <button type="submit" className="btn-edit">
-                  💾 Save
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditingPayment(null)}
-                  className="btn-delete"
-                >
-                  ❌ Cancel
-                </button>
+                <button type="submit" className="btn-edit">💾 Save</button>
+                <button type="button" onClick={() => setEditingPayment(null)} className="btn-delete">❌ Cancel</button>
               </div>
             </form>
           </div>
@@ -553,3 +416,4 @@ const ListBarPayment = () => {
 };
 
 export default ListBarPayment;
+

@@ -54,7 +54,7 @@ const BarBalanceStock = () => {
   useEffect(() => {
     const delay = setTimeout(() => {
       fetchStockBalances();
-    }, 300); // debounce
+    }, 300);
     return () => clearTimeout(delay);
   }, [selectedBar, startDate, endDate, search, selectedItemId]);
 
@@ -96,76 +96,77 @@ const BarBalanceStock = () => {
       <div className="stock-balance-header">
         <h2>📊 Bar Stock Balance Report</h2>
 
-        {/* FILTERS */}
         <div className="filter-frame1">
-          {/* Row 1: Bar + Dates */}
-          <div className="filter-row date-group1">
-            <div className="filter-group1">
-              <label>Bar:</label>
-              <select value={selectedBar} onChange={(e) => setSelectedBar(e.target.value)}>
-                <option value="">All Bars</option>
-                {bars.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="filter-group1">
-              <label>Start:</label>
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            </div>
-
-            <div className="filter-group1">
-              <label>End:</label>
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </div>
+          {/* Bar */}
+          <div className="filter-group1 bar-filter">
+            <label>Bar</label>
+            <select value={selectedBar} onChange={(e) => setSelectedBar(e.target.value)}>
+              <option value="">All Bars</option>
+              {bars.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* Row 2: Search + Item */}
-          <div className="filter-row search-group">
-            <div className="filter-group1">
-              <label>Search:</label>
-              <input
-                type="text"
-                placeholder="Search item..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setSelectedItemId("");
-                }}
-              />
-            </div>
+          {/* Start Date */}
+          <div className="filter-group1">
+            <label>Start Date</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
 
-            <div className="filter-group1">
-              <label>Item:</label>
-              <select
-                value={selectedItemId}
-                onChange={(e) => {
-                  setSelectedItemId(e.target.value);
-                  setSearch("");
-                }}
-              >
-                <option value="">All Items</option>
-                {balances.map((item) => (
-                  <option key={item.item_id} value={item.item_id}>
-                    {item.item_name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* End Date */}
+          <div className="filter-group1">
+            <label>End Date</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+
+          {/* Search */}
+          <div className="filter-group1 search-filter">
+            <label>Search</label>
+            <input
+              type="text"
+              placeholder="Search item..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setSelectedItemId("");
+              }}
+            />
+          </div>
+
+          {/* Item */}
+          <div className="filter-group1 item-filter">
+            <label>Item</label>
+            <select
+              value={selectedItemId}
+              onChange={(e) => {
+                setSelectedItemId(e.target.value);
+                setSearch("");
+              }}
+            >
+              <option value="">All Items</option>
+              {balances.map((item) => (
+                <option key={item.item_id} value={item.item_id}>
+                  {item.item_name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {/* TOTALS */}
         <div className="total-stock1">
-          <div>
-            Total Stock Value: <strong>₦{totalStockAmount.toLocaleString()}</strong>
-          </div>
-          <div>
-            Stock Balance: <strong>{totalStockBalance.toLocaleString()}</strong>
-          </div>
+          <div>Total Stock Value: <strong>₦{totalStockAmount.toLocaleString()}</strong></div>
+          <div>Stock Balance: <strong>{totalStockBalance.toLocaleString()}</strong></div>
         </div>
       </div>
 
@@ -174,40 +175,49 @@ const BarBalanceStock = () => {
       {loading ? (
         <p>Loading...</p>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Bar</th>
-              <th>Item</th>
-              <th>Unit</th>
-              <th>Category</th>
-              <th>Item Type</th>
-              <th>Total Received</th>
-              <th>Total Sold</th>
-              <th>Total Adjusted</th>
-              <th>Balance</th>
-              <th>Unit Price</th>
-              <th>Balance Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {balances.map((item, idx) => (
-              <tr key={`${item.bar_id}-${item.item_id}`} className={idx % 2 === 0 ? "even-row" : "odd-row"}>
-                <td>{item.bar_name}</td>
-                <td>{item.item_name}</td>
-                <td>{item.unit}</td>
-                <td>{item.category_name}</td>
-                <td>{item.item_type}</td>
-                <td>{item.total_received}</td>
-                <td>{item.total_sold}</td>
-                <td>{item.total_adjusted}</td>
-                <td>{item.balance}</td>
-                <td>{item.last_unit_price ? `₦${item.last_unit_price.toLocaleString()}` : "-"}</td>
-                <td>{item.balance_total_amount ? `₦${item.balance_total_amount.toLocaleString()}` : "-"}</td>
+        <div className="table-scroll-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Bar</th>
+                <th>Item</th>
+                <th>Unit</th>
+                <th>Category</th>
+                <th>Item Type</th>
+                <th>Total Received</th>
+                <th>Total Sold</th>
+                <th>Total Adjusted</th>
+                <th>Balance</th>
+                <th>Unit Price</th>
+                <th>Balance Value</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {balances.map((item, idx) => (
+                <tr
+                  key={`${item.bar_id}-${item.item_id}`}
+                  className={idx % 2 === 0 ? "even-row" : "odd-row"}
+                >
+                  <td>{item.bar_name}</td>
+                  <td>{item.item_name}</td>
+                  <td>{item.unit}</td>
+                  <td>{item.category_name}</td>
+                  <td>{item.item_type}</td>
+                  <td>{item.total_received}</td>
+                  <td>{item.total_sold}</td>
+                  <td>{item.total_adjusted}</td>
+                  <td>{item.balance}</td>
+                  <td>
+                    {item.last_unit_price ? `₦${item.last_unit_price.toLocaleString()}` : "-"}
+                  </td>
+                  <td>
+                    {item.balance_total_amount ? `₦${item.balance_total_amount.toLocaleString()}` : "-"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

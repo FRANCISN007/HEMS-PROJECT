@@ -6,7 +6,15 @@
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   font-size: 14px;
+
+   /* 👇 ADD THESE */
+  display: block;
+  max-height: 65vh;   /* controls visible height */
+  overflow-y: auto;   /* enables vertical scroll */
+
 }
+
+
 
 .listorder-header {
   display: flex;
@@ -113,7 +121,7 @@
 
 .action-btn {
   margin: 0 4px;
-  padding: 6px 10px;
+  padding: 3px 5px;
   border: none;
   border-radius: 6px;
   font-size: 13px;

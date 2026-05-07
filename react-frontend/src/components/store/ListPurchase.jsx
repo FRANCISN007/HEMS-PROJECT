@@ -54,7 +54,6 @@ const ListPurchase = () => {
 
     setStartDate(today);
     setEndDate(today);
-
     fetchPurchases(today, today);
   }, []);
 
@@ -123,9 +122,7 @@ const ListPurchase = () => {
     try {
       await axios.delete(`/store/purchases/${id}`);
       setMessage("✅ Purchase deleted successfully.");
-
       fetchPurchases();
-
       setTimeout(() => setMessage(""), 3000);
     } catch {
       setMessage("❌ Failed to delete purchase.");
@@ -177,9 +174,7 @@ const ListPurchase = () => {
 
       setMessage("✅ Purchase updated successfully.");
       setEditingPurchase(null);
-
       fetchPurchases();
-
       setTimeout(() => setMessage(""), 3000);
     } catch (err) {
       console.error(err);
@@ -188,9 +183,6 @@ const ListPurchase = () => {
     }
   };
 
-  // =========================
-  // ✅ UI
-  // =========================
   return (
     <div className="list-purchase-container">
       <h2>List Purchases</h2>
@@ -225,9 +217,7 @@ const ListPurchase = () => {
           ))}
         </select>
 
-        <button onClick={() => fetchPurchases()}>
-          Search
-        </button>
+        <button onClick={() => fetchPurchases()}>Search</button>
       </div>
 
       {/* Summary */}
@@ -236,57 +226,59 @@ const ListPurchase = () => {
         <p><strong>Total Purchase:</strong> ₦{totalAmount.toLocaleString()}</p>
       </div>
 
-      {/* Table */}
+      {/* Table with Vertical Scroll */}
       {loading ? (
         <p>Loading...</p>
       ) : error ? (
         <p className="error">{error}</p>
       ) : (
-        <table className="purchase-table">
-          <thead>
-            <tr>
-              <th>Invoice</th>
-              <th>Item</th>
-              <th>Qty</th>
-              <th>Unit Price</th>
-              <th>Total</th>
-              <th>Vendor</th>
-              <th>Date</th>
-              <th>By</th>
-              <th>Attachment</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {purchases.length === 0 ? (
-              <tr><td colSpan="10">No data</td></tr>
-            ) : (
-              purchases.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.invoice_number}</td>
-                  <td>{p.item_name}</td>
-                  <td>{p.quantity}</td>
-                  <td>{p.unit_price}</td>
-                  <td>{p.total_amount}</td>
-                  <td>{p.vendor_name}</td>
-                  <td>{new Date(p.purchase_date).toLocaleDateString()}</td>
-                  <td>{p.created_by}</td>
-                  <td>
-                    {p.attachment_url ? (
-                      <a href={p.attachment_url} target="_blank" rel="noreferrer">
-                        View
-                      </a>
-                    ) : "-"}
-                  </td>
-                  <td>
-                    <button onClick={() => handleEditClick(p)}>Edit</button>
-                    <button onClick={() => handleDelete(p.id)}>Delete</button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        <div className="table-scroll-container">
+          <table className="purchase-table">
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Unit Price</th>
+                <th>Total</th>
+                <th>Vendor</th>
+                <th>Date</th>
+                <th>Created By</th>
+                <th>Attachment</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {purchases.length === 0 ? (
+                <tr><td colSpan="10">No data</td></tr>
+              ) : (
+                purchases.map((p) => (
+                  <tr key={p.id}>
+                    <td>{p.invoice_number}</td>
+                    <td>{p.item_name}</td>
+                    <td>{p.quantity}</td>
+                    <td>{p.unit_price}</td>
+                    <td>{p.total_amount}</td>
+                    <td>{p.vendor_name}</td>
+                    <td>{new Date(p.purchase_date).toLocaleDateString()}</td>
+                    <td>{p.created_by}</td>
+                    <td>
+                      {p.attachment_url ? (
+                        <a href={p.attachment_url} target="_blank" rel="noreferrer">
+                          View
+                        </a>
+                      ) : "-"}
+                    </td>
+                    <td>
+                      <button onClick={() => handleEditClick(p)}>Edit</button>
+                      <button onClick={() => handleDelete(p.id)}>Delete</button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* Edit Modal */}

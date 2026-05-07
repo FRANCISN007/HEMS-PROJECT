@@ -1,286 +1,172 @@
-/* src/components/payments/ListBarPayment.css
-   Compact variant: tighter paddings, smaller font, sticky header, scrollable body, zebra + grid lines
-*/
-
+/* ================= MAIN CONTAINER ================= */
 .list-bar-payment-container {
-  padding: 10px;
+  max-width: 1350px;
+  margin: 0 auto;
+  padding: 12px;
   background: #f5f2f2;
-  border-radius: 8px;
-  box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.05);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  color: #222;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
 /* Header */
 .list-bar-payment-container h2 {
-  margin-bottom: 10px;
-  font-size: 1.15rem;
-  font-weight: 600;
-  color: #222;
+  text-align: center;
+  margin-bottom: 15px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #2c3e50;
 }
 
-/* Filters */
+/* ================= FILTERS ================= */
 .filter-section {
-  margin-bottom: 10px;
   display: flex;
-  gap: 10px;
-  align-items: center;
   flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 15px;
+  align-items: center;
 }
-.filter-section label { font-size: 13px; font-weight: 500; }
+
+.filter-section label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+}
+
+
+
 .filter-section select,
 .filter-section input[type="date"] {
-  padding: 6px 8px;
+  padding: 6px 6px;
   font-size: 13px;
-  border: 1px solid #d5d5d5;
+  border: 1px solid #ccc;
   border-radius: 6px;
   background: #fff;
+  min-width: 130px;
 }
 
-/* Table wrapper (scrolling area) */
-.list-bar-payment-container .table-scroll {
-  max-height: none;
-  overflow-x: auto;   /* horizontal scroll if table too wide */
-  overflow-y: visible; 
-  border: 1px solid #e6e6e6;
-  border-radius: 6px;
+/* ================= SCROLLABLE TABLE ================= */
+.table-scroll-container {
+  max-height: 68vh;
+  overflow-y: auto;
+  overflow-x: auto;
+  border: 1px solid #ccc;
+  border-radius: 8px;
   background: #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
 }
 
-
-
-
-/* Compact table */
-.list-bar-payment-container .bar-payment-table {
+.bar-payment-table {
   width: 100%;
   border-collapse: collapse;
-  margin: 0;
-  font-size: 12px;            /* compact font */
   table-layout: auto;
-  min-width: 900px;          /* allow horizontal scroll on very narrow screens */
+  font-size: 13px;
+  margin: 0;
 }
 
-/* Grid lines for header and body cells */
-.list-bar-payment-container .bar-payment-table th,
-.list-bar-payment-container .bar-payment-table td {
-  border: 1px solid #e6e6e6;
-  padding: 6px 8px;         /* compact padding */
-  text-align: center;
-  vertical-align: middle;
-  white-space: nowrap;       /* keep cells single-line for compactness */
-}
-
-/* Sticky header so column titles stay visible while scrolling */
-.list-bar-payment-container .bar-payment-table thead th {
+/* Sticky Header */
+.bar-payment-table thead {
   position: sticky;
   top: 0;
-  background-color: #2f3b46;
-  color: #ffffff;
-  z-index: 5;
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.2px;
+  z-index: 15;
+  background-color: #2f3136;
 }
 
-/* Zebra striping - keep void/exception rows separate */
-.list-bar-payment-container .bar-payment-table tbody tr:not(.void-row):nth-of-type(odd) {
-  background-color: #fbfbfb;
+.bar-payment-table th {
+  background-color: #2f3136;
+  color: #ffffff;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.4px;
+  padding: 10px 6px;
+  border: 1px solid #bdbdbd;
+  text-align: center;
+  position: sticky;
+  top: 0;
 }
-.list-bar-payment-container .bar-payment-table tbody tr:not(.void-row):nth-of-type(even) {
+
+.bar-payment-table td {
+  padding: 7px 6px;
+  border: 1px solid #e0e0e0;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* Row Styling */
+.bar-payment-table tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.bar-payment-table tr:nth-child(odd) {
   background-color: #ffffff;
 }
 
-/* Hover effect (applies to any row) */
-.list-bar-payment-container .bar-payment-table tbody tr:hover {
-  background-color: #eef9ff;
+.bar-payment-table tr:hover {
+  background-color: #f0f7ff;
 }
 
-/* Void row accent (overrides zebra) */
-.list-bar-payment-container .bar-payment-table tbody tr.void-row {
+/* Void Row */
+.bar-payment-table tr.void-row {
   background-color: #fff0f0 !important;
+  color: #d32f2f;
 }
 
-/* Status badge - smaller */
-.list-bar-payment-container .status {
+/* Status Badges */
+.status {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
 }
 
-/* Status colors */
-.list-bar-payment-container .status.unpaid { background: #fff0f0; color: #d32f2f; }
-.list-bar-payment-container .status.part-payment { background: #fff7e6; color: #ff9800; }
-.list-bar-payment-container .status.fully-paid { background: #e8f6ea; color: #2e7d32; }
-.list-bar-payment-container .status.voided { background: #f2f2f2; color: #7a7a7a; font-style: italic; }
+.status.fully-paid { background: #e8f5e9; color: #2e7d32; }
+.status.part-payment { background: #fff3e0; color: #f57c00; }
+.status.unpaid { background: #ffebee; color: #c62828; }
+.status.voided-payment { background: #f5f5f5; color: #757575; font-style: italic; }
 
-/* Compact action buttons */
-.list-bar-payment-container .btn-edit,
-.list-bar-payment-container .btn-delete,
-.list-bar-payment-container .btn-void,
-.list-bar-payment-container .btn-print {
-  padding: 4px 6px;
+/* Action Buttons */
+.btn-edit, .btn-delete, .btn-void, .btn-print {
+  padding: 4px 8px;
+  margin: 2px;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
+  font-size: 12px;
   cursor: pointer;
-  margin: 1px;
-  font-size: 11px;
-  line-height: 1;
 }
 
-/* Button colors */
-.list-bar-payment-container .btn-edit { background: #2e7d32; color: #fff; }
-.list-bar-payment-container .btn-delete { background: #d32f2f; color: #fff; }
-.list-bar-payment-container .btn-void { background: #ff9800; color: #fff; }
-.list-bar-payment-container .btn-void:disabled { background: #cfcfcf; cursor: not-allowed; }
-.list-bar-payment-container .btn-print { background: #1976d2; color: #fff; }
+.btn-edit { background: #2e7d32; color: white; }
+.btn-delete { background: #d32f2f; color: white; }
+.btn-void { background: #f57c00; color: white; }
+.btn-print { background: #1976d2; color: white; }
 
-/* Summary box - slim */
-.list-bar-payment-container .summary-box {
-  margin-top: 10px;
-  padding: 10px;
-  border: 1px solid #e6e6e6;
+/* ================= SUMMARY ================= */
+.main-summary-section, .bank-summary-section {
+  margin-top: 18px;
+  padding: 12px;
+  background: #fff;
   border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.03);
-  font-size: 13px;
+  border: 1px solid #e0e0e0;
 }
 
-/* Modal styling (slim) */
-.modal-overlay3 { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; z-index: 999; }
-.modal3 { background: #fff; padding: 14px; border-radius: 8px; width: 380px; max-height: 90vh; overflow:auto; }
-
-/* Responsiveness */
-@media (max-width: 1100px) {
-  .list-bar-payment-container .bar-payment-table { font-size: 11px; min-width: 760px; }
-  .list-bar-payment-container .bar-payment-table th,
-  .list-bar-payment-container .bar-payment-table td { padding: 5px 6px; }
-  .filter-section label { font-size: 12px; }
-}
-
-@media (max-width: 700px) {
-  .list-bar-payment-container .table-scroll { max-height: 60vh; }
-  .list-bar-payment-container .bar-payment-table { min-width: 900px; } /* allow horizontal scroll */
-}
-
-
-/* ✅ Modal Overlay */
-.modal-overlay3 {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.6); /* dim background */
+.main-summary-grid {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 2000;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
-/* ✅ Modal Box */
-.modal3 {
-  background: #fff;
-  padding: 25px;
-  border-radius: 10px;
-  width: 420px;
-  max-width: 95%;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-/* ✅ Modal Title */
-.modal3 h3 {
-  margin-top: 0;
-  margin-bottom: 15px;
-  font-size: 1.3rem;
-  font-weight: bold;
-  color: #333;
+.summary-card {
+  background: #f8f9fa;
+  padding: 10px 14px;
+  border-radius: 8px;
+  flex: 1;
+  min-width: 160px;
   text-align: center;
-}
-
-/* ✅ Inputs & Select */
-.modal3 input,
-.modal3 select {
-  width: 100%;
-  padding: 10px;
-  margin: 6px 0 12px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-size: 1rem;
-}
-
-.modal3 input:focus,
-.modal3 select:focus {
-  border-color: #007bff;
-  outline: none;
-}
-
-/* ✅ Modal Actions */
-.modal-actions3 {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 15px;
-}
-
-/* ✅ Save Button */
-.btn-edit {
-  background-color: #28a745;
-  color: #fff;
-  padding: 10px 16px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.95rem;
-  transition: background 0.2s ease-in-out;
-}
-
-.btn-edit:hover {
-  background-color: #218838;
-}
-
-/* ✅ Cancel Button */
-.btn-delete {
-  background-color: #dc3545;
-  color: #fff;
-  padding: 10px 16px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.95rem;
-  transition: background 0.2s ease-in-out;
-}
-
-.btn-delete:hover {
-  background-color: #c82333;
-}
-
-/* ✅ Animation */
-@keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-
-/* Payment Status dropdown - align with filters */
-.filter-section select.status-dropdown {
-  min-width: 140px;
-}
-
-
-.bank-summary-section {
-  margin-top: 15px;
-  padding: 10px;
-  background: #f8f9fc;
-  border-radius: 10px;
-  border: 1px solid #dce1f0;
-}
-
-.bank-summary-section h3 {
-  margin-bottom: 8px;
-  font-size: 18px;
-  color: #333;
+  font-weight: 600;
+  border-left: 4px solid #1976d2;
 }
 
 .bank-summary-grid {
@@ -291,41 +177,79 @@
 
 .bank-summary-card {
   background: white;
-  border: 1px solid #ccd4e3;
-  padding: 8px;
+  border: 1px solid #e0e0e0;
+  padding: 10px;
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 
-.bank-summary-card h4 {
-  margin: 0 0 10px 0;
-  font-size: 16px;
-  color: #003366;
-  border-bottom: 1px dashed #ddd;
-  padding-bottom: 2px;
-}
-
-.bank-summary-card p {
-  margin: 2px 0;
-  font-size: 14px;
-}
-
-
-.main-summary-section {
-  margin: 15px 0;
-}
-
-.main-summary-grid {
+/* ================= MODAL ================= */
+.modal-overlay3 {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
 }
 
-.summary-card {
-  background-color: #f5f5f5;
-  padding: 8px 12px;
-  border-radius: 8px;
-  flex: 1 1 150px;
+.modal3 {
+  background: #fff;
+  padding: 22px;
+  border-radius: 10px;
+  width: 420px;
+  max-width: 95%;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+.modal3 h3 {
   text-align: center;
-  font-weight: bold;
+  margin-bottom: 18px;
+  color: #2c3e50;
+}
+
+.modal3 label {
+  display: block;
+  margin: 10px 0 4px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.modal3 input,
+.modal3 select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 13.5px;
+}
+
+.modal-actions3 {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.btn-edit, .btn-delete {
+  flex: 1;
+  padding: 10px;
+  font-size: 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-edit { background: #28a745; color: white; }
+.btn-delete { background: #dc3545; color: white; }
+
+/* Responsive */
+@media (max-width: 992px) {
+  .table-scroll-container {
+    max-height: 55vh;
+  }
 }

@@ -14,7 +14,6 @@ const ListBarSales = () => {
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const roles = user.roles || [];
   
-  // Get business name from the structure your login already returns
   const businessName = user.business?.name || "HEMS Hotel";
 
   if (!(roles.includes("admin") || roles.includes("bar"))) {
@@ -244,8 +243,8 @@ const ListBarSales = () => {
         </div>
       </div>
 
-      {/* SALES TABLE */}
-      <div className="data-container1">
+      {/* SALES TABLE WITH VERTICAL SCROLL */}
+      <div className="table-scroll-container">
         <table className="sales-table1">
           <thead>
             <tr>

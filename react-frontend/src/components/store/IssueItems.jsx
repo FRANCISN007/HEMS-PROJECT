@@ -1,5 +1,3 @@
-// src/components/store/IssueItems.jsx
-
 import React, { useState, useEffect, useRef } from "react";
 import axiosWithAuth from "../../utils/axiosWithAuth";
 import "./IssueItems.css";
@@ -23,9 +21,7 @@ const IssueItems = () => {
     setIssueDate(getToday());
   }, []);
 
-  // =============================
-  // 🔐 ROLE CHECK
-  // =============================
+  // Role Check
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
   let roles = Array.isArray(storedUser.roles)
     ? storedUser.roles
@@ -44,9 +40,7 @@ const IssueItems = () => {
     );
   }
 
-  // =============================
-  // FETCH BARS
-  // =============================
+  // Fetch Bars
   useEffect(() => {
     axios
       .get("/bar/bars/simple")
@@ -56,21 +50,14 @@ const IssueItems = () => {
       .catch((err) => console.error("❌ Error fetching bars", err));
   }, []);
 
-  // =============================
-  // 🔍 SEARCH BAR ITEMS
-  // =============================
+  // Search Items
   const fetchItems = async (searchText) => {
     if (!searchText) return [];
 
     try {
       const res = await axios.get("/bar/items/simple-search", {
-        params: {
-          search: searchText,
-          limit: 50,
-        },
+        params: { search: searchText, limit: 50 },
       });
-
-      // ✅ Normalize backend
       return (res.data || []).map((item) => ({
         id: item.item_id,
         name: item.item_name,
@@ -81,13 +68,9 @@ const IssueItems = () => {
     }
   };
 
-  // =============================
-  // ROW CHANGE
-  // =============================
   const handleRowChange = (index, field, value) => {
     const updated = [...rows];
 
-    // 🔍 SEARCH INPUT
     if (field === "search") {
       updated[index].search = value;
       updated[index].itemId = "";
@@ -97,7 +80,6 @@ const IssueItems = () => {
 
       fetchTimeout.current = setTimeout(async () => {
         const results = await fetchItems(value);
-
         setRows((prev) => {
           const temp = [...prev];
           temp[index].suggestions = results;
@@ -106,7 +88,6 @@ const IssueItems = () => {
       }, 300);
     }
 
-    // ✅ SELECT ITEM
     if (field === "select_item") {
       updated[index].itemId = value.id;
       updated[index].itemName = value.name;
@@ -114,7 +95,6 @@ const IssueItems = () => {
       updated[index].suggestions = [];
     }
 
-    // 🔢 QUANTITY
     if (field === "quantity") {
       updated[index].quantity = value;
     }
@@ -122,9 +102,6 @@ const IssueItems = () => {
     setRows(updated);
   };
 
-  // =============================
-  // ADD / REMOVE ROW
-  // =============================
   const addRow = () => {
     setRows([
       ...rows,
@@ -136,16 +113,11 @@ const IssueItems = () => {
     setRows(rows.filter((_, i) => i !== index));
   };
 
-  // =============================
-  // SUBMIT
-  // =============================
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!issuedTo) return alert("Select a bar");
 
     const validRows = rows.filter((r) => r.itemId && r.quantity);
-
     if (!validRows.length) {
       alert("Add at least one valid item");
       return;
@@ -163,12 +135,9 @@ const IssueItems = () => {
 
     try {
       await axios.post("/store/bar", payload);
-
       setMessage("✅ Items successfully issued to bar");
 
-      setRows([
-        { itemId: "", itemName: "", search: "", suggestions: [], quantity: "" },
-      ]);
+      setRows([{ itemId: "", itemName: "", search: "", suggestions: [], quantity: "" }]);
       setIssuedTo("");
       setIssueDate(getToday());
     } catch (err) {
@@ -176,9 +145,6 @@ const IssueItems = () => {
     }
   };
 
-  // =============================
-  // UI
-  // =============================
   return (
     <div className="issue-items-container">
       <h2>📤 Issue Items to Bar</h2>
@@ -206,69 +172,65 @@ const IssueItems = () => {
           readOnly={roles.includes("store")}
         />
 
-        <table className="issue-table">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Qty</th>
-              <th></th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {rows.map((row, idx) => (
-              <tr key={idx}>
-                <td>
-                  <div className="autocomplete">
-                    <input
-                      type="text"
-                      placeholder="Search item..."
-                      value={row.search}
-                      onChange={(e) =>
-                        handleRowChange(idx, "search", e.target.value)
-                      }
-                    />
-
-                    {row.suggestions.length > 0 && (
-                      <ul className="suggestions-list">
-                        {row.suggestions.map((item) => (
-                          <li
-                            key={item.id}
-                            onClick={() =>
-                              handleRowChange(idx, "select_item", item)
-                            }
-                          >
-                            {item.name} - ₦{item.price}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </td>
-
-                <td>
-                  <input
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    value={row.quantity}
-                    onChange={(e) =>
-                      handleRowChange(idx, "quantity", e.target.value)
-                    }
-                  />
-                </td>
-
-                <td>
-                  {rows.length > 1 && (
-                    <button type="button" onClick={() => removeRow(idx)}>
-                      ❌
-                    </button>
-                  )}
-                </td>
+        {/* Scrollable Table */}
+        <div className="table-scroll-container">
+          <table className="issue-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Qty</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((row, idx) => (
+                <tr key={idx}>
+                  <td>
+                    <div className="autocomplete">
+                      <input
+                        type="text"
+                        placeholder="Search item..."
+                        value={row.search}
+                        onChange={(e) => handleRowChange(idx, "search", e.target.value)}
+                      />
+
+                      {row.suggestions.length > 0 && (
+                        <ul className="suggestions-list">
+                          {row.suggestions.map((item) => (
+                            <li
+                              key={item.id}
+                              onClick={() => handleRowChange(idx, "select_item", item)}
+                            >
+                              {item.name} - ₦{item.price}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </td>
+
+                  <td>
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      value={row.quantity}
+                      onChange={(e) => handleRowChange(idx, "quantity", e.target.value)}
+                    />
+                  </td>
+
+                  <td>
+                    {rows.length > 1 && (
+                      <button type="button" onClick={() => removeRow(idx)} className="remove-btn">
+                        ❌
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         <button type="button" onClick={addRow} className="add-row-btn">
           ➕ Add Item

@@ -1,16 +1,54 @@
+
+/* =========================
+   SALES PAGE CONTAINER
+========================= */
 .list-sales {
-  padding: 8px; /* reduced padding */
+  padding: 8px;
   font-family: "Segoe UI", Tahoma, sans-serif;
   color: #222;
+
+  /* ✅ VERTICAL SCROLL */
+  height: calc(100vh - 20px);
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  /* smooth scrolling */
+  scroll-behavior: smooth;
 }
 
+/* =========================
+   CUSTOM VERTICAL SCROLLBAR
+========================= */
+.list-sales::-webkit-scrollbar {
+  width: 8px;
+}
+
+.list-sales::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.list-sales::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 10px;
+}
+
+.list-sales::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* =========================
+   PAGE TITLE
+========================= */
 h2 {
   font-size: 18px;
   margin-bottom: 4px;
   font-weight: 600;
 }
 
-/* Filter bar */
+/* =========================
+   FILTER BAR
+========================= */
 .filter-bar {
   display: flex;
   align-items: center;
@@ -40,7 +78,9 @@ h2 {
   cursor: pointer;
 }
 
-/* Summary bar */
+/* =========================
+   SALES SUMMARY
+========================= */
 .sales-summary {
   display: flex;
   justify-content: space-between;
@@ -52,27 +92,34 @@ h2 {
   font-weight: 500;
 }
 
-/* Sales list */
+/* =========================
+   SALES LIST
+========================= */
 .sales-list {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
+/* =========================
+   SALE CARD
+========================= */
 .sale-card {
   border: 1px solid #ddd;
   border-radius: 8px;
   padding: 10px 12px;
   margin-bottom: 10px;
   background: #fff;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 
   display: grid;
-  grid-template-columns: 1fr auto; /* details + footer actions */
+  grid-template-columns: 1fr auto;
   gap: 8px;
 }
 
-/* Header compact */
+/* =========================
+   HEADER
+========================= */
 .sale-header {
   grid-column: span 2;
   font-size: 13px;
@@ -81,7 +128,9 @@ h2 {
   color: #111;
 }
 
-/* Details in grid */
+/* =========================
+   DETAILS GRID
+========================= */
 .sale-details {
   font-size: 13px;
   display: grid;
@@ -94,7 +143,9 @@ h2 {
   line-height: 1.4;
 }
 
-/* Items compact */
+/* =========================
+   ITEMS
+========================= */
 .sale-items {
   grid-column: span 2;
   margin-top: 6px;
@@ -114,7 +165,9 @@ h2 {
   border-bottom: 1px dashed #eee;
 }
 
-/* Footer buttons aligned right */
+/* =========================
+   FOOTER BUTTONS
+========================= */
 .sale-footer {
   grid-column: span 2;
   display: flex;
@@ -151,7 +204,9 @@ h2 {
   background: #c0392b;
 }
 
-/* Empty state */
+/* =========================
+   EMPTY STATE
+========================= */
 .no-sales {
   font-size: 13px;
   font-style: italic;
@@ -159,6 +214,3 @@ h2 {
   text-align: center;
   margin-top: 20px;
 }
-
-
-

@@ -1,4 +1,6 @@
-/* Modal overlay */
+/* =========================
+   MODAL OVERLAY
+========================= */
 .modal-overlay1 {
   position: fixed;
   inset: 0;
@@ -10,23 +12,34 @@
   backdrop-filter: blur(1px);
 }
 
-/* Modal */
+/* =========================
+   MODAL
+========================= */
 .modal {
   background: #ffffff;
-  width: 360px;          /* compact width */
+  width: 360px;
   max-width: 90%;
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   overflow: hidden;
   animation: cardIn 150ms ease-out;
 }
 
 @keyframes cardIn {
-  from { opacity: 0; transform: translateY(10px) scale(0.96); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-/* Header */
+/* =========================
+   MODAL HEADER
+========================= */
 .modal-header {
   padding: 4px 8px;
   border-bottom: 1px solid #eee;
@@ -41,16 +54,20 @@
   color: #000000;
 }
 
-/* Body */
+/* =========================
+   MODAL BODY
+========================= */
 .modal-body {
   padding: 4px;
 }
 
+/* =========================
+   FORM GRID
+========================= */
 .form-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 6px;
-  
 }
 
 .form-group {
@@ -73,6 +90,9 @@
   color: #111;
 }
 
+/* =========================
+   INPUTS
+========================= */
 .input {
   width: 100%;
   padding: 6px 8px;
@@ -89,7 +109,9 @@
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
-/* Footer */
+/* =========================
+   MODAL FOOTER
+========================= */
 .modal-footer {
   padding: 10px 12px;
   border-top: 1px solid #eee;
@@ -105,7 +127,9 @@
   font-size: 0.8rem;
 }
 
-/* Buttons */
+/* =========================
+   BUTTONS
+========================= */
 .btn {
   padding: 6px 10px;
   border: none;
@@ -120,18 +144,27 @@
 }
 
 .btn.edit {
-  background-color: #10b981; /* emerald */
+  background-color: #10b981;
   color: white;
 }
 
 .btn.void {
-  background-color: #ef4444; /* red */
+  background-color: #ef4444;
   color: white;
 }
 
 .btn.print {
-  background-color: #3b82f6; /* blue */
+  background-color: #3b82f6;
   color: white;
+}
+
+.btn.delete {
+  background-color: #dc3545;
+  color: white;
+}
+
+.btn.delete:hover {
+  background-color: #b02a37;
 }
 
 .btn:disabled {
@@ -139,7 +172,9 @@
   cursor: not-allowed;
 }
 
-
+/* =========================
+   FILTERS
+========================= */
 .filters {
   display: flex;
   align-items: center;
@@ -148,6 +183,7 @@
   padding: 8px;
   background: #f9f9f9;
   border-radius: 6px;
+  flex-wrap: wrap;
 }
 
 .filters label {
@@ -176,112 +212,113 @@
   background: #0056b3;
 }
 
-
+/* =========================
+   PAYMENT SUMMARY
+========================= */
 .payment-summary .outstanding {
   margin-top: 10px;
   font-size: 16px;
   font-weight: bold;
-  color: #b22222; /* dark red */
+  color: #b22222;
 }
 
-
-/* Existing styles ... */
-
+/* =========================
+   VOID STYLES
+========================= */
 .void-text {
   color: red;
   font-weight: bold;
 }
 
 .void-row {
-  background-color: #ffe6e6; /* light red background for voided rows */
+  background-color: #ffe6e6;
 }
 
-.btn.delete {
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: 0.2s ease;
-}
-
-.btn.delete:hover {
-  background-color: #b02a37;
-}
-
-
-
-/* Full vertical scroll wrapper */
+/* =========================
+   SCROLLABLE TABLE WRAPPER
+========================= */
 .scroll-wrapper {
-  height: calc(100vh - 20px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 10px;
-}
-
-/* Make table scroll if too wide */
-.payment-table {
   width: 100%;
-  border-collapse: collapse;
+  max-width: 100%;
+  height: calc(100vh - 20px);
+
+  /* ✅ ENABLE BOTH SCROLLS */
   overflow-x: auto;
-  display: block;
+  overflow-y: auto;
+
+  border-radius: 8px;
+  background: #fff;
+
+  /* smoother scrolling */
+  scroll-behavior: smooth;
 }
 
-/* Modern scrollbar */
+/* =========================
+   PAYMENT TABLE
+========================= */
+.payment-table {
+  width: max-content;       /* expands naturally */
+  min-width: 1400px;        /* forces horizontal scroll */
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+/* =========================
+   TABLE CELLS
+========================= */
+.payment-table th,
+.payment-table td {
+  padding: 4px 6px;
+  border: 1px solid #ddd;
+  text-align: center;
+  white-space: nowrap;      /* prevents column text wrapping */
+  font-size: 13px;
+}
+
+
+.payment-table td {
+  padding: 2px 4px;
+  border: 1px solid #ddd;
+  text-align: center;
+  white-space: nowrap;      /* prevents column text wrapping */
+  font-size: 13px;
+}
+
+
+/* =========================
+   STICKY HEADER
+========================= */
+.payment-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #1f2937;
+  color: white;
+}
+
+/* =========================
+   CUSTOM SCROLLBARS
+========================= */
+
+/* Vertical scrollbar */
 .scroll-wrapper::-webkit-scrollbar {
   width: 8px;
+  height: 8px; /* horizontal scrollbar */
 }
 
+/* Track */
 .scroll-wrapper::-webkit-scrollbar-track {
   background: #f1f1f1;
   border-radius: 10px;
 }
 
+/* Thumb */
 .scroll-wrapper::-webkit-scrollbar-thumb {
   background: #888;
   border-radius: 10px;
 }
 
+/* Hover */
 .scroll-wrapper::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
-
-
-
-
-/* Full vertical scroll wrapper - remove vertical scroll */
-.scroll-wrapper {
-  height: auto;           /* let it expand with content */
-  overflow-y: visible;    /* remove vertical scroll */
-  overflow-x: auto;       /* keep horizontal scroll for table */
-  padding-right: 0;       /* remove extra padding */
-}
-
-/* Make table scroll horizontally if too wide */
-.payment-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;     /* table fits container width */
-  overflow-x: auto;
-  display: block;          /* enables horizontal scroll */
-}
-
-/* Optional: modern horizontal scrollbar */
-.payment-table::-webkit-scrollbar {
-  height: 6px;            /* horizontal scrollbar height */
-}
-
-.payment-table::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 6px;
-}
-
-.payment-table::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 6px;
-}
-
-.payment-table::-webkit-scrollbar-thumb:hover {
   background: #555;
 }

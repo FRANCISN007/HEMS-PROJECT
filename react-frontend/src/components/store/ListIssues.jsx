@@ -17,7 +17,7 @@ const ListIssues = () => {
     issue_date: "",
     issue_items: [],
   });
-  const [originalIssueCounts, setOriginalIssueCounts] = useState({}); // item_id -> qty originally
+  const [originalIssueCounts, setOriginalIssueCounts] = useState({});
 
   const getToday = () => new Date().toISOString().split("T")[0];
 
@@ -75,23 +75,19 @@ const ListIssues = () => {
   ) => {
     try {
       const params = {};
-
       if (barId) params.bar_id = barId;
       if (sDate) params.start_date = sDate;
       if (eDate) params.end_date = eDate;
 
       const res = await axiosWithAuth().get("/store/bar", { params });
-
       setIssues(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Error fetching issues", err);
     }
   };
 
-
   useEffect(() => {
     fetchIssues();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBarId, startDate, endDate]);
 
   const handleEditClick = (issue) => {
@@ -126,10 +122,10 @@ const ListIssues = () => {
     setFormData({ ...formData, issue_items: newItems });
   };
 
-  // Add / Remove lines
   const addIssueLine = () => {
     setFormData({ ...formData, issue_items: [...(formData.issue_items || []), { item_id: "", quantity: 1 }] });
   };
+
   const removeIssueLine = (index) => {
     const newItems = [...formData.issue_items];
     newItems.splice(index, 1);
@@ -147,43 +143,36 @@ const ListIssues = () => {
         return;
       }
 
-      // Aggregate requested quantities by item_id
       const requested = {};
-        for (const row of formData.issue_items) {
-          const iid = Number(row.item_id || 0);
-          const qty = Number(row.quantity || 0);
-          if (!iid) {
-            showMessage("❌ Every line must have an item selected.");
-            return;
-          }
-          if (!qty || qty <= 0) {
-            showMessage("❌ Quantity must be greater than 0 for all items.");
-            return;
-          }
-          requested[iid] = (requested[iid] || 0) + qty;
-        }
-
-        for (const iidStr of Object.keys(requested)) {
-      const iid = Number(iidStr);
-      const reqQty = requested[iid];
-
-      const resp = await axiosWithAuth().get(`/store/stock/${iid}`);
-      const available = Number(resp.data?.available || 0);
-
-      const oldQty = Number(originalIssueCounts[iid] || 0);
-      const allowed = available + oldQty;
-
-      if (reqQty > allowed) {
-          const itemObj = items.find((it) => it.id === iid) || {};
-          showMessage(
-            `❌ Not enough stock for "${itemObj.name}". Requested: ${reqQty}, Available: ${allowed}`
-          );
+      for (const row of formData.issue_items) {
+        const iid = Number(row.item_id || 0);
+        const qty = Number(row.quantity || 0);
+        if (!iid) {
+          showMessage("❌ Every line must have an item selected.");
           return;
+        }
+        if (!qty || qty <= 0) {
+          showMessage("❌ Quantity must be greater than 0 for all items.");
+          return;
+        }
+        requested[iid] = (requested[iid] || 0) + qty;
       }
-  }
 
+      for (const iidStr of Object.keys(requested)) {
+        const iid = Number(iidStr);
+        const reqQty = requested[iid];
+        const resp = await axiosWithAuth().get(`/store/stock/${iid}`);
+        const available = Number(resp.data?.available || 0);
+        const oldQty = Number(originalIssueCounts[iid] || 0);
+        const allowed = available + oldQty;
 
-      // All validations passed -> send update
+        if (reqQty > allowed) {
+          const itemObj = items.find((it) => it.id === iid) || {};
+          showMessage(`❌ Not enough stock for "${itemObj.name}". Requested: ${reqQty}, Available: ${allowed}`);
+          return;
+        }
+      }
+
       const payload = {
         issue_to: formData.issue_to,
         issued_to_id: Number(formData.issued_to_id),
@@ -211,7 +200,6 @@ const ListIssues = () => {
     if (!window.confirm("Are you sure you want to delete this issue?")) return;
     try {
       await axiosWithAuth().delete(`/store/bar-issues/${id}`);
-
       showMessage("✅ Issue deleted successfully.");
       fetchIssues();
     } catch (err) {
@@ -220,9 +208,9 @@ const ListIssues = () => {
     }
   };
 
-  // summary values
   const totalIssued = issues.length;
-  const totalQuantity = issues.reduce((acc, issue) => acc + (issue.issue_items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0), 0);
+  const totalQuantity = issues.reduce((acc, issue) => 
+    acc + (issue.issue_items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0), 0);
 
   return (
     <div className="list-issues-container">
@@ -241,19 +229,14 @@ const ListIssues = () => {
           ))}
         </select>
 
-
         <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+
         <button
           onClick={() => {
             const now = new Date();
-            const first = new Date(now.getFullYear(), now.getMonth(), 1)
-              .toISOString()
-              .split("T")[0];
-            const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-              .toISOString()
-              .split("T")[0];
-
+            const first = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+            const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
             setSelectedBarId("");
             setStartDate(first);
             setEndDate(last);
@@ -261,8 +244,6 @@ const ListIssues = () => {
         >
           ♻️ Reset
         </button>
-
-        
       </div>
 
       {message && <p className="issue-message">{message}</p>}
@@ -272,27 +253,44 @@ const ListIssues = () => {
         <p>Total Quantity Issued: {totalQuantity}</p>
       </div>
 
-      <table className="list-issues-table">
-        <thead>
-          <tr><th>ID</th><th>Issue To</th><th>Issue Date</th><th>Items Issued</th><th>Actions</th></tr>
-        </thead>
-        <tbody>
-          {issues.length === 0 ? (
-            <tr><td colSpan="5">No issues found.</td></tr>
-          ) : issues.map((issue) => (
-            <tr key={issue.id}>
-              <td>{issue.id}</td>
-              <td>{issue.issued_to?.name || "Unnamed Bar"}</td>
-              <td>{new Date(issue.issue_date).toLocaleDateString()}</td>
-              <td><ul style={{ paddingLeft: "1rem", margin: 0 }}>{issue.issue_items.map(it => <li key={it.id}>{it.item?.name || 'Item'} — Qty: {it.quantity}</li>)}</ul></td>
-              <td>
-                <button className="edit-btn" onClick={() => handleEditClick(issue)}>✏️ Edit</button>
-                <button className="delete-btn" onClick={() => handleDelete(issue.id)}>🗑️ Delete</button>
-              </td>
+      {/* Vertical Scroll Table */}
+      <div className="table-scroll-container">
+        <table className="list-issues-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Issue To</th>
+              <th>Issue Date</th>
+              <th>Items Issued</th>
+              <th>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {issues.length === 0 ? (
+              <tr><td colSpan="5">No issues found.</td></tr>
+            ) : issues.map((issue) => (
+              <tr key={issue.id}>
+                <td>{issue.id}</td>
+                <td>{issue.issued_to?.name || "Unnamed Bar"}</td>
+                <td>{new Date(issue.issue_date).toLocaleDateString()}</td>
+                <td>
+                  <ul style={{ paddingLeft: "1rem", margin: 0 }}>
+                    {issue.issue_items.map(it => (
+                      <li key={it.id}>
+                        {it.item?.name || 'Item'} — Qty: {it.quantity}
+                      </li>
+                    ))}
+                  </ul>
+                </td>
+                <td>
+                  <button className="edit-btn" onClick={() => handleEditClick(issue)}>✏️ Edit</button>
+                  <button className="delete-btn" onClick={() => handleDelete(issue.id)}>🗑️ Delete</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {editingIssue && (
         <div className="edit-modal-overlay">
@@ -310,41 +308,36 @@ const ListIssues = () => {
 
             <h4>Items</h4>
 
-          <div className="items-scroll">
-            {(formData.issue_items || []).map((item, index) => (
-              <div key={index} className="item-row">
-                <select
-                  value={item.item_id}
-                  onChange={(e) =>
-                    handleFormChange(index, "item_id", e.target.value)
-                  }
-                >
-                  <option value="">-- Select an item --</option>
-                  {items.map(it => (
-                    <option key={it.id} value={it.id}>{it.name}</option>
-                  ))}
-                </select>
+            <div className="items-scroll">
+              {(formData.issue_items || []).map((item, index) => (
+                <div key={index} className="item-row">
+                  <select
+                    value={item.item_id}
+                    onChange={(e) => handleFormChange(index, "item_id", e.target.value)}
+                  >
+                    <option value="">-- Select an item --</option>
+                    {items.map(it => (
+                      <option key={it.id} value={it.id}>{it.name}</option>
+                    ))}
+                  </select>
 
-                <input
-                  type="number"
-                  min={1}
-                  value={item.quantity}
-                  onChange={(e) =>
-                    handleFormChange(index, "quantity", e.target.value)
-                  }
-                />
+                  <input
+                    type="number"
+                    min={1}
+                    value={item.quantity}
+                    onChange={(e) => handleFormChange(index, "quantity", e.target.value)}
+                  />
 
-                <button
-                  type="button"
-                  className="remove-line"
-                  onClick={() => removeIssueLine(index)}
-                >
-                  ❌
-                </button>
-              </div>
-            ))}
-          </div>
-
+                  <button
+                    type="button"
+                    className="remove-line"
+                    onClick={() => removeIssueLine(index)}
+                  >
+                    ❌
+                  </button>
+                </div>
+              ))}
+            </div>
 
             <button type="button" className="add-btn" onClick={addIssueLine}>➕ Add Item</button>
 
