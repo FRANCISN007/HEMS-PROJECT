@@ -29,6 +29,7 @@ const ListGuestOrder = () => {
     guest_name: "",
     room_number: "",
     order_type: "",
+    created_at: "", // ✅ ADD THIS
     location_id: "",
     kitchen_id: "",
     items: [],
@@ -182,6 +183,7 @@ const ListGuestOrder = () => {
       guest_name: order.guest_name || "",
       room_number: order.room_number || "",
       order_type: order.order_type || "",
+      created_at: order.created_at || "",
       location_id: order.location_id || "",
       kitchen_id: order.kitchen_id || "",
       items: (order.items || []).map((i) => ({
@@ -240,10 +242,20 @@ const ListGuestOrder = () => {
     try {
       const payload = {
         guest_name: formData.guest_name,
+
         room_number: formData.room_number,
+
         order_type: formData.order_type,
+
+        // ✅ SEND ORDER DATE
+        created_at: formData.created_at
+          ? new Date(formData.created_at).toISOString()
+          : null,
+
         location_id: Number(formData.location_id) || null,
+
         kitchen_id: Number(formData.kitchen_id) || null,
+
         items: formData.items.map((i) => ({
           store_item_id: i.store_item_id,
           quantity: Number(i.quantity),
@@ -415,32 +427,89 @@ const ListGuestOrder = () => {
         </tbody>
       </table>
 
-      {/* Print Modal - Using business name */}
+      {/* =========================
+        PRINT MODAL - 80MM FORMAT
+      ========================= */}
       {printOrder && (
         <div className="modal-overlay" onClick={closePrintModal}>
-          <div className="print-modal" onClick={(e) => e.stopPropagation()}>
-            <div ref={printRef} className="receipt-container">
+          <div
+            className="print-modal thermal-80mm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div ref={printRef} className="receipt-container-80mm">
+
+              {/* HEADER */}
               <div className="receipt-header">
-                <h2>{businessName.toUpperCase()}</h2>
-                <h2>Kitchen Order</h2>
+                <h2>{businessName?.toUpperCase()}</h2>
+                <h3>KITCHEN ORDER</h3>
+
                 <p>{printTime?.toLocaleString()}</p>
-                <hr />
+
+                <div className="divider" />
               </div>
 
+              {/* ORDER INFO */}
               <div className="receipt-info">
-                <p><strong>Order #:</strong> {printOrder.id}</p>
-                <p><strong>Guest:</strong> {printOrder.guest_name || "--"}</p>
-                <p><strong>Room:</strong> {printOrder.room_number || "--"}</p>
-                <p><strong>Type:</strong> {printOrder.order_type}</p>
-                <p>
-                  <strong>Kitchen:</strong>{" "}
-                  {kitchens.find((k) => k.id === printOrder.kitchen_id)?.name || "--"}
-                </p>
+                <div className="info-row">
+                  <span>Order No:</span>
+                  <span>{printOrder.id}</span>
+                </div>
+
+                <div className="info-row">
+                  <span>Guest:</span>
+                  <span>{printOrder.guest_name || "--"}</span>
+                </div>
+
+                <div className="info-row">
+                  <span>Room:</span>
+                  <span>{printOrder.room_number || "--"}</span>
+                </div>
+
+                <div className="info-row">
+                  <span>Type:</span>
+                  <span>{printOrder.order_type}</span>
+                </div>
+
+                <div className="info-row">
+                  <span>Kitchen:</span>
+                  <span>
+                    {kitchens.find((k) => k.id === printOrder.kitchen_id)?.name ||
+                      "--"}
+                  </span>
+                </div>
               </div>
 
-              <hr />
+              <div className="divider" />
 
-              {/* ✅ CALCULATE TOTAL */}
+              {/* ITEMS */}
+              <div className="receipt-items">
+                {printOrder.items && printOrder.items.length > 0 ? (
+                  printOrder.items.map((item, idx) => {
+                    const total =
+                      Number(item.total_price) ||
+                      (Number(item.price_per_unit || 0) *
+                        Number(item.quantity || 0));
+
+                    return (
+                      <div key={idx} className="receipt-item">
+                        <div className="item-name">
+                          {item.quantity} x {item.item_name}
+                        </div>
+
+                        <div className="item-price">
+                          {currencyNGN(total)}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p>No items</p>
+                )}
+              </div>
+
+              <div className="divider" />
+
+              {/* TOTAL */}
               {(() => {
                 const orderTotal = (printOrder.items || []).reduce(
                   (sum, item) =>
@@ -452,51 +521,29 @@ const ListGuestOrder = () => {
                 );
 
                 return (
-                  <>
-                    <div className="receipt-items">
-                      {printOrder.items && printOrder.items.length > 0 ? (
-                        printOrder.items.map((item, idx) => (
-                          <div key={idx} className="receipt-item">
-                            <span>
-                              {item.quantity} × {item.item_name}
-                            </span>
-                            <span className="amount">
-                              {currencyNGN(
-                                item.total_price ||
-                                  (item.price_per_unit || 0) * item.quantity
-                              )}
-                            </span>
-                          </div>
-                        ))
-                      ) : (
-                        <p>No items</p>
-                      )}
-                    </div>
-
-                    <hr />
-
-                    {/* ✅ TOTAL DISPLAY */}
-                    <div className="receipt-total">
-                      <strong>Total:</strong>
-                      <strong><span>{currencyNGN(orderTotal)} </span></strong>
-                    </div>
-
-                    <hr />
-
-                    <div className="receipt-footer">
-                      <p>-- Send to Kitchen --</p>
-                    </div>
-                  </>
+                  <div className="receipt-total">
+                    <span>TOTAL</span>
+                    <span>{currencyNGN(orderTotal)}</span>
+                  </div>
                 );
               })()}
+
+              <div className="divider" />
+
+              {/* FOOTER */}
+              <div className="receipt-footer">
+                <p>*** SEND TO KITCHEN ***</p>
+              </div>
             </div>
 
-            <div className="modal-actions">
+            {/* ACTIONS */}
+            <div className="modal-actions no-print">
               <button onClick={printModalContent} className="print-btn">
-                🖨️ Print Now
+                🖨️ Print
               </button>
+
               <button onClick={closePrintModal} className="close-btn">
-                ❌
+                ❌ Close
               </button>
             </div>
           </div>
@@ -527,6 +574,30 @@ const ListGuestOrder = () => {
                     }
                   />
                 </div>
+
+
+                <div className="form-group">
+                  <label>Order Date</label>
+
+                  <input
+                    type="datetime-local"
+                    value={
+                      formData.created_at
+                        ? new Date(formData.created_at)
+                            .toISOString()
+                            .slice(0, 16)
+                        : ""
+                    }
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        created_at: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                
 
                 <div className="form-group">
                   <label>Room Number</label>

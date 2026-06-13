@@ -18,15 +18,15 @@ from sqlalchemy import desc
 from app.core.tenant import resolve_business_id  # adjust import if needed
 from app.core.timezone import now_wat, to_wat
 
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+from typing import Optional, List
+from fastapi import Query
+
 
 import re
-from typing import Optional
-from fastapi import Query
 from sqlalchemy import select, not_
-
-
-
-from typing import List
 
 
 from app.rooms.models import RoomFault  # Not app.models.room
@@ -261,83 +261,139 @@ def list_rooms(
 
 
 
-from datetime import datetime, date, time
-from typing import Optional
-from fastapi import Query
 
 @router.post("/update_status_after_checkout")
 def update_rooms_after_checkout(
-    business_id: Optional[int] = Query(None, description="Super admin must provide business_id"),
+    business_id: Optional[int] = Query(
+        None,
+        description="Super admin must provide business_id"
+    ),
     db: Session = Depends(get_db),
-    current_user: user_schemas.UserDisplaySchema = Depends(role_required(["dashboard"]))
+    current_user: user_schemas.UserDisplaySchema = Depends(
+        role_required(["dashboard"])
+    )
 ):
-    now = datetime.now()
-    today = date.today()
-    noon = time(12, 0)
 
-    # ---------------- Enforce business scope ----------------
+    # ---------------------------------------------------------
+    # CURRENT LAGOS TIME
+    # ---------------------------------------------------------
+
+
+    now = now_wat()
+
+    today = now.date()
+
+    # ✅ EXACT CHECKOUT TIME = 12 NOON
+    checkout_time = time(12, 0, 0)
+
+    # ---------------------------------------------------------
+    # ENFORCE BUSINESS SCOPE
+    # ---------------------------------------------------------
+
     roles = set(current_user.roles)
 
     if "super_admin" in roles:
+
         if not business_id:
             raise HTTPException(
                 status_code=400,
                 detail="Super admin must provide business_id"
             )
+
         effective_business_id = business_id
+
     else:
         effective_business_id = current_user.business_id
 
-    # ---------------- Get bookings departing today ----------------
+    # ---------------------------------------------------------
+    # STOP BEFORE 12 NOON
+    # ---------------------------------------------------------
+
+    if now.time() < checkout_time:
+
+        return {
+            "message": "Checkout time has not reached yet",
+            "current_time_wat": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "checkout_time_wat": "12:00:00",
+            "rooms_updated": [],
+            "bookings_updated": [],
+        }
+
+    # ---------------------------------------------------------
+    # GET TODAY'S DEPARTURES
+    # ---------------------------------------------------------
+
     bookings = db.query(booking_models.Booking).filter(
         booking_models.Booking.departure_date == today,
-        booking_models.Booking.status.in_(["checked-in", "reserved", "complimentary"]),
+        booking_models.Booking.status.in_([
+            "checked-in",
+            "reserved",
+            "complimentary"
+        ]),
         booking_models.Booking.business_id == effective_business_id
     ).all()
 
     updated_rooms = []
     updated_bookings = []
 
-    # ---------------- Only update after 12 noon ----------------
-    if now.time() >= noon:
-        for booking in bookings:
+    # ---------------------------------------------------------
+    # PROCESS BOOKINGS
+    # ---------------------------------------------------------
 
-            # Check overlapping booking
-            overlapping = db.query(booking_models.Booking).filter(
-                booking_models.Booking.room_number == booking.room_number,
-                booking_models.Booking.id != booking.id,
-                booking_models.Booking.status.in_(["checked-in", "reserved", "complimentary"]),
-                booking_models.Booking.arrival_date <= today,
-                booking_models.Booking.departure_date >= today,
-                booking_models.Booking.business_id == effective_business_id
-            ).first()
+    for booking in bookings:
 
-            if overlapping:
-                continue
+        # ---------------------------------------------------------
+        # CHECK FOR OVERLAPPING ACTIVE BOOKING
+        # ---------------------------------------------------------
 
-            # ✅ Mark booking as checked-out
-            booking.status = "checked-out"
-            updated_bookings.append(booking.id)
+        overlapping = db.query(booking_models.Booking).filter(
+            booking_models.Booking.room_number == booking.room_number,
+            booking_models.Booking.id != booking.id,
+            booking_models.Booking.status.in_([
+                "checked-in",
+                "reserved",
+                "complimentary"
+            ]),
+            booking_models.Booking.arrival_date <= today,
+            booking_models.Booking.departure_date >= today,
+            booking_models.Booking.business_id == effective_business_id
+        ).first()
 
-            # ✅ Update room status
-            room = db.query(room_models.Room).filter(
-                room_models.Room.room_number == booking.room_number,
-                room_models.Room.business_id == effective_business_id
-            ).first()
+        # Skip if another booking is active
+        if overlapping:
+            continue
 
-            if room and room.status != "maintenance":
-                room.status = "available"
-                updated_rooms.append(room.room_number)
+        # ---------------------------------------------------------
+        # UPDATE BOOKING STATUS
+        # ---------------------------------------------------------
 
-        db.commit()
+        booking.status = "checked-out"
+
+        updated_bookings.append(booking.id)
+
+        # ---------------------------------------------------------
+        # UPDATE ROOM STATUS
+        # ---------------------------------------------------------
+
+        room = db.query(room_models.Room).filter(
+            room_models.Room.room_number == booking.room_number,
+            room_models.Room.business_id == effective_business_id
+        ).first()
+
+        if room and room.status != "maintenance":
+
+            room.status = "available"
+
+            updated_rooms.append(room.room_number)
+
+    db.commit()
 
     return {
         "message": "Room and booking statuses updated after 12 noon checkout time",
+        "current_time_wat": now.strftime("%Y-%m-%d %H:%M:%S"),
         "rooms_updated": updated_rooms,
         "bookings_updated": updated_bookings,
     }
-
-
 
 
 

@@ -70,6 +70,10 @@ class RestaurantSaleDisplay(BaseModel):
     class Config:
         from_attributes = True
 
+
+
+
+
 class RestaurantSaleWithPaymentsDisplay(BaseModel):
     id: int
     total_amount: float

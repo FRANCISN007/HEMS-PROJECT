@@ -50,7 +50,7 @@ const CheckoutGuest = () => {
 
   const handleCheckout = async (roomNumber) => {
     try {
-      const res = await axiosWithAuth().put(`/bookings/${roomNumber}/`);
+      const res = await axiosWithAuth().put(`/bookings/${roomNumber}/checkout`);
       alert(res.data.message);
 
       // Optimistically remove the checked-out booking

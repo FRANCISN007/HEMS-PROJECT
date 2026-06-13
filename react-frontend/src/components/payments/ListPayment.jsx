@@ -95,66 +95,157 @@ const fetchByStatus = async () => {
 
   try {
     const params = new URLSearchParams();
-    if (startDate) params.append("start_date", startDate);
-    if (endDate) params.append("end_date", endDate);
+
+    if (startDate) {
+      params.append("start_date", startDate);
+    }
+
+    if (endDate) {
+      params.append("end_date", endDate);
+    }
+
+    // 🔥 IMPORTANT FIX
+    // Backend expects bank_name query param
+    if (bankFilter) {
+      params.append("bank_name", bankFilter);
+    }
 
     let url = "";
 
-    // BANK FILTER ONLY
+    // ------------------------------------------------
+    // 1️⃣ BANK FILTER ONLY
+    // ------------------------------------------------
     if (bankFilter && status === "none") {
-      params.append("bank_name", bankFilter);
-      url = `${API_BASE_URL}/payments/by-bank?${params}`;
+      url = `${API_BASE_URL}/payments/by-bank?${params.toString()}`;
     }
-    // ALL STATUS
+
+    // ------------------------------------------------
+    // 2️⃣ ALL PAYMENTS
+    // ------------------------------------------------
     else if (status === "All") {
-      if (bankFilter) params.append("bank_name", bankFilter);
-      url = `${API_BASE_URL}/payments/list?${params}`;
+      url = `${API_BASE_URL}/payments/list?${params.toString()}`;
     }
-    // SPECIFIC STATUS
+
+    // ------------------------------------------------
+    // 3️⃣ FILTER BY STATUS
+    // ------------------------------------------------
     else {
-      if (bankFilter) params.append("bank_name", bankFilter);
       params.append("status", status);
-      url = `${API_BASE_URL}/payments/by-status?${params}`;
+
+      url = `${API_BASE_URL}/payments/by-status?${params.toString()}`;
     }
 
-    const data = await fetchWithToken(url);
-
-    // FILTER → Normalize → Set
-    let filtered = (data.payments || []).map(normalizePayment);
-
-    // Do NOT exclude voided payments when status === "voided"
-    if (status !== "voided") {
-      filtered = filtered.filter((p) => p.status !== "voided");
-    }
-
-    setPayments(filtered);
-
-
-    // BANK FILTER SUMMARY
-    if (bankFilter && url.includes("/payments/by-bank")) {
-      setViewMode("bank");
-      setSummary(data.summary || {});
-      return;
-    }
-
-    // ALL STATUS SUMMARY (LIST PAYMENT)
-    if (status === "All") {
-      setViewMode("all");
-      setSummary(data.summary || {});
-      setMethodTotals(data.payment_method_totals || {});
-      return;
-    }
-
-    // SPECIFIC STATUS
-    setViewMode("status");
-    setSummary({
-      total_payments: data.total_payments || 0,
-      total_amount: data.total_amount || 0,
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
     });
 
-    if (!filtered.length) {
+    if (!response.ok) {
+      throw new Error("Failed to fetch payments");
+    }
+
+    const data = await response.json();
+
+    // ------------------------------------------------
+    // 🔥 NORMALIZE PAYMENTS
+    // ------------------------------------------------
+    let paymentData = Array.isArray(data.payments)
+      ? data.payments.map((p) => ({
+          ...p,
+          bank_name:
+            p.bank_name ||
+            p.bank?.name ||
+            p.bank ||
+            "-",
+        }))
+      : [];
+
+    // ------------------------------------------------
+    // 🔥 FRONTEND EXTRA FILTER
+    // (prevents mismatch issue)
+    // ------------------------------------------------
+    if (bankFilter) {
+      paymentData = paymentData.filter(
+        (p) =>
+          (p.bank_name || "")
+            .toLowerCase()
+            .trim() === bankFilter.toLowerCase().trim()
+      );
+    }
+
+    // ------------------------------------------------
+    // 🔥 REMOVE VOIDED EXCEPT VOIDED VIEW
+    // ------------------------------------------------
+    if (status !== "voided") {
+      paymentData = paymentData.filter(
+        (p) => p.status !== "voided"
+      );
+    }
+
+    setPayments(paymentData);
+
+    // ------------------------------------------------
+    // 🔥 BANK SUMMARY
+    // ------------------------------------------------
+    if (url.includes("/payments/by-bank")) {
+      setViewMode("bank");
+
+      setSummary({
+        total_pos: data.summary?.total_pos || 0,
+        total_bank_transfer:
+          data.summary?.total_bank_transfer || 0,
+      });
+
+      if (!paymentData.length) {
+        setNoDataMessage(
+          "No payment records found for selected bank."
+        );
+      }
+
+      return;
+    }
+
+    // ------------------------------------------------
+    // 🔥 ALL PAYMENTS SUMMARY
+    // ------------------------------------------------
+    if (status === "All") {
+      setViewMode("all");
+
+      setSummary(data.summary || {});
+
+      setMethodTotals(
+        data.payment_method_totals || {}
+      );
+
+      if (!paymentData.length) {
+        setNoDataMessage("No payment records found.");
+      }
+
+      return;
+    }
+
+    // ------------------------------------------------
+    // 🔥 STATUS SUMMARY
+    // ------------------------------------------------
+    setViewMode("status");
+
+    setSummary({
+      total_payments:
+        data.total_payments || paymentData.length || 0,
+
+      total_amount:
+        data.total_amount ||
+        paymentData.reduce(
+          (sum, p) => sum + (p.amount_paid || 0),
+          0
+        ),
+    });
+
+    if (!paymentData.length) {
       setNoDataMessage("No payment records found.");
     }
+
   } catch (error) {
     console.log(error);
     setError("Failed to fetch payments.");

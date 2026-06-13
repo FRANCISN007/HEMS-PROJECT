@@ -156,6 +156,7 @@ const StockBalance = () => {
                 <th>Unit</th>
                 <th>Category</th>
                 <th>Type</th>
+                <th>Opening Stock</th>
                 <th>Received</th>
                 <th>Issued</th>
                 <th>Adjusted</th>
@@ -174,6 +175,7 @@ const StockBalance = () => {
                   <td>{item.unit}</td>
                   <td>{item.category_name}</td>
                   <td>{item.item_type}</td>
+                  <td>{item.opening_stock}</td>
                   <td>{item.total_received}</td>
                   <td>{item.total_issued}</td>
                   <td>{item.total_adjusted}</td>

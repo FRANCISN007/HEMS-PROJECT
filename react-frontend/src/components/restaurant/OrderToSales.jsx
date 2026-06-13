@@ -23,11 +23,18 @@ const calculateOrderTotal = (order) =>
   );
 
 const OrderToSales = () => {
+  const today = new Date().toISOString().split("T")[0];
+
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+
   const [servedBy, setServedBy] = useState("");
   const [locationId, setLocationId] = useState("");
   const [locations, setLocations] = useState([]);
+
+  // ✅ NEW SALES DATE STATE
+  const [salesDate, setSalesDate] = useState(today);
+
   const [totals, setTotals] = useState({
     total_entries: 0,
     total_amount: 0,
@@ -37,13 +44,22 @@ const OrderToSales = () => {
   // ROLE + USER INFO
   // -------------------------
   const storedUser = JSON.parse(localStorage.getItem("user")) || {};
+
   let roles = [];
-  if (Array.isArray(storedUser.roles)) roles = storedUser.roles;
-  else if (typeof storedUser.role === "string") roles = [storedUser.role];
+
+  if (Array.isArray(storedUser.roles)) {
+    roles = storedUser.roles;
+  } else if (typeof storedUser.role === "string") {
+    roles = [storedUser.role];
+  }
+
   roles = roles.map((r) => r.toLowerCase());
 
   const autoWaiterName =
-    storedUser.full_name || storedUser.name || storedUser.username || "";
+    storedUser.full_name ||
+    storedUser.name ||
+    storedUser.username ||
+    "";
 
   // -------------------------
   // ACCESS CONTROL
@@ -76,21 +92,31 @@ const OrderToSales = () => {
     if (!locId) return;
 
     setLoading(true);
+
     try {
       const res = await axiosWithAuth().get("/restaurant/open", {
-        params: { location_id: locId },
+        params: {
+          location_id: locId,
+        },
       });
 
       const data = res.data || {};
+
       setOrders(data.orders || []);
+
       setTotals({
         total_entries: data.total_entries || 0,
         total_amount: data.total_amount || 0,
       });
     } catch (err) {
       console.error("❌ Error fetching orders:", err);
+
       setOrders([]);
-      setTotals({ total_entries: 0, total_amount: 0 });
+
+      setTotals({
+        total_entries: 0,
+        total_amount: 0,
+      });
     } finally {
       setLoading(false);
     }
@@ -100,14 +126,22 @@ const OrderToSales = () => {
   // CREATE SALE
   // -------------------------
   const handleCreateSale = async (order) => {
-    if (!servedBy.trim()) return;
+    if (!servedBy.trim()) {
+      alert("Please enter served by name.");
+      return;
+    }
+
+    if (!salesDate) {
+      alert("Please select sales date.");
+      return;
+    }
 
     const orderTotal = calculateOrderTotal(order);
 
     const confirmed = window.confirm(
       `Convert Order #${order.id} to sale?\n\nTotal: ${formatCurrency(
         orderTotal
-      )}`
+      )}\nSales Date: ${salesDate}`
     );
 
     if (!confirmed) return;
@@ -115,14 +149,25 @@ const OrderToSales = () => {
     try {
       await axiosWithAuth().post(
         `/restaurant/sales/from-order/${order.id}`,
-        null,
-        { params: { served_by: servedBy.trim() } }
+        {
+          served_by: servedBy.trim(),
+          sales_date: salesDate
+            ? new Date(salesDate).toISOString()
+            : null,
+        }
       );
 
+      // Refresh list
       fetchOrders(locationId);
+
+      alert("✅ Sale created successfully.");
     } catch (err) {
       console.error("❌ Failed to create sale:", err);
-      alert(err.response?.data?.detail || "Failed to create sale.");
+
+      alert(
+        err?.response?.data?.detail ||
+          "Failed to create sale."
+      );
     }
   };
 
@@ -131,7 +176,10 @@ const OrderToSales = () => {
   // -------------------------
   useEffect(() => {
     fetchLocations();
-    if (autoWaiterName) setServedBy(autoWaiterName);
+
+    if (autoWaiterName) {
+      setServedBy(autoWaiterName);
+    }
   }, []);
 
   // -------------------------
@@ -143,8 +191,10 @@ const OrderToSales = () => {
 
       {/* FILTERS */}
       <div className="filters">
+        {/* Served By */}
         <div>
           <label>Served By</label>
+
           <input
             type="text"
             value={servedBy}
@@ -153,8 +203,21 @@ const OrderToSales = () => {
           />
         </div>
 
+        {/* Sales Date */}
+        <div>
+          <label>Sales Date</label>
+
+          <input
+            type="date"
+            value={salesDate}
+            onChange={(e) => setSalesDate(e.target.value)}
+          />
+        </div>
+
+        {/* Location */}
         <div>
           <label>Location</label>
+
           <select
             value={locationId}
             onChange={(e) => {
@@ -162,7 +225,10 @@ const OrderToSales = () => {
               fetchOrders(e.target.value);
             }}
           >
-            <option value="">-- Select Location --</option>
+            <option value="">
+              -- Select Location --
+            </option>
+
             {locations.map((loc) => (
               <option key={loc.id} value={loc.id}>
                 {loc.name}
@@ -174,56 +240,96 @@ const OrderToSales = () => {
 
       {/* CONTENT */}
       {!locationId ? (
-        <p className="hint-text">Select a location to view open orders.</p>
+        <p className="hint-text">
+          Select a location to view open orders.
+        </p>
       ) : loading ? (
         <p>Loading open orders...</p>
       ) : orders.length === 0 ? (
-        <p className="no-orders">No open orders for this location.</p>
+        <p className="no-orders">
+          No open orders for this location.
+        </p>
       ) : (
         <>
+          {/* TOTALS */}
           <div className="totals">
-            <span>Orders: {totals.total_entries}</span>
-            <span>Total: {formatCurrency(totals.total_amount)}</span>
+            <span>
+              Orders: {totals.total_entries}
+            </span>
+
+            <span>
+              Total: {formatCurrency(totals.total_amount)}
+            </span>
           </div>
 
+          {/* ORDERS */}
           <ul className="orders-list">
             {orders.map((order) => {
-              const orderTotal = calculateOrderTotal(order);
-              const isHighValue = orderTotal >= HIGH_VALUE_LIMIT;
+              const orderTotal =
+                calculateOrderTotal(order);
+
+              const isHighValue =
+                orderTotal >= HIGH_VALUE_LIMIT;
 
               return (
                 <li
                   key={order.id}
-                  className={`order-card ${isHighValue ? "high-value" : ""}`}
+                  className={`order-card ${
+                    isHighValue ? "high-value" : ""
+                  }`}
                 >
+                  {/* HEADER */}
                   <div className="order-header">
                     <strong>
-                      Order #{order.id} – {order.order_type?.toLowerCase()}
+                      Order #{order.id} –{" "}
+                      {order.order_type?.toLowerCase()}
                     </strong>
-                    {isHighValue && <span className="badge">🔥 High Value</span>}
+
+                    {isHighValue && (
+                      <span className="badge">
+                        🔥 High Value
+                      </span>
+                    )}
                   </div>
 
+                  {/* ITEMS */}
                   <div className="order-items">
                     {order.items.map((item, idx) => (
-                      <div key={idx} className="order-item">
+                      <div
+                        key={idx}
+                        className="order-item"
+                      >
                         <span>
-                          {item.item_name} × {item.quantity}
+                          {item.item_name} ×{" "}
+                          {item.quantity}
                         </span>
-                        <span>{formatCurrency(item.total_price)}</span>
+
+                        <span>
+                          {formatCurrency(
+                            item.total_price
+                          )}
+                        </span>
                       </div>
                     ))}
                   </div>
 
+                  {/* FOOTER */}
                   <div className="order-footer">
                     <button
                       className="create-sale-btn"
-                      disabled={!servedBy.trim()}
-                      onClick={() => handleCreateSale(order)}
+                      disabled={
+                        !servedBy.trim() || !salesDate
+                      }
+                      onClick={() =>
+                        handleCreateSale(order)
+                      }
                     >
                       ➕ Create Sale
                     </button>
+
                     <span className="order-total">
-                      Total: {formatCurrency(orderTotal)}
+                      Total:{" "}
+                      {formatCurrency(orderTotal)}
                     </span>
                   </div>
                 </li>

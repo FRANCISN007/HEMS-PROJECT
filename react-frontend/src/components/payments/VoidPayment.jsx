@@ -78,7 +78,7 @@ const VoidPayment = () => {
   const handleConfirmVoid = async () => {
     setVoiding(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/payments/void/${selectedPayment.payment_id}/`, {
+      const res = await fetch(`${API_BASE_URL}/payments/void/${selectedPayment.payment_id}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,

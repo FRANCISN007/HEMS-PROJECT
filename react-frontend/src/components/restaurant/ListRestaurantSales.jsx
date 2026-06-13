@@ -353,59 +353,126 @@ const ListRestaurantSales = () => {
       {/* ✅ Global Modal showing POS receipt */}
       {selectedSale && (
         <div className="modal-overlay" onClick={closeModal}>
-          <div className="print-modal" onClick={(e) => e.stopPropagation()}>
-            <div ref={printRef} className="receipt-container">
+          <div
+            className="print-modal thermal-80mm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div ref={printRef} className="receipt-container-80mm">
+
+              {/* HEADER */}
               <div className="receipt-header">
-                <h2>{businessName}</h2>
-                <p>Restaurant Sales & Payment</p>
-                <p>{new Date(selectedSale.created_at).toLocaleString()}</p>
-                <hr />
+                <h2>{businessName.toUpperCase()}</h2>
+                <h3>RESTAURANT SALES RECEIPT</h3>
+
+                <p>
+                  {new Date(selectedSale.created_at).toLocaleString()}
+                </p>
+
+                <div className="receipt-divider"></div>
               </div>
 
+              {/* INFO */}
               <div className="receipt-info">
-                <p><strong>Sale No:</strong> {selectedSale.id}</p>
-                <p><strong>Guest:</strong> {selectedSale.guest_name || "N/A"}</p>
-                <p><strong>Served by:</strong> {selectedSale.served_by}</p>
-              </div>
-              <hr />
 
+                <div className="receipt-row">
+                  <span>Sale No:</span>
+                  <span>{selectedSale.id}</span>
+                </div>
+
+                <div className="receipt-row">
+                  <span>Guest:</span>
+                  <span>{selectedSale.guest_name || "N/A"}</span>
+                </div>
+
+                <div className="receipt-row">
+                  <span>Served By:</span>
+                  <span>{selectedSale.served_by}</span>
+                </div>
+
+                <div className="receipt-row">
+                  <span>Status:</span>
+                  <span>{selectedSale.status}</span>
+                </div>
+
+              </div>
+
+              <div className="receipt-divider"></div>
+
+              {/* ITEMS */}
               <div className="receipt-items">
+
                 {selectedSale.items && selectedSale.items.length > 0 ? (
                   selectedSale.items.map((item, idx) => (
                     <div key={idx} className="receipt-item">
-                      <span>{item.quantity} × {item.item_name}</span>
-                      <span className="amount">₦{formatAmount(item.total_price)}</span>
+
+                      <div className="item-details">
+                        {item.quantity} × {item.item_name}
+                      </div>
+
+                      <div className="item-price">
+                        ₦{formatAmount(item.total_price)}
+                      </div>
+
                     </div>
                   ))
                 ) : (
                   <p>No items</p>
                 )}
-              </div>
-              <hr />
 
+              </div>
+
+              <div className="receipt-divider"></div>
+
+              {/* TOTALS */}
               <div className="receipt-totals">
-                <p><span>Subtotal</span> <span>₦{formatAmount(selectedSale.total_amount)}</span></p>
-                <p><span>Paid</span> <span>₦{formatAmount(selectedSale.amount_paid)}</span></p>
-                <p className="grand-total">
-                  <span>Balance</span> 
-                  <span>₦{formatAmount(selectedSale.balance)}</span>
-                </p>
+
+                <div className="receipt-row">
+                  <span>Subtotal</span>
+                  <span>
+                    ₦{formatAmount(selectedSale.total_amount)}
+                  </span>
+                </div>
+
+                <div className="receipt-row">
+                  <span>Paid</span>
+                  <span>
+                    ₦{formatAmount(selectedSale.amount_paid)}
+                  </span>
+                </div>
+
+                <div className="receipt-row grand-total">
+                  <span>Balance</span>
+                  <span>
+                    ₦{formatAmount(selectedSale.balance)}
+                  </span>
+                </div>
+
               </div>
 
-              <hr />
+              <div className="receipt-divider"></div>
 
+              {/* FOOTER */}
               <div className="receipt-footer">
                 <p>Thank you for your patronage!</p>
                 <p>Powered by HEMS</p>
               </div>
+
             </div>
 
-            <div className="modal-actions">
-              <button onClick={printModalContent} className="print-btn">
+            {/* ACTION BUTTONS */}
+            <div className="modal-actions no-print">
+              <button
+                onClick={printModalContent}
+                className="print-btn"
+              >
                 🖨️ Print Now
               </button>
-              <button onClick={closeModal} className="close-btn">
-                ❌
+
+              <button
+                onClick={closeModal}
+                className="close-btn"
+              >
+                ❌ Close
               </button>
             </div>
           </div>

@@ -1,198 +1,235 @@
-/* ================= PAGE ================= */
-.sales-summary-page {
-  padding: 10px 16px;
-  font-family: Arial, Helvetica, sans-serif;
+/* src/components/restaurant/SalesSummary.css */
+
+/* ================= ROOT WRAPPER ONLY ================= */
+.restaurant-summary-page {
+  max-width: 1350px;
+  margin: 0 auto;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+  height: calc(90vh - 20px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-.sales-summary-page h2 {
-  margin-bottom: 8px;
-  font-size: 18px;
+/* ================= SCROLLBAR ================= */
+.restaurant-summary-page::-webkit-scrollbar {
+  width: 10px;
 }
 
-/* ================= FILTER ================= */
-.filter-bar {
+.restaurant-summary-page::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 8px;
+}
+
+.restaurant-summary-page::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 8px;
+}
+
+.restaurant-summary-page::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* ================= TITLE ================= */
+.restaurant-summary-page h2 {
+  text-align: center;
+  margin-bottom: 15px;
+  color: #2c3e50;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* ================= FILTERS ================= */
+.restaurant-summary-page .restaurant-filter-bar {
   display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
   flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 15px;
+  align-items: center;
 }
 
-.filter-bar select,
-.filter-bar input {
-  padding: 4px 6px;
+.restaurant-summary-page .restaurant-filter-bar label {
+  font-weight: 600;
   font-size: 13px;
+  color: #333;
+}
+
+.restaurant-summary-page .restaurant-filter-bar select,
+.restaurant-summary-page .restaurant-filter-bar input[type="date"] {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+/* ================= BUTTON ================= */
+.restaurant-summary-page .restaurant-print-btn {
+  padding: 6px 14px;
+  background: #2c3e50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.restaurant-summary-page .restaurant-print-btn:hover {
+  background: #4b6288;
+}
+
+/* ================= TABLE CONTAINER ================= */
+.restaurant-summary-page .restaurant-summary-table-container {
+  width: 100%;
+  border: 2px solid #bbb;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  overflow: hidden;
 }
 
 /* ================= TABLE ================= */
-.summary-table-container {
-  margin-bottom: 12px;
-  overflow-x: auto;
-}
-
-/* 🔥 FULL GRID TABLE */
-.summary-table {
+.restaurant-summary-page .restaurant-summary-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: auto;
   font-size: 13px;
+  margin: 0;
 }
 
-/* HEADER */
-.summary-table th {
-  background: #f0f2f5;
-  color: #222;
-  font-weight: 600;
-  padding: 8px 6px;
-  text-align: center;
-
-  /* GRID LINES */
-  border: 1px solid #867e7e;
+/* ================= STICKY HEADER ================= */
+.restaurant-summary-page .restaurant-summary-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background-color: #293552;
 }
 
-/* CELLS */
-.summary-table td {
-  padding: 6px;
-  text-align: center;
-
-  /* 🔥 FULL GRID (vertical + horizontal) */
-  border: 1px solid #857e7e;
-}
-
-/* 🔥 ZEBRA ROWS (CLEAR) */
-.summary-table tbody tr:nth-child(odd) {
-  background-color: #dcf1c8;
-}
-
-.summary-table tbody tr:nth-child(even) {
-  background-color: #f7f7f7;
-}
-
-/* HOVER */
-.summary-table tbody tr:hover {
-  background-color: #eaf3ff;
-}
-
-/* TOTAL ROW */
-.grand-total-row {
-  background-color: #dfeaff !important;
+.restaurant-summary-page .restaurant-summary-table th {
+  background-color: #293552;
+  color: #ffffff;
   font-weight: bold;
+  padding: 5px 4px;
+  border: 1px solid #bdbdbd;
+  text-align: center;
+  position: sticky;
+  top: 0;
+}
+
+.restaurant-summary-page .restaurant-summary-table td {
+  padding: 5px 4px;
+  border: 1px solid #bdbdbd;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.restaurant-summary-page .restaurant-summary-table tr:nth-child(even) {
+  background-color: #f4f7f4;
+}
+
+.restaurant-summary-page .restaurant-summary-table tr:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+.restaurant-summary-page .restaurant-summary-table tbody tr:hover {
+  background-color: #eef5ff;
+}
+
+/* ================= GRAND TOTAL ================= */
+.restaurant-summary-page .restaurant-grand-total-row {
+  font-weight: bold;
+  background: #e0e0e0 !important;
+  border-top: 2px solid #333;
 }
 
 /* ================= SUMMARY GRID ================= */
-.summary-grid {
+.restaurant-summary-page .restaurant-summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 6px;
-  margin-bottom: 8px;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(160px, 1fr)
+  );
+  gap: 10px;
+  margin: 15px 0;
 }
 
-.card {
-  background: #f1efef;
-  padding: 6px;
-  border-radius: 6px;
+.restaurant-summary-page .restaurant-card {
+  background: #e9ecee;
+  padding: 12px;
+  border-radius: 8px;
   text-align: center;
-  font-size: 13px;
-  border: 1px solid #797373;
-}
-
-.card span {
-  color: #555;
-  font-size: 12px;
+  border: 1px solid #e6d2d2;
   font-weight: 700;
 }
 
-.card h3 {
-  margin-top: 3px;
-  font-size: 13px;
-  font-weight: 600;
+.restaurant-summary-page .restaurant-card span {
+  display: block;
+  color: #555;
+  font-size: 17px;
+  margin-bottom: 4px;
 }
 
-/* CASH highlight */
-.card.highlight {
-  background: #eafaf0;
-  border: 1px solid #28a745;
+.restaurant-summary-page .restaurant-card h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.restaurant-summary-page .restaurant-card.highlight {
+  background: #e8f5e9;
+  border-color: #28a745;
 }
 
 /* ================= BANK SECTION ================= */
-.bank-section {
-  margin-top: 6px;
-  font-size: 13px;
+.restaurant-summary-page .restaurant-bank-section {
+  margin-top: 15px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
 }
 
-.bank-section h4 {
-  margin-bottom: 4px;
-  font-size: 14px;
-}
-
-/* 🔥 TIGHT + CLEAN ALIGNMENT */
-.bank-line {
-  display: flex;
-  align-items: center;
-  gap: 10px; /* reduced spacing */
-  padding: 4px 0;
-  border-bottom: 1px dashed #ddd;
-}
-
-/* Bank column alignment */
-.bank-name {
-  min-width: 110px;
-  font-weight: 600;
-}
-
-/* POS + Transfer tight */
-.bank-line span {
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-/* ================= SMALL SCREEN ================= */
-@media (max-width: 600px) {
-  .summary-table th,
-  .summary-table td {
-    padding: 4px;
-    font-size: 12px;
-  }
-
-  .bank-name {
-    min-width: 90px;
-  }
-
-  .card h3 {
-    font-size: 12px;
-  }
-}
-
-
-
-.print-btn {
-  padding: 5px 10px;
-  background: #007bff;
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.print-btn:hover {
-  background: #0056b3;
-}
-
-
-
-/* TOP SUMMARY (Sales / Paid / Balance) */
-.top-summary {
-  grid-template-columns: repeat(3, 1fr);
-  margin-bottom: 6px;
-}
-
-/* 🔥 PAYMENT ROW (Cash / POS / Transfer) */
-.payment-row {
-  grid-template-columns: repeat(3, 1fr);
+.restaurant-summary-page .restaurant-bank-section h4 {
   margin-bottom: 10px;
 }
 
-/* Make CASH stand out more */
-.payment-row .highlight {
-  background: #eafaf0;
-  border: 1px solid #28a745;
+.restaurant-summary-page .restaurant-bank-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px dashed #ddd;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* ================= ERROR ================= */
+.restaurant-summary-page .restaurant-error {
+  color: #d32f2f;
+  text-align: center;
   font-weight: bold;
+  margin: 10px 0;
+}
+
+/* ================= MOBILE ================= */
+@media (max-width: 992px) {
+  .restaurant-summary-page {
+    height: calc(100vh - 10px);
+    padding: 8px;
+  }
+
+  .restaurant-summary-page .restaurant-summary-grid {
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(130px, 1fr)
+    );
+  }
+
+  .restaurant-summary-page .restaurant-summary-table {
+    font-size: 12px;
+  }
+
+  .restaurant-summary-page .restaurant-summary-table th,
+  .restaurant-summary-page .restaurant-summary-table td {
+    padding: 6px 4px;
+  }
 }
